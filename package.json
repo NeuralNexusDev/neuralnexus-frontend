@@ -8,12 +8,14 @@
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
     "test:unit": "vitest",
-    "build-only": "vite build",
+    "build-only": "vite-ssg build",
     "type-check": "vue-tsc --build --force",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore",
     "format": "prettier --write src/"
   },
   "dependencies": {
+    "@sfirew/minecraft-motd-parser": "^1.1.2-1",
+    "vite-ssg": "^0.23.6",
     "vue": "^3.4.21",
     "vue-router": "^4.3.0"
   },
