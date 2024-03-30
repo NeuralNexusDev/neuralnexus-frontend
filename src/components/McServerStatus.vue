@@ -11,14 +11,14 @@ const FAVICON = ''
 
 fetch(`https://api.neuralnexus.dev/api/v1/mcstatus/${props.address}`, {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+    headers: { 'Content-Type': 'application/json' }
 })
     .then((response) => response.json())
     .then((data) => {
         console.log(data)
         const motd = document.getElementById('motd')
         if (motd) {
-            motd.innerHTML = autoToHTML(data.motd)
+            motd.innerHTML = autoToHTML(data.name)
         }
         document.getElementById
     })
