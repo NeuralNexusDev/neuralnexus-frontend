@@ -1,18 +1,6 @@
-FROM node:20-alpine as build-stage
+FROM alpine:3.14
 
-WORKDIR /app
-RUN corepack enable
+COPY ./webserver .
+COPY ./dist /static
 
-COPY package.json pnpm-lock.yaml ./
-RUN --mount=type=cache,id=pnpm-store,target=/root/.pnpm-store \
-    pnpm install --frozen-lockfile
-
-COPY . .
-RUN pnpm build-only
-
-FROM nginx:stable-alpine as production-stage
-
-COPY --from=build-stage /app/dist /usr/share/nginx/html
-EXPOSE 80
-
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["./webserver"]
