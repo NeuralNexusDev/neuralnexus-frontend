@@ -11,7 +11,7 @@ const FAVICON = ''
 
 fetch(`https://api.neuralnexus.dev/api/v1/mcstatus/${props.address}`, {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
 })
     .then((response) => response.json())
     .then((data) => {
