@@ -9,7 +9,10 @@ const ONLINE_PLAYERS = 0
 const MAX_PLAYERS = 0
 const FAVICON = ''
 
-fetch(`https://api.neuralnexus.dev/api/v1/mcstatus/${props.address}`)
+fetch(`https://api.neuralnexus.dev/api/v1/mcstatus/${props.address}`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' }
+})
     .then((response) => response.json())
     .then((data) => {
         console.log(data)
