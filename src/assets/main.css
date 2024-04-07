@@ -7,29 +7,44 @@
     font-weight: normal;
 }
 
-a,
-.green {
+.app {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 50vh;
+}
+
+.header {
+    display: flex;
+    justify-content: left;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    font-size: 1.2rem;
+}
+
+/* Grey text with the red rounded box */
+.login-button {
+    margin-left: auto;
+    padding: 0.5rem 1rem;
+    border-radius: 5px;
+    background-color: rgb(247, 0, 39);
+    color: rgb(12, 12, 12);
+    font-weight: bold;
+}
+
+.login-button:hover {
+    background-color: rgb(12, 12, 12);
+    color: rgb(247, 0, 39);
+}
+
+a {
     text-decoration: none;
-    color: hsla(160, 100%, 37%, 1);
+    color: rgb(247, 0, 39);
     transition: 0.4s;
     padding: 3px;
 }
 
-@media (hover: hover) {
-    a:hover {
-        background-color: hsla(160, 100%, 37%, 0.2);
-    }
-}
-
-@media (min-width: 1024px) {
-    body {
-        display: flex;
-        place-items: center;
-    }
-
-    #app {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        padding: 0 2rem;
-    }
+a:hover {
+    background-color: hsla(0, 0%, 0%, 0.2);
 }
