@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 
 const beeName = ref('')
+const suggestedName = ref('')
 
 // GET https://api.neuralnexus.dev/api/v1/bee-name-generator/name
 function getBeeName(): string {
@@ -15,6 +16,9 @@ function getBeeName(): string {
         })
     return beeName.value
 }
+
+// TODO: Add the rest of the methods when auth is stored as a cookie
+// Make it so the other routes are hidden behind the permissions
 
 // POST https://api.neuralnexus.dev/api/v1/bee-name-generator/suggestion
 function suggestBeeName(name: string): void {
@@ -40,6 +44,6 @@ function suggestBeeName(name: string): void {
         <button @click="getBeeName()">Generate</button>
     </div>
     <br />
-    <input type="text" id="suggestedName" placeholder="Suggest a name" />
-    <button>Suggest</button>
+    <input type="text" v-model="suggestedName" />
+    <button @click="suggestBeeName(suggestedName)">Suggest</button>
 </template>

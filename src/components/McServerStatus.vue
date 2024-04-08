@@ -15,7 +15,6 @@ fetch(`https://api.neuralnexus.dev/api/v1/mcstatus/${props.address}`, {
 })
     .then((response) => response.json())
     .then((data) => {
-        console.log(data)
         const motd = document.getElementById('motd')
         if (motd) {
             motd.innerHTML = autoToHTML(data.name)
@@ -32,6 +31,7 @@ fetch(`https://api.neuralnexus.dev/api/v1/mcstatus/${props.address}`, {
     <div>
         <h2>Server Address: {{ props.address }}</h2>
     </div>
+    <br />
     <div style="text-align: center" id="motd"></div>
     <br />
     <img class="center" src="" alt="Server Favicon" id="favicon" />

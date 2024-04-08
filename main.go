@@ -4,9 +4,45 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 )
 
-// -------------- Globals --------------
+// -------------- Middleware --------------
+
+// WrappedWriter - Wrapper for http.ResponseWriter
+type WrappedWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+// WriteHeader - Write the header
+func (w *WrappedWriter) WriteHeader(statusCode int) {
+	w.ResponseWriter.WriteHeader(statusCode)
+	w.statusCode = statusCode
+}
+
+// Middleware - Middleware type
+type Middleware func(http.Handler) http.Handler
+
+// CreateStack - Create a stack of middlewares
+func CreateStack(middlewares ...Middleware) Middleware {
+	return func(next http.Handler) http.Handler {
+		for i := len(middlewares) - 1; i >= 0; i-- {
+			next = middlewares[i](next)
+		}
+		return next
+	}
+}
+
+// RequestLoggerMiddleware - Log all requests
+func RequestLoggerMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		wrapped := &WrappedWriter{w, http.StatusOK}
+		next.ServeHTTP(wrapped, r)
+		log.Printf("%s %d %s %s %s", r.RemoteAddr, wrapped.statusCode, r.Method, r.URL.Path, time.Since(start))
+	})
+}
 
 // -------------- Main --------------
 func main() {
@@ -20,27 +56,20 @@ func main() {
 	}
 
 	router := http.NewServeMux()
-
 	router.Handle("/", http.FileServer(http.Dir("/static")))
 	router.HandleFunc("/mcstatus/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "/static/mcstatus.html")
 	})
-	// router.HandleFunc("/bee-name-generator", func(w http.ResponseWriter, r *http.Request) {
-	// 	http.ServeFile(w, r, "/static/bee-name-generator.html")
-	// })
-	// Handle the rest
-	router.HandleFunc("/{rest}", func(w http.ResponseWriter, r *http.Request) {
-		path := r.PathValue("rest")
-		// if strings.Contains(path, ".") || strings.Contains(path, "/") {
-		// 	http.Error(w, "404 page not found", http.StatusNotFound)
-		// 	return
-		// }
+	router.HandleFunc("/{path}", func(w http.ResponseWriter, r *http.Request) {
+		path := r.PathValue("path")
 		http.ServeFile(w, r, "/static/"+path+".html")
 	})
 
+	middlewareStack := CreateStack(RequestLoggerMiddleware)
+
 	server := http.Server{
 		Addr:    ip + ":" + port,
-		Handler: router,
+		Handler: middlewareStack(router),
 	}
 	log.Fatal(server.ListenAndServe())
 }
