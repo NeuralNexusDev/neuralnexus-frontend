@@ -29,7 +29,7 @@ func main() {
 	// 	http.ServeFile(w, r, "/static/bee-name-generator.html")
 	// })
 	// Handle the rest
-	router.HandleFunc("/{rest:.*}", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/{rest}", func(w http.ResponseWriter, r *http.Request) {
 		path := r.PathValue("rest")
 		// if strings.Contains(path, ".") || strings.Contains(path, "/") {
 		// 	http.Error(w, "404 page not found", http.StatusNotFound)
