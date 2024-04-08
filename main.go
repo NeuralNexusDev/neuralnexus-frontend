@@ -40,6 +40,15 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 		start := time.Now()
 		wrapped := &WrappedWriter{w, http.StatusOK}
 		next.ServeHTTP(wrapped, r)
+
+		forwardedFor := r.Header.Get("X-Forwarded-For")
+		cfConnectingIP := r.Header.Get("CF-Connecting-IP")
+		if cfConnectingIP != "" {
+			r.RemoteAddr = cfConnectingIP
+		} else if forwardedFor != "" {
+			r.RemoteAddr = forwardedFor
+		}
+
 		log.Printf("%s %d %s %s %s", r.RemoteAddr, wrapped.statusCode, r.Method, r.URL.Path, time.Since(start))
 	})
 }
