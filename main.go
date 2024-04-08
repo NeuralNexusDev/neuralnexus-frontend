@@ -22,16 +22,16 @@ func main() {
 	router := http.NewServeMux()
 
 	router.Handle("/", http.FileServer(http.Dir("/static")))
-	router.HandleFunc("/mcstatus/", mcstatusHandler)
+	router.HandleFunc("/mcstatus/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "/static/mcstatus.html")
+	})
+	router.HandleFunc("/bee-name-generator", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "/static/bee-name-generator.html")
+	})
 
 	server := http.Server{
 		Addr:    ip + ":" + port,
 		Handler: router,
 	}
 	log.Fatal(server.ListenAndServe())
-}
-
-// -------------- Handlers --------------
-func mcstatusHandler(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, "/static/mcstatus.html")
 }
