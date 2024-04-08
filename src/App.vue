@@ -10,9 +10,6 @@
     </div>
 
     <div id="app" class="app">
-        <br />
-
-        <router-link :to="{ name: 'McStatus' }">MC Status</router-link>
         <router-view></router-view>
     </div>
 </template>
