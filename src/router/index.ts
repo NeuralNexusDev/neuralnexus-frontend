@@ -7,25 +7,40 @@ export const routes = [
         component: () => import('@/components/HomePage.vue')
     },
     {
-        path: '/bee-name-generator',
-        name: 'BeeNameGenerator',
-        component: () => import('@/components/BeeNameGenerator.vue')
+        path: '/login',
+        name: 'Login',
+        component: () => import('@/components/LoginPage')
     },
-    {
-        path: '/mcstatus',
-        name: 'McStatus',
-        component: () => import('@/components/McStatus.vue')
-    },
-    {
-        path: '/mcstatus/:address',
-        name: 'McServerStatus',
-        component: () => import('@/components/McServerStatus.vue'),
-        props: true
-    },
+    // {
+    //     path: '/register',
+    //     name: 'Register',
+    //     component: () => import('@/components/RegisterPage.vue')
+    // },
+    // {
+    //     path: '/forgot-password',
+    //     name: 'ForgotPassword',
+    //     component: () => import('@/components/ForgotPasswordPage.vue')
+    // },
     {
         path: '/projects',
         name: 'Projects',
         component: () => import('@/components/ProjectsPage.vue')
+    },
+    {
+        path: '/projects/bee-name-generator',
+        name: 'BeeNameGenerator',
+        component: () => import('@/components/BeeNameGenerator.vue')
+    },
+    {
+        path: '/projects/mcstatus',
+        name: 'McStatus',
+        component: () => import('@/components/McStatus.vue')
+    },
+    {
+        path: '/projects/mcstatus/:address',
+        name: 'McServerStatus',
+        component: () => import('@/components/McServerStatus.vue'),
+        props: true
     }
 ]
 

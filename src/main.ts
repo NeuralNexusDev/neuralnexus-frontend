@@ -1,5 +1,4 @@
-import './assets/main.css'
-import './index.css'
+import './assets/index.css'
 
 import { ViteSSG } from 'vite-ssg'
 
