@@ -12,4 +12,6 @@
     <div id="app" class="app">
         <router-view></router-view>
     </div>
+
+    <h1 className="text-3xl font-bold underline">Hello world!</h1>
 </template>
