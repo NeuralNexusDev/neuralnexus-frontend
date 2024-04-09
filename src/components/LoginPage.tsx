@@ -60,6 +60,12 @@ export default function Component() {
                                 class="w-6 h-6 mr-2"
                             />
                         </button>
+                        <div class="mt-4 text-center text-sm ">
+                            <span class="mr-1">Don't have an account?</span>
+                            <a class="underline" href="/register">
+                                Sign Up
+                            </a>
+                        </div>
                         <a class="inline-block w-full text-center text-sm underline" href="#">
                             Forgot your password?
                         </a>

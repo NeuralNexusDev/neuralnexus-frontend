@@ -11,11 +11,11 @@ export const routes = [
         name: 'Login',
         component: () => import('@/components/LoginPage')
     },
-    // {
-    //     path: '/register',
-    //     name: 'Register',
-    //     component: () => import('@/components/RegisterPage.vue')
-    // },
+    {
+        path: '/register',
+        name: 'Register',
+        component: () => import('@/components/RegisterPage')
+    },
     // {
     //     path: '/forgot-password',
     //     name: 'ForgotPassword',
