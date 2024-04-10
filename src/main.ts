@@ -67,9 +67,10 @@ export const createApp: any = ViteSSG(
             }
         ]
     },
-    (ctx) => {
+    async (ctx) => {
         ctx.app.use(cookies)
 
+        await ctx.router.isReady()
         ctx.router.afterEach(() => {
             const title = <string>ctx.router.currentRoute.value.meta.title
             if (title) {
