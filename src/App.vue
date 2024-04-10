@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useCookies } from '@/composables/cookies'
 
-const cookies = useCookies()
+const cookies: any = useCookies()
 
 function revokeSession() {
     fetch('https://api.neuralnexus.dev/api/v1/auth/logout', {

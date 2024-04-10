@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useCookies } from '@/composables/cookies'
 
-const cookies = useCookies()
+const cookies: any = useCookies()
 
 function submitForm(e: Event) {
     e.preventDefault()
