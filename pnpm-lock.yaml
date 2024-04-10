@@ -14,6 +14,9 @@ dependencies:
   vue:
     specifier: ^3.4.21
     version: 3.4.21(typescript@5.4.3)
+  vue-cookies:
+    specifier: ^1.8.4
+    version: 1.8.4
   vue-router:
     specifier: ^4.3.0
     version: 4.3.0(vue@3.4.21)
@@ -3630,6 +3633,10 @@ packages:
   /vue-component-type-helpers@2.0.7:
     resolution: {integrity: sha512-7e12Evdll7JcTIocojgnCgwocX4WzIYStGClBQ+QuWPinZo/vQolv2EMq4a3lg16TKfwWafLimG77bxb56UauA==}
     dev: true
+
+  /vue-cookies@1.8.4:
+    resolution: {integrity: sha512-9zjvACKE4W0kEb8OQtXzpizKhf6zfFOG/Z1TEUjSJn4Z4rintuAHo8y/FpCUhTWHMmPe8E+Fko+/tiXVM+5jOw==}
+    dev: false
 
   /vue-eslint-parser@9.4.2(eslint@8.57.0):
     resolution: {integrity: sha512-Ry9oiGmCAK91HrKMtCrKFWmSFWvYkpGglCeFAIqDdr9zdXmMMpJOmUJS7WWsW7fX81h6mwHmUZCQQ1E0PkSwYQ==}
