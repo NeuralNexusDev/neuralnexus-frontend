@@ -90,8 +90,8 @@ function submitForm(e: Event) {
                 class="shrink-0 bg-gray-100 h-[1px] w-full my-8"
             ></div>
             <div class="space-y-4">
-                {/* <button class="w-full">Login with Google</button> */} {/*
-                <button class="w-full">Login with Twich</button> */}
+                <!-- <button class="w-full">Login with Google</button> -->
+                <!-- <button class="w-full">Login with Twich</button> -->
                 <button
                     class="bg-discord-blue inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
                 >

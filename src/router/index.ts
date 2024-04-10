@@ -9,12 +9,18 @@ export const routes = [
     {
         path: '/login',
         name: 'Login',
-        component: () => import('@/components/LoginPage.vue')
+        component: () => import('@/components/LoginPage.vue'),
+        meta: {
+            title: 'Login - NeuralNexus'
+        }
     },
     {
         path: '/register',
         name: 'Register',
-        component: () => import('@/components/RegisterPage')
+        component: () => import('@/components/RegisterPage'),
+        meta: {
+            title: 'Sign Up - NeuralNexus'
+        }
     },
     // {
     //     path: '/forgot-password',
@@ -24,17 +30,26 @@ export const routes = [
     {
         path: '/projects',
         name: 'Projects',
-        component: () => import('@/components/ProjectsPage.vue')
+        component: () => import('@/components/ProjectsPage.vue'),
+        meta: {
+            title: 'Projects - NeuralNexus'
+        }
     },
     {
         path: '/projects/bee-name-generator',
         name: 'BeeNameGenerator',
-        component: () => import('@/components/BeeNameGenerator.vue')
+        component: () => import('@/components/BeeNameGenerator.vue'),
+        meta: {
+            title: 'Bee Name Generator - NeuralNexus'
+        }
     },
     {
         path: '/projects/mcstatus',
         name: 'McStatus',
-        component: () => import('@/components/McStatus.vue')
+        component: () => import('@/components/McStatus.vue'),
+        meta: {
+            title: 'Minecraft Server Status - NeuralNexus'
+        }
     },
     {
         path: '/projects/mcstatus/:address',
@@ -43,8 +58,3 @@ export const routes = [
         props: true
     }
 ]
-
-export const router = createRouter({
-    history: createMemoryHistory(),
-    routes: routes
-})
