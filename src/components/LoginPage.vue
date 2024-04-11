@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { useCookies } from '@/composables/cookies'
+import { sessionStore } from '@/composables/store'
 
-const cookies: any = useCookies()
+const store = sessionStore()
 
 function submitForm(e: Event) {
     e.preventDefault()
@@ -28,7 +28,7 @@ function submitForm(e: Event) {
         .then((res) => res.json())
         .then((data) => {
             if (data.session_id) {
-                cookies.set('session_id', data)
+                store.setSession(data)
                 window.location.href = '/'
             }
         })

@@ -1,19 +1,19 @@
 <script setup lang="ts">
-import { useCookies } from '@/composables/cookies'
+import { sessionStore } from './composables/store'
 
-const cookies: any = useCookies()
+const store = sessionStore()
 
 function revokeSession() {
     fetch('https://api.neuralnexus.dev/api/v1/auth/logout', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${cookies.get('session_id').session_id}`
+            Authorization: `Bearer ${store.getSession().session_id}`
         }
     })
         .then((res) => {
             if (res.ok) {
-                cookies.remove('session_id')
+                store.deleteSession()
                 window.location.href = '/'
             }
         })
@@ -31,7 +31,7 @@ function revokeSession() {
         <router-link to="/projects">Projects</router-link>
 
         <router-link
-            v-if="!cookies.get('session_id')"
+            v-if="store.getSession().session_id === ''"
             class="ml-auto py-2 px-4 rounded-lg bg-red-600 text-black font-bold hover:bg-black hover:text-red-600"
             to="/login"
             >Login</router-link

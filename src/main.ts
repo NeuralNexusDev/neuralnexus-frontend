@@ -1,9 +1,9 @@
 import './assets/index.css'
+import App from './App.vue'
 
 import { ViteSSG } from 'vite-ssg'
-import * as cookies from 'vue-cookies'
-
-import App from './App.vue'
+import { createPinia } from 'pinia'
+import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 
 export const createApp: any = ViteSSG(
     App,
@@ -68,14 +68,18 @@ export const createApp: any = ViteSSG(
         ]
     },
     async (ctx) => {
-        ctx.app.use(cookies)
+        const pinia = createPinia()
+        pinia.use(piniaPluginPersistedstate)
+        ctx.app.use(pinia)
 
-        await ctx.router.isReady()
-        ctx.router.afterEach(() => {
-            const title = <string>ctx.router.currentRoute.value.meta.title
-            if (title) {
-                document.title = title
-            }
-        })
+        if (import.meta.env.SSR) ctx.initialState.pinia = pinia.state.value
+        else pinia.state.value = ctx.initialState.pinia || {}
+
+        // ctx.router.afterEach(() => {
+        //     const title = <string>ctx.router.currentRoute.value.meta.title
+        //     if (title) {
+        //         document.title = title
+        //     }
+        // })
     }
 )
