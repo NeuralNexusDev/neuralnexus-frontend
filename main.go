@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -71,7 +72,11 @@ func main() {
 	})
 	router.HandleFunc("/{path}", func(w http.ResponseWriter, r *http.Request) {
 		path := r.PathValue("path")
-		http.ServeFile(w, r, "/static/"+path+".html")
+		var servePath string = "/static/" + path
+		if !strings.Contains(path, ".") {
+			servePath += ".html"
+		}
+		http.ServeFile(w, r, servePath)
 	})
 
 	middlewareStack := CreateStack(RequestLoggerMiddleware)
