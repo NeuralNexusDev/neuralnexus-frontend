@@ -23,7 +23,7 @@ func WrapContents(contents templ.Component) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<html><head><meta charset=\"UTF-8\"><link rel=\"stylesheet\" href=\"/public/styles.css\"><link rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"/public/apple-touch-icon.png\"><link rel=\"icon\" type=\"image/png\" sizes=\"32x32\" href=\"/public/favicon-32x32.png\"><link rel=\"icon\" type=\"image/png\" sizes=\"16x16\" href=\"/public/favicon-16x16.png\"><link rel=\"icon\" type=\"image/png\" href=\"/public/favicon.png\"><link rel=\"manifest\" href=\"/public/site.webmanifest\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>NeuralNexus</title></head><body>")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<!doctype html><html lang=\"en\"><head><meta charset=\"UTF-8\"><link rel=\"stylesheet\" href=\"/public/styles.css\"><link rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"/public/apple-touch-icon.png\"><link rel=\"icon\" type=\"image/png\" sizes=\"32x32\" href=\"/public/favicon-32x32.png\"><link rel=\"icon\" type=\"image/png\" sizes=\"16x16\" href=\"/public/favicon-16x16.png\"><link rel=\"icon\" type=\"image/x-icon\" href=\"/public/favicon.ico\"><link rel=\"manifest\" href=\"/public/site.webmanifest\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>NeuralNexus</title></head><body><div hidden id=\"session\">false</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -130,6 +130,33 @@ func Header() templ.Component {
 	})
 }
 
+func updateSessionVal() templ.ComponentScript {
+	return templ.ComponentScript{
+		Name: `__templ_updateSessionVal_122e`,
+		Function: `function __templ_updateSessionVal_122e(){const name = "session=";
+	const decodedCookie = decodeURIComponent(document.cookie);
+	const ca = decodedCookie.split(";");
+	result = false;
+	for (let i = 0; i < ca.length; i++) {
+		let c = ca[i];
+		while (c.charAt(0) == " ") {
+			c = c.substring(1);
+		}
+		if (c.indexOf(name) == 0) {
+			const value = c.substring(name.length, c.length);
+			if (value === valueHolder) {
+				result = true;
+				break;
+			}
+		}
+	}
+	document.getElementById("session").innerText = result;
+}`,
+		Call:       templ.SafeScript(`__templ_updateSessionVal_122e`),
+		CallInline: templ.SafeScriptInline(`__templ_updateSessionVal_122e`),
+	}
+}
+
 func LoginButton() templ.Component {
 	return templ.ComponentFunc(func(ctx context.Context, templ_7745c5c3_W io.Writer) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templ_7745c5c3_W.(*bytes.Buffer)
@@ -161,6 +188,46 @@ func LoginButton() templ.Component {
 	})
 }
 
+func submitLoginForm() templ.ComponentScript {
+	return templ.ComponentScript{
+		Name: `__templ_submitLoginForm_cb56`,
+		Function: `function __templ_submitLoginForm_cb56(){event.preventDefault();
+	const form = event.target;
+	const formData = new FormData(form);
+	const data = Object.fromEntries(formData.entries());
+	const json = {
+		password: data.password
+	}
+	const username = data.username
+	if (username.includes('@')) {
+		json.email = username
+	} else {
+		json.username = username
+	}
+	fetch('https://api.neuralnexus.dev/api/v1/auth/login', {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json'
+		},
+		body: JSON.stringify(json)
+	})
+		.then((res) => res.json())
+		.then((data) => {
+			if (data.session_id) {
+				document.cookie = ` + "`" + `session=${data}; expires=${new Date(data.exp).toUTCString()}; path=/` + "`" + `
+				{ updateSessionVal() }
+				window.location.href = '/'
+			}
+		})
+		.catch((error) => {
+			console.error('Error:', error)
+		})
+}`,
+		Call:       templ.SafeScript(`__templ_submitLoginForm_cb56`),
+		CallInline: templ.SafeScriptInline(`__templ_submitLoginForm_cb56`),
+	}
+}
+
 func Login() templ.Component {
 	return templ.ComponentFunc(func(ctx context.Context, templ_7745c5c3_W io.Writer) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templ_7745c5c3_W.(*bytes.Buffer)
@@ -174,7 +241,24 @@ func Login() templ.Component {
 			templ_7745c5c3_Var6 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<div class=\"mx-auto max-w-sm space-y-6\"><div class=\"space-y-2 text-center\"><h1 class=\"text-3xl font-bold\">Login</h1><p class=\"text-gray-500 dark:text-gray-400\">Enter your username or email below to login</p></div><div><form class=\"space-y-4\" @submit=\"submitForm\"><div class=\"space-y-2\"><label class=\"text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70\" for=\"username\">Username or Email</label> <input class=\"text-black flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50\" id=\"username\" name=\"username\" placeholder=\"user@example.com\" type=\"text\"></div><div class=\"space-y-2\"><label class=\"text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70\" for=\"password\">Password</label> <input class=\"text-black flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50\" id=\"password\" name=\"password\" type=\"password\"></div><button class=\"border inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 w-full\" type=\"submit\">Login</button></form><div data-orientation=\"horizontal\" role=\"none\" class=\"shrink-0 bg-gray-100 h-[1px] w-full my-8\"></div><div class=\"space-y-4\"><!-- <button class=\"w-full\">Login with Google</button> --><!-- <button class=\"w-full\">Login with Twich</button> --><button class=\"bg-discord_blue inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full\"><span class=\"mr-2\">Login with Discord</span> <img src=\"https://assets-global.website-files.com/6257adef93867e50d84d30e2/636e0a6ca814282eca7172c6_icon_clyde_white_RGB.svg\" alt=\"Discord Logo\" class=\"w-6 h-6 mr-2\"></button><div class=\"mt-4 text-center text-sm\"><span class=\"mr-1\">Don't have an account?</span> <a class=\"underline\" href=\"/register\">Sign Up </a></div><a class=\"inline-block w-full text-center text-sm underline\" href=\"#\">Forgot your password?</a></div></div></div>")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<div class=\"mx-auto max-w-sm space-y-6\"><div class=\"space-y-2 text-center\"><h1 class=\"text-3xl font-bold\">Login</h1><p class=\"text-gray-500 dark:text-gray-400\">Enter your username or email below to login</p></div><div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templ.RenderScriptItems(ctx, templ_7745c5c3_Buffer, submitLoginForm())
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<form class=\"space-y-4\" onSubmit=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var7 templ.ComponentScript = submitLoginForm()
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7.Call)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("\"><div class=\"space-y-2\"><label class=\"text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70\" for=\"username\">Username or Email</label> <input class=\"text-black flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50\" id=\"username\" name=\"username\" placeholder=\"user@example.com\" type=\"text\"></div><div class=\"space-y-2\"><label class=\"text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70\" for=\"password\">Password</label> <input class=\"text-black flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50\" id=\"password\" name=\"password\" type=\"password\"></div><button class=\"border inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 w-full\" type=\"submit\">Login</button></form><div data-orientation=\"horizontal\" role=\"none\" class=\"shrink-0 bg-gray-100 h-[1px] w-full my-8\"></div><div class=\"space-y-4\"><!-- <button class=\"w-full\">Login with Google</button> --><!-- <button class=\"w-full\">Login with Twich</button> --><button class=\"bg-discord_blue inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full\"><span class=\"mr-2\">Login with Discord</span> <img src=\"https://assets-global.website-files.com/6257adef93867e50d84d30e2/636e0a6ca814282eca7172c6_icon_clyde_white_RGB.svg\" alt=\"Discord Logo\" class=\"w-6 h-6 mr-2\"></button><div class=\"mt-4 text-center text-sm\"><span class=\"mr-1\">Don't have an account?</span> <a class=\"underline\" href=\"/register\">Sign Up </a></div><a class=\"inline-block w-full text-center text-sm underline\" href=\"#\">Forgot your password?</a></div></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -193,9 +277,9 @@ func LoginPage() templ.Component {
 			defer templ.ReleaseBuffer(templ_7745c5c3_Buffer)
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var7 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var7 == nil {
-			templ_7745c5c3_Var7 = templ.NopComponent
+		templ_7745c5c3_Var8 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var8 == nil {
+			templ_7745c5c3_Var8 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		templ_7745c5c3_Err = WrapContents(Login()).Render(ctx, templ_7745c5c3_Buffer)
@@ -217,12 +301,12 @@ func Projects() templ.Component {
 			defer templ.ReleaseBuffer(templ_7745c5c3_Buffer)
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var8 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var8 == nil {
-			templ_7745c5c3_Var8 = templ.NopComponent
+		templ_7745c5c3_Var9 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var9 == nil {
+			templ_7745c5c3_Var9 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<a href=\"/projects/mcstatus\">MC Status</a><br><a href=\"/projects/bee-name-generator\">Bee Name Generator</a>")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<a href=\"/project/mcstatus\">MC Status</a><br><a href=\"/project/bee-name-generator\">Bee Name Generator</a>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -241,9 +325,9 @@ func ProjectsPage() templ.Component {
 			defer templ.ReleaseBuffer(templ_7745c5c3_Buffer)
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var9 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var9 == nil {
-			templ_7745c5c3_Var9 = templ.NopComponent
+		templ_7745c5c3_Var10 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var10 == nil {
+			templ_7745c5c3_Var10 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		templ_7745c5c3_Err = WrapContents(Projects()).Render(ctx, templ_7745c5c3_Buffer)
@@ -257,19 +341,53 @@ func ProjectsPage() templ.Component {
 	})
 }
 
-// templ BeeNameGenerator() {
-// 	<div class="beenamegenerator">
-// 		<h1>BeeNameGenerator</h1>
-// 	</div>
-// 	<br/>
-// 	<div>
-// 		<h2>Bee Name: { { beeName } }</h2>
-// 		<button @click="getBeeName()">Generate</button>
-// 	</div>
-// 	<br/>
-// 	<input type="text" v-model="suggestedName"/>
-// 	<button @click="suggestBeeName(suggestedName)">Suggest</button>
-// }
+func BeeNameGenerator() templ.Component {
+	return templ.ComponentFunc(func(ctx context.Context, templ_7745c5c3_W io.Writer) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templ_7745c5c3_W.(*bytes.Buffer)
+		if !templ_7745c5c3_IsBuffer {
+			templ_7745c5c3_Buffer = templ.GetBuffer()
+			defer templ.ReleaseBuffer(templ_7745c5c3_Buffer)
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var11 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var11 == nil {
+			templ_7745c5c3_Var11 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<script>\n\t\tfunction getBeeName() {\n\t\t\tfetch(\"https://api.neuralnexus.dev/api/v1/bee-name-generator/name\")\n\t\t\t\t.then((response) => response.json())\n\t\t\t\t.then((data) => {\n\t\t\t\t\tdocument.getElementById(\"get-bee-name\").innerText = `Bee Name: ${data.name}`;\n\t\t\t\t});\n\t\t}\n\n\t\tfunction suggestBeeName() {\n\t\t\tconst name = document.getElementById(\"suggest-bee-name\").value;\n\t\t\tfetch(\"https://api.neuralnexus.dev/api/v1/bee-name-generator/suggestion\", {\n\t\t\t\tmethod: \"POST\",\n\t\t\t\tbody: JSON.stringify({ name }),\n\t\t\t\theaders: {\n\t\t\t\t\t\"Content-Type\": \"application/json\",\n\t\t\t\t},\n\t\t\t});\n\t\t}\n\t</script><div class=\"beenamegenerator\"><h1>BeeNameGenerator</h1></div><br><div><h2 id=\"get-bee-name\">Bee Name:</h2><button onClick=\"getBeeName()\">Generate</button></div><br><input type=\"text\" id=\"suggest-bee-name\" placeholder=\"Suggested Name\" class=\"text-gray-500 dark:text-gray-600\"> <button onClick=\"suggestBeeName()\">Suggest</button>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if !templ_7745c5c3_IsBuffer {
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteTo(templ_7745c5c3_W)
+		}
+		return templ_7745c5c3_Err
+	})
+}
+
+func BeeNameGeneratorPage() templ.Component {
+	return templ.ComponentFunc(func(ctx context.Context, templ_7745c5c3_W io.Writer) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templ_7745c5c3_W.(*bytes.Buffer)
+		if !templ_7745c5c3_IsBuffer {
+			templ_7745c5c3_Buffer = templ.GetBuffer()
+			defer templ.ReleaseBuffer(templ_7745c5c3_Buffer)
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var12 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var12 == nil {
+			templ_7745c5c3_Var12 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = WrapContents(BeeNameGenerator()).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if !templ_7745c5c3_IsBuffer {
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteTo(templ_7745c5c3_W)
+		}
+		return templ_7745c5c3_Err
+	})
+}
 
 // templ McStatus() {
 // 	<div class="mcstatus">

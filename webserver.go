@@ -37,6 +37,7 @@ func (s *WebServer) Run() error {
 	router.Handle("/", templ.Handler(components.HomePage()))
 	router.Handle("/login", templ.Handler(components.LoginPage()))
 	router.Handle("/projects", templ.Handler(components.ProjectsPage()))
+	router.Handle("/project/bee-name-generator", templ.Handler(components.BeeNameGeneratorPage()))
 
 	server := http.Server{
 		Addr:    s.Address,

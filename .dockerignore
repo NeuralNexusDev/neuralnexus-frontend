@@ -4,4 +4,3 @@ Dockerfile
 .dockerignore
 docker-compose.yml
 .github
-node_modules

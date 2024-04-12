@@ -1,7 +1,8 @@
 package components
 
 templ WrapContents(contents templ.Component) {
-	<html>
+	<!DOCTYPE html>
+	<html lang="en">
 		<head>
 			<meta charset="UTF-8"/>
 			<link rel="stylesheet" href="/public/styles.css"/>
@@ -14,6 +15,7 @@ templ WrapContents(contents templ.Component) {
 			<title>NeuralNexus</title>
 		</head>
 		<body>
+			<div hidden id="session">false</div>
 			@Header()
 			<div class="relative isolate px-6 pt-14 lg:px-8">
 				@contents
@@ -42,6 +44,27 @@ templ Header() {
 	</div>
 }
 
+script updateSessionVal() {
+	const name = "session=";
+	const decodedCookie = decodeURIComponent(document.cookie);
+	const ca = decodedCookie.split(";");
+	result = false;
+	for (let i = 0; i < ca.length; i++) {
+		let c = ca[i];
+		while (c.charAt(0) == " ") {
+			c = c.substring(1);
+		}
+		if (c.indexOf(name) == 0) {
+			const value = c.substring(name.length, c.length);
+			if (value === valueHolder) {
+				result = true;
+				break;
+			}
+		}
+	}
+	document.getElementById("session").innerText = result;
+}
+
 templ LoginButton() {
 	if (false) {
 		<button
@@ -58,6 +81,40 @@ templ LoginButton() {
 	}
 }
 
+script submitLoginForm() {
+	event.preventDefault();
+	const form = event.target;
+	const formData = new FormData(form);
+	const data = Object.fromEntries(formData.entries());
+	const json = {
+		password: data.password
+	}
+	const username = data.username
+	if (username.includes('@')) {
+		json.email = username
+	} else {
+		json.username = username
+	}
+	fetch('https://api.neuralnexus.dev/api/v1/auth/login', {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json'
+		},
+		body: JSON.stringify(json)
+	})
+		.then((res) => res.json())
+		.then((data) => {
+			if (data.session_id) {
+				document.cookie = `session=${data}; expires=${new Date(data.exp).toUTCString()}; path=/`
+				{ updateSessionVal() }
+				window.location.href = '/'
+			}
+		})
+		.catch((error) => {
+			console.error('Error:', error)
+		})
+}
+
 templ Login() {
 	<div class="mx-auto max-w-sm space-y-6">
 		<div class="space-y-2 text-center">
@@ -67,7 +124,7 @@ templ Login() {
 			</p>
 		</div>
 		<div>
-			<form class="space-y-4" @submit="submitForm">
+			<form class="space-y-4" onSubmit={ submitLoginForm() }>
 				<div class="space-y-2">
 					<label
 						class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
@@ -139,28 +196,52 @@ templ LoginPage() {
 }
 
 templ Projects() {
-	<a href="/projects/mcstatus">MC Status</a>
+	<a href="/project/mcstatus">MC Status</a>
 	<br/>
-	<a href="/projects/bee-name-generator">Bee Name Generator</a>
+	<a href="/project/bee-name-generator">Bee Name Generator</a>
 }
 
 templ ProjectsPage() {
 	@WrapContents(Projects())
 }
 
-// templ BeeNameGenerator() {
-// 	<div class="beenamegenerator">
-// 		<h1>BeeNameGenerator</h1>
-// 	</div>
-// 	<br/>
-// 	<div>
-// 		<h2>Bee Name: { { beeName } }</h2>
-// 		<button @click="getBeeName()">Generate</button>
-// 	</div>
-// 	<br/>
-// 	<input type="text" v-model="suggestedName"/>
-// 	<button @click="suggestBeeName(suggestedName)">Suggest</button>
-// }
+templ BeeNameGenerator() {
+	<script>
+		function getBeeName() {
+			fetch("https://api.neuralnexus.dev/api/v1/bee-name-generator/name")
+				.then((response) => response.json())
+				.then((data) => {
+					document.getElementById("get-bee-name").innerText = `Bee Name: ${data.name}`;
+				});
+		}
+
+		function suggestBeeName() {
+			const name = document.getElementById("suggest-bee-name").value;
+			fetch("https://api.neuralnexus.dev/api/v1/bee-name-generator/suggestion", {
+				method: "POST",
+				body: JSON.stringify({ name }),
+				headers: {
+					"Content-Type": "application/json",
+				},
+			});
+		}
+	</script>
+	<div class="beenamegenerator">
+		<h1>BeeNameGenerator</h1>
+	</div>
+	<br/>
+	<div>
+		<h2 id="get-bee-name">Bee Name:</h2>
+		<button onClick="getBeeName()">Generate</button>
+	</div>
+	<br/>
+	<input type="text" id="suggest-bee-name" placeholder="Suggested Name" class="text-gray-500 dark:text-gray-600"/>
+	<button onClick="suggestBeeName()">Suggest</button>
+}
+
+templ BeeNameGeneratorPage() {
+	@WrapContents(BeeNameGenerator())
+}
 
 // templ McStatus() {
 // 	<div class="mcstatus">
