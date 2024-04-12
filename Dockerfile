@@ -17,6 +17,6 @@ FROM alpine:edge AS release-stage
 WORKDIR /app
 
 COPY --from=build /app/webserver .
-COPY --from=build /app/public /public
+COPY ./public ./public
 
 CMD ["/app/webserver"]
