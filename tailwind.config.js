@@ -1,16 +1,15 @@
 /** @type {import('tailwindcss').Config} */
-export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx,vue}",
-  ],
+module.exports = {
+  content: ["./components/*.templ"],
   theme: {
     extend: {
       colors: {
-        'discord-blue': '#5865F2',
-      },
+        discord_blue: '#5865F2',
+      }
     },
   },
-  plugins: [],
+  plugins: [
+    require('@tailwindcss/forms'),
+    require('@tailwindcss/typography')
+  ],
 }
-
