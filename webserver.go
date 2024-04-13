@@ -27,21 +27,26 @@ func NewWebServer(address string, usingUDS bool) *WebServer {
 	}
 }
 
-// Run - Start the web server
-func (s *WebServer) Run() error {
+// Setup - Setup the web server
+func (s *WebServer) Setup() http.Handler {
 	router := http.NewServeMux()
 
-	// Static public files
 	router.Handle("/public/", http.StripPrefix("/public/", http.FileServer(http.Dir("public"))))
 
 	router.Handle("/", templ.Handler(components.HomePage()))
 	router.Handle("/login", templ.Handler(components.LoginPage()))
 	router.Handle("/projects", templ.Handler(components.ProjectsPage()))
 	router.Handle("/project/bee-name-generator", templ.Handler(components.BeeNameGeneratorPage()))
+	router.Handle("/teapot", templ.Handler(components.TeapotPage()))
 
+	return middleware.RequestLoggerMiddleware(router)
+}
+
+// Run - Start the web server
+func (s *WebServer) Run() error {
 	server := http.Server{
 		Addr:    s.Address,
-		Handler: middleware.RequestLoggerMiddleware(router),
+		Handler: s.Setup(),
 	}
 
 	if s.UsingUDS {
