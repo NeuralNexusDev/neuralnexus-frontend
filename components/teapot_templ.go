@@ -69,7 +69,7 @@ func Teapot() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<div class=\"flex flex-col items-center justify-center gap-4 text-center\"><img src=\"/public/teapot.jpg\" width=\"200\" height=\"200\" alt=\"Teapot\" class=\"rounded-full border-4 border-white\" style=\"aspect-ratio: 200 / 200; object-fit: cover;\"><div class=\"space-y-2\"><h1 class=\"text-4xl font-bold\">418 I'm a teapot</h1><p class=\"text-sm text-gray-500\">You requested a cup of coffee, but I'm a teapot.</p></div><a class=\"rounded-full w-full max-w-xs\" href=\"/\">Brew another cup</a></div>")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<meta property=\"og:site_name\" content=\"Powered by NeuralNexus.dev\"><meta name=\"theme-color\" data-react-helmet=\"true\" content=\"#7C0014\"><meta property=\"og:title\" content=\"418 I&#39;m a teapot\"><meta property=\"og:description\" content=\"You requested a cup of coffee, but I&#39;m a teapot.\"><meta property=\"og:url\" content=\"https://neuralnexus.dev/teapot\"><meta property=\"og:image\" content=\"https://neuralnexus.dev/public/teapot.jpg\"><div class=\"flex flex-col items-center justify-center gap-4 text-center\"><img src=\"/public/teapot.jpg\" width=\"200\" height=\"200\" alt=\"Teapot\" class=\"rounded-full border-4 border-white\" style=\"aspect-ratio: 200 / 200; object-fit: cover;\"><div class=\"space-y-2\"><h1 class=\"text-4xl font-bold\">418 I'm a teapot</h1><p class=\"text-sm text-gray-500\">You requested a cup of coffee, but I'm a teapot.</p></div><a class=\"rounded-full w-full max-w-xs\" href=\"/\">Brew another cup</a></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

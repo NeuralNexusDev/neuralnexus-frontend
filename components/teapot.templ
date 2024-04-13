@@ -18,6 +18,12 @@ script logTeapotRequest() {
 
 templ Teapot() {
 	@logTeapotRequest()
+	<meta property="og:site_name" content="Powered by NeuralNexus.dev"/>
+	<meta name="theme-color" data-react-helmet="true" content="#7C0014"/>
+	<meta property="og:title" content="418 I'm a teapot"/>
+	<meta property="og:description" content="You requested a cup of coffee, but I'm a teapot."/>
+	<meta property="og:url" content="https://neuralnexus.dev/teapot"/>
+	<meta property="og:image" content="https://neuralnexus.dev/public/teapot.jpg"/>
 	<div class="flex flex-col items-center justify-center gap-4 text-center">
 		<img
 			src="/public/teapot.jpg"
