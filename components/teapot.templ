@@ -4,7 +4,20 @@ templ TeapotPage() {
 	@WrapContents(Teapot())
 }
 
+script logTeapotRequest() {
+	fetch('https://api.neuralnexus.dev/api/v1/teapot')
+		.then((response) => {
+			if (response.status !== 418) {
+				console.error('Failed to log teapot request:', response.statusText);
+			}
+		})
+		.catch((error) => {
+			console.error('Failed to log teapot request:', error);
+		});
+}
+
 templ Teapot() {
+	@logTeapotRequest()
 	<div class="flex flex-col items-center justify-center gap-4 text-center">
 		<img
 			src="/public/teapot.jpg"
