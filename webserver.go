@@ -13,7 +13,7 @@ import (
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/middleware"
 )
 
-// -------------- Structs --------------
+// WebServer - The web server
 type WebServer struct {
 	Address  string
 	UsingUDS bool
