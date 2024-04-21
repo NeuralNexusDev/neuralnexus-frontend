@@ -6,7 +6,8 @@ var (
 	DISCORD_CLIENT_ID     = os.Getenv("DISCORD_CLIENT_ID")
 	DISCORD_CLIENT_SECRET = os.Getenv("DISCORD_CLIENT_SECRET")
 	DISCORD_REDIRECT_URI  = os.Getenv("DISCORD_REDIRECT_URI")
-	OAUTH2_DISCORD        = templ.SafeURL("https://discord.com/api/oauth2/authorize?client_id=" + DISCORD_CLIENT_ID + "&redirect_uri=" + DISCORD_REDIRECT_URI + "&response_type=code&scope=identify%20email&state=discord")
+	// TODO: Add redirect-redirect encoded in the state
+	OAUTH2_DISCORD = templ.SafeURL("https://discord.com/api/oauth2/authorize?client_id=" + DISCORD_CLIENT_ID + "&redirect_uri=" + DISCORD_REDIRECT_URI + "&response_type=code&scope=identify%20email&state=discord")
 )
 
 script updateSessionVal() {
