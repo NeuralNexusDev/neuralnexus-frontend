@@ -16,7 +16,13 @@ var (
 	DISCORD_CLIENT_ID     = os.Getenv("DISCORD_CLIENT_ID")
 	DISCORD_CLIENT_SECRET = os.Getenv("DISCORD_CLIENT_SECRET")
 	DISCORD_REDIRECT_URI  = os.Getenv("DISCORD_REDIRECT_URI")
-	OAUTH2_DISCORD        = templ.SafeURL("https://discord.com/api/oauth2/authorize?client_id=" + DISCORD_CLIENT_ID + "&redirect_uri=" + DISCORD_REDIRECT_URI + "&response_type=code&scope=identify%20email")
+	// TODO: Add redirect-redirect encoded in the state
+	OAUTH2_DISCORD = templ.SafeURL("https://discord.com/api/oauth2/authorize?client_id=" + DISCORD_CLIENT_ID + "&redirect_uri=" + DISCORD_REDIRECT_URI + "&response_type=code&scope=identify%20email&state=discord")
+
+	TWITCH_CLIENT_ID     = os.Getenv("TWITCH_CLIENT_ID")
+	TWITCH_CLIENT_SECRET = os.Getenv("TWITCH_CLIENT_SECRET")
+	TWITCH_REDIRECT_URI  = os.Getenv("TWITCH_REDIRECT_URI")
+	OAUTH2_TWITCH        = templ.SafeURL("https://id.twitch.tv/oauth2/authorize?client_id=" + TWITCH_CLIENT_ID + "&redirect_uri=" + TWITCH_REDIRECT_URI + "&response_type=code&scope=user%3Aread%3Aemail&state=twitch")
 )
 
 func updateSessionVal() templ.ComponentScript {
@@ -147,7 +153,7 @@ func Login() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("\"><div class=\"space-y-2\"><label class=\"text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70\" for=\"username\">Username or Email</label> <input class=\"text-black flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50\" id=\"username\" name=\"username\" placeholder=\"user@example.com\" type=\"text\"></div><div class=\"space-y-2\"><label class=\"text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70\" for=\"password\">Password</label> <input class=\"text-black flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50\" id=\"password\" name=\"password\" type=\"password\"></div><button class=\"border inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 w-full\" type=\"submit\">Login</button></form><div data-orientation=\"horizontal\" role=\"none\" class=\"shrink-0 bg-gray-100 h-[1px] w-full my-8\"></div><div class=\"space-y-4\"><!-- <button class=\"w-full\">Login with Google</button> --><!-- <button class=\"w-full\">Login with Twich</button> --><a href=\"")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("\"><div class=\"space-y-2\"><label class=\"text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70\" for=\"username\">Username or Email</label> <input class=\"text-black flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50\" id=\"username\" name=\"username\" placeholder=\"user@example.com\" type=\"text\"></div><div class=\"space-y-2\"><label class=\"text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70\" for=\"password\">Password</label> <input class=\"text-black flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50\" id=\"password\" name=\"password\" type=\"password\"></div><button class=\"border inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 w-full\" type=\"submit\">Login</button></form><div data-orientation=\"horizontal\" role=\"none\" class=\"shrink-0 bg-gray-100 h-[1px] w-full my-8\"></div><div class=\"space-y-4\"><!-- <button class=\"w-full\">Login with Google</button> --><a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -156,7 +162,16 @@ func Login() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("\"><button class=\"bg-discord_blue inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full\"><span class=\"mr-2\">Login with Discord</span> <img src=\"https://assets-global.website-files.com/6257adef93867e50d84d30e2/636e0a6ca814282eca7172c6_icon_clyde_white_RGB.svg\" alt=\"Discord Logo\" class=\"w-6 h-6 mr-2\"></button></a><div class=\"mt-4 text-center text-sm\"><span class=\"mr-1\">Don't have an account?</span> <a class=\"underline\" href=\"/register\">Sign Up </a></div><a class=\"inline-block w-full text-center text-sm underline\" href=\"#\">Forgot your password?</a></div></div></div>")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("\"><button class=\"bg-discord_blue inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full\"><span class=\"mr-2\">Login with Discord</span> <img src=\"https://assets-global.website-files.com/6257adef93867e50d84d30e2/636e0a6ca814282eca7172c6_icon_clyde_white_RGB.svg\" alt=\"Discord Logo\" class=\"w-6 h-6 mr-2\"></button></a> <a href=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var5 templ.SafeURL = OAUTH2_TWITCH
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(string(templ_7745c5c3_Var5)))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("\"><button class=\"bg-twitch_purple inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full\"><span class=\"mr-2\">Login with Twitch</span> <img src=\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMwAAADACAMAAAB/Pny7AAAAb1BMVEX///9lRpz08/icir5cOJiomcZgP5ra1Od9ZqtgPZtjQ5xjQp1lQKDi3euTfbrq5vG0ps91V6pwUaV+Y67BtdZrS6KTgLi6rtCDba7GvNrVzuT6+fxXMJfv7PV4XalZNJejksPMw91iPKGLdrWGbbSnGin/AAAE00lEQVR4nO3d6XqqMBAGYAqKhSABt4qAVez9X+Oxi0crmSw0xIzPfL/L8nYCCSAhCC6Zpi+4k+T/LeGWPXpv/pgbzHHxRJVB38puMO0pfvTO/DVXzHH/PJWpi/XzYPgG+7nsBnPcA5g08TW9lnTB1AVkWW4iP5P3upILpt0kYsxk2tahl9m93p9+L5gd1GNOpmHgZ2YQpi4mYgtGDM+BVoYRs4POZQgx4LkMI4ZD5zKMmN3ieSpTv0HnMoSYdgu2MnyYWX+YgxZTF++gBR0mPMGtDB1mJruTgQ1TdLAFG6aWtTJsGN7JLv6RYapGYsGG2cDdPz6M/H4ZMoyMQhhHIQxhHIQwhHEQwhDGQQhDGAchDGEchDDmmPawuUtetPJF6qi3yKr2AjNfT+5+f9CcuHyRkHX3ixwUG3aFKfs/N1Bheo+7MtWGCUMYwhCGMIQhDGEIQxjCEIYwhCEMYQhDGMLoYOLTE2HYkjCEIQxhCEMYwhCGMIQhDGEIQxjCEIYwhCEMYQjzNJhFwn4lfVdi1nH6O75g+LK8yzpSVibzFFPzXhS/0T7/A3pRbdcRxk0IQxgHIYyvmKo3XQ5ejGBONrQYPu3PloUV0x6y/jwmKU5MGKWCOVlwYsKNcEa2eIsQE0aCNnZOU+DD1JF4Osa44+gwNVCXtFsF2DBtxMQWdrYgw7QHsYWtPy24MML+5dOyr75euMWE4VBdyp+XhxFhIEu6v7wIjQcD1uWnjQWIMOCxX15fUMeCqYXjsbNlcfOyPRIMNIZhi+PNxAE4MJAlbY63f4YDsxEfL3Gz+vVnGDDhBmhj2fH3HyLAwOOxOwsCTHgQz459Ho/dTxriPYYDx35cVr0JUHzH8APQv5SCyVw8x0jGY4I98xszh/rKfb+NBZ5jONC/CNtY4DeGA/1LKjj2v+Ixps2BNpYegYmc/MXwPBPuE+sqaBEVRjGZ1XjhJ8CSrcBl5JgkmhsEfqjcznczrVXMdt85Hhbi7/uxDKyLCvOSZvphbxClKLv3TmsdXfP+maaZiKcrT5nEosK8pPp5ATA86s5nWM11yMMWMosSo590LcbwXDpbv0lYeT9OdozhkXSyfpPEe8XkerY2BGG4+GHKkDCVZWxMe7LXxsTjMXcYHkm+1GOWGBiPOcPM7X2mU3Qt5hTDc2vHS/963zGGAzciBiSGx2NuMDy3Z5H2+w4wrfxjMEZr7nTa2IgYyQcHTcM06zIahufW6sJKXctIGKvjMW3LOBge2WtjGn3lqBiL/QtbavSVY2Jaq23M5Lrd1mavmPO1mK1VGrWxMTAW+0rDutjHPKR/GQnDgYfCA8Ia+J6SEwzPxTeIBiTWGiePh6lCi21Mb5w8GmZxiOz1L8bHi13MuWVYq0usuKfkAGMtint9qDCp8p4SHozGPSUsmDQp34Y+R2EZM83w3dTa1qka/IDrrTDNVP5xVDDJOipWQG72ouLDn2/VoWHq+XZQLz9ZVm1YQ7mufrBkULjkq/Vwuu38YU8UJeFDKjPZKl6ifVCGVCZZzh692+IMqEzyMX/0XgMxrwzz1mJeGfaxe/Q+gzGtjM8W08qwD0+P/a+YVSZ79bguhpXpvK6LWWWS0tvz2HcMKjPZe93GApPKdL72+9doV8b7NhboVyZzXpd/PuzJNyyY7AoAAAAASUVORK5CYII=\" alt=\"Twitch Logo\" class=\"w-6 h-6 mr-2\"></button></a><div class=\"mt-4 text-center text-sm\"><span class=\"mr-1\">Don't have an account?</span> <a class=\"underline\" href=\"/register\">Sign Up </a></div><a class=\"inline-block w-full text-center text-sm underline\" href=\"#\">Forgot your password?</a></div></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -175,9 +190,9 @@ func LoginPage() templ.Component {
 			defer templ.ReleaseBuffer(templ_7745c5c3_Buffer)
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var5 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var5 == nil {
-			templ_7745c5c3_Var5 = templ.NopComponent
+		templ_7745c5c3_Var6 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var6 == nil {
+			templ_7745c5c3_Var6 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		templ_7745c5c3_Err = WrapContents(Login()).Render(ctx, templ_7745c5c3_Buffer)
