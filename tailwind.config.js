@@ -4,7 +4,8 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        discord_blue: '#5865F2',
+        discord_blurple: '#5865F2',
+        twitch_purple: '#6441A5',
       }
     },
   },
