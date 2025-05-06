@@ -35,18 +35,23 @@ templ Login() {
     <script>
     const nonce = generateNonce();
 
+    let redirect = window.location.href;
+    if (redirect.endsWith("/login")) {
+        redirect = redirect.substring(0, redirect.length - 6);
+    }
+
     setTimeout(() => {
         let aDiscord = document.getElementById("discord-oauth");
         let discordUrl = document.getElementById("discord-oauth-base").innerText;
         if (aDiscord) {
-            aDiscord.href = discordUrl + "&state=" + encodeState("discord", nonce, window.location.href);
+            aDiscord.href = discordUrl + "&state=" + encodeState("discord", nonce, redirect);
         }
     }, 1000);
     setTimeout(() => {
         let aTwitch = document.getElementById("twitch-oauth");
         let twitchUrl = document.getElementById("twitch-oauth-base").innerText;
         if (aTwitch) {
-            aTwitch.href = twitchUrl + "&state=" + encodeState("twitch", nonce, window.location.href);
+            aTwitch.href = twitchUrl + "&state=" + encodeState("twitch", nonce, redirect);
         }
     }, 1000);
     </script>
