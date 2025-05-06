@@ -35,16 +35,20 @@ templ Login() {
     <script>
     const nonce = generateNonce();
 
-    let aDiscord = document.getElementById("discord-oauth");
-    let discordUrl = document.getElementById("discord-oauth-base").innerText;
-    if (aDiscord) {
-        aDiscord.href = discordUrl + "&state=" + encodeState("discord", nonce, window.location.href);
-    }
-    let aTwitch = document.getElementById("twitch-oauth");
-    let twitchUrl = document.getElementById("twitch-oauth-base").innerText;
-    if (aTwitch) {
-        aTwitch.href = twitchUrl + "&state=" + encodeState("twitch", nonce, window.location.href);
-    }
+    setTimeout(() => {
+        let aDiscord = document.getElementById("discord-oauth");
+        let discordUrl = document.getElementById("discord-oauth-base").innerText;
+        if (aDiscord) {
+            aDiscord.href = discordUrl + "&state=" + encodeState("discord", nonce, window.location.href);
+        }
+    }, 1000);
+    setTimeout(() => {
+        let aTwitch = document.getElementById("twitch-oauth");
+        let twitchUrl = document.getElementById("twitch-oauth-base").innerText;
+        if (aTwitch) {
+            aTwitch.href = twitchUrl + "&state=" + encodeState("twitch", nonce, window.location.href);
+        }
+    }, 1000);
     </script>
     <div hidden id="discord-oauth-base">{ OAUTH2_DISCORD }</div>
     <div hidden id="twitch-oauth-base">{ OAUTH2_TWITCH }</div>
@@ -113,7 +117,7 @@ templ Login() {
 					</button>
 				</a>
 				<div class="mt-2"></div>
-				<a href="/" id="twitch-oauth">
+				<a href="" id="twitch-oauth">
 					<button
 						class="bg-twitch_purple hover:bg-purple-800 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
 					>
