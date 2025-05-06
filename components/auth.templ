@@ -1,40 +1,19 @@
 package components
 
-import "os"
+import (
+    "os"
+    "golang.org/x/oauth2/endpoints"
+)
 
 var (
 	DISCORD_CLIENT_ID     = os.Getenv("DISCORD_CLIENT_ID")
-	DISCORD_CLIENT_SECRET = os.Getenv("DISCORD_CLIENT_SECRET")
 	DISCORD_REDIRECT_URI  = os.Getenv("DISCORD_REDIRECT_URI")
-	// TODO: Add redirect-redirect encoded in the state
-	OAUTH2_DISCORD = templ.SafeURL("https://discord.com/api/oauth2/authorize?client_id=" + DISCORD_CLIENT_ID + "&redirect_uri=" + DISCORD_REDIRECT_URI + "&response_type=code&scope=identify%20email&state=discord")
+	OAUTH2_DISCORD = templ.SafeURL("https://discord.com/api/oauth2/authorize?client_id=" + DISCORD_CLIENT_ID + "&redirect_uri=" + DISCORD_REDIRECT_URI + "&response_type=code&scope=identify%20email")
 
 	TWITCH_CLIENT_ID     = os.Getenv("TWITCH_CLIENT_ID")
-	TWITCH_CLIENT_SECRET = os.Getenv("TWITCH_CLIENT_SECRET")
 	TWITCH_REDIRECT_URI  = os.Getenv("TWITCH_REDIRECT_URI")
-	OAUTH2_TWITCH        = templ.SafeURL("https://id.twitch.tv/oauth2/authorize?client_id=" + TWITCH_CLIENT_ID + "&redirect_uri=" + TWITCH_REDIRECT_URI + "&response_type=code&scope=user%3Aread%3Aemail&state=twitch")
+	OAUTH2_TWITCH        = templ.SafeURL(endpoints.Twitch.AuthURL + "?client_id=" + TWITCH_CLIENT_ID + "&redirect_uri=" + TWITCH_REDIRECT_URI + "&response_type=code&scope=user%3Aread%3Aemail")
 )
-
-script updateSessionVal() {
-	const name = "session=";
-	const decodedCookie = decodeURIComponent(document.cookie);
-	const ca = decodedCookie.split(";");
-	result = false;
-	for (let i = 0; i < ca.length; i++) {
-		let c = ca[i];
-		while (c.charAt(0) == " ") {
-			c = c.substring(1);
-		}
-		if (c.indexOf(name) == 0) {
-			const value = c.substring(name.length, c.length);
-			if (value === valueHolder) {
-				result = true;
-				break;
-			}
-		}
-	}
-	document.getElementById("session").innerText = result;
-}
 
 templ LoginButton() {
 	if (false) {
@@ -52,41 +31,19 @@ templ LoginButton() {
 	}
 }
 
-script submitLoginForm() {
-	event.preventDefault();
-	const form = event.target;
-	const formData = new FormData(form);
-	const data = Object.fromEntries(formData.entries());
-	const json = {
-		password: data.password
-	}
-	const username = data.username
-	if (username.includes('@')) {
-		json.email = username
-	} else {
-		json.username = username
-	}
-	fetch('https://api.neuralnexus.dev/api/v1/auth/login', {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json'
-		},
-		body: JSON.stringify(json)
-	})
-		.then((res) => res.json())
-		.then((data) => {
-			if (data.session_id) {
-				document.cookie = `session=${data}; expires=${new Date(data.exp).toUTCString()}; path=/`
-				{ updateSessionVal() }
-				window.location.href = '/'
-			}
-		})
-		.catch((error) => {
-			console.error('Error:', error)
-		})
-}
-
 templ Login() {
+    <script>
+    const nonce = generateNonce();
+
+    let aDiscord = document.querySelector("a[href='%discord.oauth.placeholder%']")
+    if (aDiscord) {
+        aDiscord.href = "{ OAUTH2_DISCORD }&state=" + encodeState("discord", nonce, window.location.href);
+    }
+    let aTwitch = document.querySelector("a[href='%twitch.oauth.placeholder%']")
+    if (aTwitch) {
+        aTwitch.href = "{ OAUTH2_TWITCH }&state=" + encodeState("twitch", nonce, window.location.href);
+    }
+    </script>
 	<div class="mx-auto max-w-sm space-y-6">
 		<div class="space-y-2 text-center">
 			<h1 class="text-3xl font-bold">Login</h1>
@@ -95,7 +52,7 @@ templ Login() {
 			</p>
 		</div>
 		<div>
-			<form class="space-y-4" onSubmit={ submitLoginForm() }>
+			<form class="space-y-4" onSubmit="submitLoginForm()">
 				<div class="space-y-2">
 					<label
 						class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
@@ -139,7 +96,7 @@ templ Login() {
 			></div>
 			<div class="space-y-4">
 				<!-- <button class="w-full">Login with Google</button> -->
-				<a href={ OAUTH2_DISCORD }>
+				<a href="%discord.oauth.placeholder%">
 					<button
 						class="bg-discord_blurple hover:bg-blue-600 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
 					>
@@ -152,7 +109,7 @@ templ Login() {
 					</button>
 				</a>
 				<div class="mt-2"></div>
-				<a href={ OAUTH2_TWITCH }>
+				<a href="%twitch.oauth.placeholder%">
 					<button
 						class="bg-twitch_purple hover:bg-purple-800 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
 					>
