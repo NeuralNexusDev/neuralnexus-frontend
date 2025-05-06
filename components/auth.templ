@@ -35,13 +35,13 @@ templ Login() {
     <script>
     const nonce = generateNonce();
 
-    let aDiscord = document.querySelector("a[href='%discord.oauth.placeholder%']")
+    let aDiscord = document.getElementById("discord-oauth");
     if (aDiscord) {
-        aDiscord.href = "{ OAUTH2_DISCORD }&state=" + encodeState("discord", nonce, window.location.href);
+        aDiscord.href = "{ OAUTH2_DISCORD }" + "&state=" + encodeState("discord", nonce, window.location.href);
     }
-    let aTwitch = document.querySelector("a[href='%twitch.oauth.placeholder%']")
+    let aTwitch = document.getElementById("twitch-oauth");
     if (aTwitch) {
-        aTwitch.href = "{ OAUTH2_TWITCH }&state=" + encodeState("twitch", nonce, window.location.href);
+        aTwitch.href = "{ OAUTH2_TWITCH }" + "&state=" + encodeState("twitch", nonce, window.location.href);
     }
     </script>
 	<div class="mx-auto max-w-sm space-y-6">
@@ -96,7 +96,7 @@ templ Login() {
 			></div>
 			<div class="space-y-4">
 				<!-- <button class="w-full">Login with Google</button> -->
-				<a href="%discord.oauth.placeholder%">
+				<a href="/" id="discord-oauth">
 					<button
 						class="bg-discord_blurple hover:bg-blue-600 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
 					>
@@ -109,7 +109,7 @@ templ Login() {
 					</button>
 				</a>
 				<div class="mt-2"></div>
-				<a href="%twitch.oauth.placeholder%">
+				<a href="/" id="twitch-oauth">
 					<button
 						class="bg-twitch_purple hover:bg-purple-800 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
 					>
