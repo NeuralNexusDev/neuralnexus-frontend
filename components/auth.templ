@@ -36,14 +36,18 @@ templ Login() {
     const nonce = generateNonce();
 
     let aDiscord = document.getElementById("discord-oauth");
+    let discordUrl = document.getElementById("discord-oauth-base").innerText;
     if (aDiscord) {
-        aDiscord.href = "{ OAUTH2_DISCORD }" + "&state=" + encodeState("discord", nonce, window.location.href);
+        aDiscord.href = discordUrl + "&state=" + encodeState("discord", nonce, window.location.href);
     }
     let aTwitch = document.getElementById("twitch-oauth");
+    let twitchUrl = document.getElementById("twitch-oauth-base").innerText;
     if (aTwitch) {
-        aTwitch.href = "{ OAUTH2_TWITCH }" + "&state=" + encodeState("twitch", nonce, window.location.href);
+        aTwitch.href = twitchUrl + "&state=" + encodeState("twitch", nonce, window.location.href);
     }
     </script>
+    <div hidden id="discord-oauth-base">{ OAUTH2_DISCORD }</div>
+    <div hidden id="twitch-oauth-base">{ OAUTH2_TWITCH }</div>
 	<div class="mx-auto max-w-sm space-y-6">
 		<div class="space-y-2 text-center">
 			<h1 class="text-3xl font-bold">Login</h1>
@@ -96,7 +100,7 @@ templ Login() {
 			></div>
 			<div class="space-y-4">
 				<!-- <button class="w-full">Login with Google</button> -->
-				<a href="/" id="discord-oauth">
+				<a href="" id="discord-oauth">
 					<button
 						class="bg-discord_blurple hover:bg-blue-600 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
 					>
