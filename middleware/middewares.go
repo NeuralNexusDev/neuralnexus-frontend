@@ -1,8 +1,11 @@
 package middleware
 
 import (
+	"context"
+	"crypto"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -21,6 +24,22 @@ func (w *WrappedWriter) WriteHeader(statusCode int) {
 // Middleware - Middleware type
 type Middleware func(http.Handler) http.Handler
 
+// key - Type for context keys
+type key int
+
+const (
+	// SessionKey - Key for session in context
+	SessionKey key = iota
+	// RequestIDKey - Key for request ID in context
+	RequestIDKey
+)
+
+const (
+	XRequestIDHeader     = "X-Request-ID"
+	XForwardedForHeader  = "X-Forwarded-For"
+	CFConnectingIPHeader = "CF-Connecting-IP"
+)
+
 // CreateStack - Create a stack of middlewares
 func CreateStack(middlewares ...Middleware) Middleware {
 	return func(next http.Handler) http.Handler {
@@ -36,16 +55,48 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		wrapped := &WrappedWriter{w, http.StatusOK}
-		next.ServeHTTP(wrapped, r)
 
-		cfConnectingIP := r.Header.Get("CF-Connecting-IP")
-		forwardedFor := r.Header.Get("X-Forwarded-For")
+		// Set the request ID in the context
+		requestIdStr := r.Header.Get(XRequestIDHeader)
+		var requestId int
+		if requestIdStr == "" {
+			requestId = int(start.UnixNano())
+			r.Header.Set(XRequestIDHeader, strconv.Itoa(requestId))
+		} else {
+			requestId, _ = strconv.Atoi(requestIdStr)
+		}
+		ctx := r.Context()
+		ctx = context.WithValue(ctx, RequestIDKey, requestId)
+
+		// IP address handling
+		cfConnectingIP := r.Header.Get(CFConnectingIPHeader)
+		forwardedFor := r.Header.Get(XForwardedForHeader)
 		if cfConnectingIP != "" {
 			r.RemoteAddr = cfConnectingIP
 		} else if forwardedFor != "" {
 			r.RemoteAddr = forwardedFor
 		}
 
-		log.Printf("%s %d %s %s %s", r.RemoteAddr, wrapped.statusCode, r.Method, r.URL.Path, time.Since(start))
+		// Handle the request
+		next.ServeHTTP(wrapped, r.WithContext(ctx))
+
+		// Log the request
+		cookie, err := r.Cookie("session")
+		sessionId := "N/A"
+		if err == nil {
+			h := crypto.SHA256.New()
+			h.Write([]byte(cookie.Value))
+			sessionId = string(h.Sum(nil))
+		}
+
+		log.Printf("%d %s %s %d %s %s %s",
+			requestId,
+			sessionId,
+			r.RemoteAddr,
+			wrapped.statusCode,
+			r.Method,
+			r.URL.Path,
+			time.Since(start),
+		)
 	})
 }
