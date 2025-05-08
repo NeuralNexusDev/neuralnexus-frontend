@@ -19,12 +19,13 @@ function setCookie(name, value, expires) {
 }
 
 function getSession() {
-    return getCookie('session');
+    return getCookie('sessionId');
 }
 
 function updateSession(data) {
     if (data.session_id) {
-        setCookie('session', data.session_id, new Date(data.exp).toUTCString());
+        setCookie('session_id', data.session_id, new Date(data.exp).toUTCString());
+        setCookie('user_id', data.user_id, new Date(data.exp).toUTCString());
         window.location.href = '/';
     }
 }
@@ -33,14 +34,15 @@ function revokeSession() {
     fetch('https://api.neuralnexus.dev/api/v1/auth/logout', {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ session_id: document.cookie })
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + getSession()
+        }
     })
         .then((res) => res.json())
         .then((data) => {
             if (data.success) {
-                setCookie('session', '', new Date(0).toUTCString());
+                setCookie('session_id', '', new Date(0).toUTCString());
+                setCookie('user_id', '', new Date(0).toUTCString());
                 window.location.href = '/'
             }
         })

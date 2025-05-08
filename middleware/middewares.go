@@ -2,8 +2,6 @@ package middleware
 
 import (
 	"context"
-	"crypto"
-	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -82,17 +80,15 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(wrapped, r.WithContext(ctx))
 
 		// Log the request
-		cookie, err := r.Cookie("session")
-		sessionId := "N/A"
+		cookie, err := r.Cookie("user_id")
+		userId := "N/A"
 		if err == nil {
-			h := crypto.SHA256.New()
-			h.Write([]byte(cookie.Value))
-			sessionId = fmt.Sprintf("%x", h.Sum(nil))
+			userId = cookie.Value
 		}
 
 		log.Printf("%d %s %s %d %s %s %s",
 			requestId,
-			sessionId,
+			userId,
 			r.RemoteAddr,
 			wrapped.statusCode,
 			r.Method,
