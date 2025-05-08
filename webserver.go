@@ -10,7 +10,7 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/components"
-	"github.com/p0t4t0sandwich/neuralnexus-frontend/middleware"
+	mw "github.com/p0t4t0sandwich/neuralnexus-frontend/middleware"
 )
 
 // WebServer - The web server
@@ -39,7 +39,13 @@ func (s *WebServer) Setup() http.Handler {
 	router.Handle("/project/bee-name-generator", templ.Handler(components.BeeNameGeneratorPage()))
 	router.Handle("/teapot", templ.Handler(components.TeapotPage()))
 
-	return middleware.RequestLoggerMiddleware(router)
+	middlewareStack := mw.CreateStack(
+		mw.RequestIDMiddleware,
+		mw.IPMiddleware,
+		mw.RequestLoggerMiddleware,
+	)
+
+	return middlewareStack(router)
 }
 
 // Run - Start the web server

@@ -2,9 +2,11 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -39,6 +41,22 @@ const (
 	CFConnectingIPHeader = "CF-Connecting-IP"
 )
 
+func LogRequest(r *http.Request, message ...string) {
+	requestId := r.Context().Value(RequestIDKey).(int)
+	cookie, err := r.Cookie("user_id")
+	userId := "N/A"
+	if err == nil {
+		userId = cookie.Value
+	}
+	log.Printf("%d %d %s %s %s",
+		time.Now().Unix(),
+		requestId,
+		userId,
+		r.RemoteAddr,
+		strings.Join(message, " "),
+	)
+}
+
 // CreateStack - Create a stack of middlewares
 func CreateStack(middlewares ...Middleware) Middleware {
 	return func(next http.Handler) http.Handler {
@@ -49,25 +67,28 @@ func CreateStack(middlewares ...Middleware) Middleware {
 	}
 }
 
-// RequestLoggerMiddleware - Log all requests
-func RequestLoggerMiddleware(next http.Handler) http.Handler {
+// RequestIDMiddleware - Set the request ID in the context
+func RequestIDMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		wrapped := &WrappedWriter{w, http.StatusOK}
-
-		// Set the request ID in the context
 		requestIdStr := r.Header.Get(XRequestIDHeader)
 		var requestId int
 		if requestIdStr == "" {
-			requestId = int(start.UnixNano())
+			requestId = int(time.Now().UnixNano())
 			r.Header.Set(XRequestIDHeader, strconv.Itoa(requestId))
 		} else {
 			requestId, _ = strconv.Atoi(requestIdStr)
 		}
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, RequestIDKey, requestId)
+		r = r.WithContext(ctx)
 
-		// IP address handling
+		next.ServeHTTP(w, r)
+	})
+}
+
+// IPMiddleware - Update the remote address based on headers
+func IPMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cfConnectingIP := r.Header.Get(CFConnectingIPHeader)
 		forwardedFor := r.Header.Get(XForwardedForHeader)
 		if cfConnectingIP != "" {
@@ -76,24 +97,23 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 			r.RemoteAddr = forwardedFor
 		}
 
-		// Handle the request
-		next.ServeHTTP(wrapped, r.WithContext(ctx))
+		next.ServeHTTP(w, r)
+	})
+}
 
-		// Log the request
-		cookie, err := r.Cookie("user_id")
-		userId := "N/A"
-		if err == nil {
-			userId = cookie.Value
-		}
+// RequestLoggerMiddleware - Log all requests
+func RequestLoggerMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		wrapped := &WrappedWriter{w, http.StatusOK}
 
-		log.Printf("%d %s %s %d %s %s %s",
-			requestId,
-			userId,
-			r.RemoteAddr,
+		next.ServeHTTP(wrapped, r)
+
+		LogRequest(r, fmt.Sprintf("%d %s %s %s",
 			wrapped.statusCode,
 			r.Method,
 			r.URL.Path,
 			time.Since(start),
-		)
+		))
 	})
 }
