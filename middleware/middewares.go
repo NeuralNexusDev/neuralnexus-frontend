@@ -48,8 +48,7 @@ func LogRequest(r *http.Request, message ...string) {
 	if err == nil {
 		userId = cookie.Value
 	}
-	log.Printf("%d %d %s %s %s",
-		time.Now().Unix(),
+	log.Printf("%d %s %s %s",
 		requestId,
 		userId,
 		r.RemoteAddr,
