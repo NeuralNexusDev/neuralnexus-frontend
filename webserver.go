@@ -40,6 +40,7 @@ func (s *WebServer) Setup() http.Handler {
 	router.Handle("/teapot", templ.Handler(components.TeapotPage()))
 
 	middlewareStack := mw.CreateStack(
+		mw.SessionMiddleware,
 		mw.RequestIDMiddleware,
 		mw.IPMiddleware,
 		mw.RequestLoggerMiddleware,

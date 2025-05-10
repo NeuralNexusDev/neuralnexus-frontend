@@ -1,3 +1,8 @@
+/**
+ * @description This function is used to get a cookie by name
+ * @param cname {string} - The name of the cookie to get
+ * @returns {string} - The value of the cookie
+ */
 function getCookie(cname) {
     let name = cname + "=";
     let decodedCookie = decodeURIComponent(document.cookie);
@@ -14,23 +19,53 @@ function getCookie(cname) {
     return "";
 }
 
+/**
+ * @description This function is used to set a cookie
+ * @param name {string} - The name of the cookie to set
+ * @param value {string} - The value of the cookie
+ * @param expires {string} - The expiration date of the cookie
+ */
 function setCookie(name, value, expires) {
     document.cookie = name + "=" + value + "; expires=" + expires + "; path=/";
 }
 
-function getSession() {
-    return getCookie('sessionId');
+/**
+ * @description This function is used to delete a cookie
+ * @param name {string} - The name of the cookie to delete
+ */
+function deleteCookie(name) {
+    document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
 }
 
+/**
+ * @description This function is used to get the session ID from the cookie
+ * @returns {string} - The session ID
+ */
+function getSession() {
+    return getCookie('session');
+}
+
+/**
+ * @description A session object
+ * @typedef {Object} Session
+ * @property {string} session - The session JWT
+ */
+
+/**
+ * @description This function is used to get the user ID from the cookie
+ * @param data {Session} - The data object containing the user ID
+ */
 function updateSession(data) {
-    if (data.session_id) {
-        setCookie('session_id', data.session_id, new Date(data.exp).toUTCString());
-        setCookie('user_id', data.user_id, new Date(data.exp).toUTCString());
-        window.location.href = '/';
+    if (data.session) {
+        const payload = JSON.parse(atob(data.session.split('.')[1]));
+        if (payload && payload.exp) {
+            const exp = payload.exp * 1000;
+            setCookie('session', payload.session, new Date(exp).toUTCString());
+        }
     }
 }
 
-function revokeSession() {
+function logout() {
     fetch('https://api.neuralnexus.dev/api/v1/auth/logout', {
         method: 'POST',
         headers: {
@@ -41,8 +76,7 @@ function revokeSession() {
         .then((res) => res.json())
         .then((data) => {
             if (data.success) {
-                setCookie('session_id', '', new Date(0).toUTCString());
-                setCookie('user_id', '', new Date(0).toUTCString());
+                setCookie('session', '', new Date(0).toUTCString());
                 window.location.href = '/'
             }
         })
