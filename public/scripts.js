@@ -73,11 +73,12 @@ function logout() {
             'Authorization': 'Bearer ' + getSession()
         }
     })
-        .then((res) => res.json())
-        .then((data) => {
-            if (data.success) {
-                setCookie('session', '', new Date(0).toUTCString());
+        .then((res) => {
+            if (res.status === 204) {
+                deleteCookie('session');
                 window.location.href = '/'
+            } else {
+                console.error('Logout failed');
             }
         })
         .catch((error) => {
