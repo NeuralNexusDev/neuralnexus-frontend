@@ -47,7 +47,7 @@ templ Login() {
             state = {
                 platform: "discord",
                 nonce: nonce,
-                redirect: redirect,
+                redirect_uri: redirect,
                 mode: "login"
             }
             aDiscord.href = discordUrl + "&state=" + encodeState(state);
@@ -60,7 +60,7 @@ templ Login() {
             state = {
                 platform: "twitch",
                 nonce: nonce,
-                redirect: redirect,
+                redirect_uri: redirect,
                 mode: "login"
             }
             aTwitch.href = twitchUrl + "&state=" + encodeState(state);
