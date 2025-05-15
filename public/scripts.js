@@ -114,31 +114,30 @@ function submitLoginForm() {
         })
 }
 
+/**
+ * @description Generate a random nonce for the OAuth flow
+ * @returns {string} - The generated nonce
+ */
 function generateNonce() {
     const nonce = Math.random().toString(36).substring(2, 15);
     setCookie('nonce', nonce, new Date(Date.now() + 60 * 1000).toUTCString());
     return nonce;
 }
 
-function validateNonce(nonce) {
-    const cookieNonce = getCookie('nonce');
-    if (cookieNonce === nonce) {
-        setCookie('nonce', '', new Date(0).toUTCString());
-        return true;
-    }
-    return false;
-}
+/**
+ * @description an OAuthState object
+ * @typedef {Object} OAuthState
+ * @property {string} platform - The platform to redirect to
+ * @property {string} nonce - The nonce to use for the OAuth flow
+ * @property {string} redirect_uri - The redirect URI to use for the OAuth flow
+ * @property {string} mode - The mode describing how to handle the OAuth interaction
+ */
 
-function encodeState(platform, nonce, redirect_uri) {
-    const state = {
-        platform: platform,
-        nonce: nonce,
-        redirect_uri: redirect_uri
-    };
+/**
+ * @description This function is used to encode the state object into a string
+ * @param state {OAuthState} - The state object to encode
+ * @returns {string} - The encoded state object
+ */
+function encodeState(state) {
     return btoa(JSON.stringify(state));
-}
-
-function decodeState(state) {
-    const decoded = atob(state);
-    return JSON.parse(decoded);
 }
