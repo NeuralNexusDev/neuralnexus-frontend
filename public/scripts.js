@@ -26,7 +26,7 @@ function getCookie(cname) {
  * @param expires {string} - The expiration date of the cookie
  */
 function setCookie(name, value, expires) {
-    document.cookie = name + "=" + value + "; expires=" + expires + "; path=/";
+    document.cookie = name + "=" + value + "; expires=" + expires + "; path=/; domain=.neuralnexus.dev; SameSite=None; Secure=true";
 }
 
 /**
