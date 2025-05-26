@@ -2,8 +2,6 @@ FROM golang:1.24.2-bookworm AS build
 
 WORKDIR /app
 
-RUN apt-get install -y make
-
 COPY go.mod go.sum ./
 RUN go mod download
 
@@ -20,7 +18,7 @@ FROM alpine:edge AS release-stage
 
 WORKDIR /app
 
-COPY ./public ./public
+COPY --from=build /app/public ./public
 COPY --from=build /app/webserver .
 
 CMD ["/app/webserver"]
