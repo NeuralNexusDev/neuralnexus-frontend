@@ -2,11 +2,6 @@ generate:
 	./tailwindcss -i ./assets/css/input.css -o ./public/css/styles.css --minify
 	templ generate
 
-downloadtw:
-	curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64
-	chmod +x tailwindcss-linux-x64
-	mv tailwindcss-linux-x64 ./tailwindcss
-
 update:
 	go install github.com/a-h/templ/cmd/templ@latest
 
@@ -33,11 +28,18 @@ server:
 	--build.stop_on_error "false" \
 	--misc.clean_on_exit true
 
-# Watch Tailwind CSS changes
-tailwind:
+tailwind-clean:
+	./tailwindcss -i ./assets/css/input.css -o ./public/css/styles.css --clean
+
+tailwind-watch:
 	./tailwindcss -i ./assets/css/input.css -o ./public/css/styles.css --watch
 
-# Start development server with all watchers
+tailwind-dl:
+	curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64
+	chmod +x tailwindcss-linux-x64
+	mv tailwindcss-linux-x64 ./tailwindcss
+
 dev:
 	export DISCORD_CLIENT_ID=1107039927230791680 DISCORD_REDIRECT_URI=https://api.neuralnexus.dev/api/oauth TWITCH_CLIENT_ID=cx0nr5h65pexo8huupaywy08ry79pw TWITCH_REDIRECT_URI=https://api.neuralnexus.dev/api/oauth
-	make -j3 tailwind templ server
+	make tailwind-clean
+	make -j3 tailwind-watch templ server

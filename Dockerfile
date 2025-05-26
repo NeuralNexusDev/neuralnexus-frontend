@@ -9,7 +9,7 @@ RUN go install github.com/a-h/templ/cmd/templ@latest
 
 COPY . .
 
-RUN make downloadtw
+RUN make tailwind-dl
 RUN make generate
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o webserver .

@@ -23,6 +23,7 @@ go.work
 build
 node_modules
 .idea
+tmp
 
 # Generated files
 /components/**/*.go
