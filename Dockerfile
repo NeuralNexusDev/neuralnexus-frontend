@@ -1,15 +1,17 @@
-FROM golang:1.24.2-alpine AS build
+FROM golang:1.24.2-bookworm AS build
 
 WORKDIR /app
+
+RUN apt-get install -y make
 
 COPY go.mod go.sum ./
 RUN go mod download
 
 RUN go install github.com/a-h/templ/cmd/templ@latest
-RUN make downloadtw
 
 COPY . .
 
+RUN make downloadtw
 RUN make generate
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o webserver .
