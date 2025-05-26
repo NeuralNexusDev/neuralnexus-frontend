@@ -1,6 +1,8 @@
-FROM golang:1.24.2-bookworm AS build
+FROM golang:1.24.2-alpine AS build
 
 WORKDIR /app
+
+RUN apk update && apk add --no-cache gcc make
 
 COPY go.mod go.sum ./
 RUN go mod download
