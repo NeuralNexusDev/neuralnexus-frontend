@@ -1,13 +1,10 @@
 generate:
-	./tailwindcss -i ./assets/css/input.css -o ./public/css/styles.css --minify
-	templ generate
+	go tool gotailwind -i ./assets/css/input.css -o ./public/css/styles.css --minify
+	go tool templ generate
 
 update:
-	go install github.com/a-h/templ/cmd/templ@latest
-
-	curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64
-	chmod +x tailwindcss-linux-x64
-	mv tailwindcss-linux-x64 ./tailwindcss
+	go get -tool github.com/a-h/templ/cmd/templ@latest
+	go get -tool github.com/hookenz/gotailwind/v4@latest
 
 	go install github.com/air-verse/air@latest
 
@@ -15,7 +12,7 @@ update:
 
 # Run templ generation in watch mode
 templ:
-	templ generate --watch --proxy="http://localhost:8090" --open-browser=false
+	go tool templ generate --watch --proxy="http://localhost:8090" --open-browser=false
 
 # Run air for Go hot reload
 server:
@@ -33,11 +30,6 @@ tailwind-clean:
 
 tailwind-watch:
 	./tailwindcss -i ./assets/css/input.css -o ./public/css/styles.css --watch
-
-tailwind-dl:
-	curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64
-	chmod +x tailwindcss-linux-x64
-	mv tailwindcss-linux-x64 ./tailwindcss
 
 dev:
 	export DISCORD_CLIENT_ID=1107039927230791680 DISCORD_REDIRECT_URI=https://api.neuralnexus.dev/api/oauth TWITCH_CLIENT_ID=cx0nr5h65pexo8huupaywy08ry79pw TWITCH_REDIRECT_URI=https://api.neuralnexus.dev/api/oauth

@@ -1,20 +1,23 @@
 FROM golang:1.24.2-alpine AS build
 
 WORKDIR /app
+ENV CGO_ENABLED=0
 
 RUN apk update && apk add --no-cache gcc make musl-dev
+
+# Required for gotailwind override
+RUN apk add --no-cache git
 
 COPY go.mod go.sum ./
 RUN go mod download
 
-RUN go install github.com/a-h/templ/cmd/templ@latest
+COPY Makefile ./
 
 COPY . .
 
-RUN make tailwind-dl
 RUN make generate
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o webserver .
+RUN go build -o webserver .
 
 FROM alpine:edge AS release-stage
 

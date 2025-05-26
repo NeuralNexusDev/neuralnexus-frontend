@@ -28,6 +28,3 @@ tmp
 # Generated files
 /components/**/*.go
 /public/css/styles.css
-
-# Tailwind CLI is too big
-tailwindcss
