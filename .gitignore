@@ -23,3 +23,10 @@ go.work
 build
 node_modules
 .idea
+
+# Generated files
+/components/**/*.go
+/public/css/styles.css
+
+# Tailwind CLI is too big
+tailwindcss

@@ -2,13 +2,15 @@ FROM golang:1.24.2-alpine AS build
 
 WORKDIR /app
 
-RUN go install github.com/a-h/templ/cmd/templ@latest
 COPY go.mod go.sum ./
 RUN go mod download
 
+RUN go install github.com/a-h/templ/cmd/templ@latest
+RUN make downloadtw
+
 COPY . .
 
-RUN go generate
+RUN make generate
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o webserver .
 

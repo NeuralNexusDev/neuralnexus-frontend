@@ -11,7 +11,7 @@ func main() {
 	if address == "" && useUDS {
 		address = "/tmp/go.socket"
 	} else if address == "" {
-		address = "0.0.0.0:8080"
+		address = "0.0.0.0:8090"
 	}
 
 	server := NewWebServer(address, useUDS)

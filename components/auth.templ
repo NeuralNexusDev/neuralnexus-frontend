@@ -2,6 +2,7 @@ package components
 
 import (
     "os"
+    "github.com/p0t4t0sandwich/neuralnexus-frontend/components/button"
     "golang.org/x/oauth2/endpoints"
 )
 
@@ -24,10 +25,12 @@ templ LoginButton() {
 			Logout
 		</button>
 	} else {
-		<a
-			class="ml-auto py-2 px-4 rounded-lg bg-red-600 text-black font-bold hover:bg-black hover:text-red-600"
-			href="/login"
-		>Login</a>
+	    @button.Button(button.Props{
+            Class: "ml-auto py-2 px-4 rounded-lg bg-red-600 text-black font-bold hover:bg-black hover:text-red-600",
+            Href: "/login",
+        }) {
+            Login
+        }
 	}
 }
 
