@@ -27,8 +27,8 @@ github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWE
 github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
 github.com/natefinch/atomic v1.0.1 h1:ZPYKxkqQOx3KZ+RsbnP/YsgvxWQPGxjC0oBt2AhwV0A=
 github.com/natefinch/atomic v1.0.1/go.mod h1:N/D/ELrljoqDyT3rZrsUmtsuzvHkeB/wWjHV22AZRbM=
-github.com/p0t4t0sandwich/gotailwind/v4 v4.0.0-20250526232352-30b4aa5a1de4 h1:0OlCzIfAIz7dapQR3dqnJcOEHKhS9D4OQbN9TWrALVg=
-github.com/p0t4t0sandwich/gotailwind/v4 v4.0.0-20250526232352-30b4aa5a1de4/go.mod h1:IfiJtdp8ExV9HV2XUiVjRBvB3QewVXVKWoAGEcpjfNE=
+github.com/p0t4t0sandwich/gotailwind/v4 v4.0.0-20250526235411-63fa87003b12 h1:9zNkShXD2MbeBvo0yx5VNHzzT4S2FLvgeYj8NIOMcP8=
+github.com/p0t4t0sandwich/gotailwind/v4 v4.0.0-20250526235411-63fa87003b12/go.mod h1:IfiJtdp8ExV9HV2XUiVjRBvB3QewVXVKWoAGEcpjfNE=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/stretchr/testify v1.9.0 h1:HtqpIVDClZ4nwg75+f6Lvsy/wHu+3BoSGCbBAcpTsTg=

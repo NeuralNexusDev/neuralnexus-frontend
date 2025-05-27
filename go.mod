@@ -2,7 +2,7 @@ module github.com/p0t4t0sandwich/neuralnexus-frontend
 
 go 1.24.2
 
-replace github.com/hookenz/gotailwind/v4 => github.com/p0t4t0sandwich/gotailwind/v4 v4.0.0-20250526232352-30b4aa5a1de4
+replace github.com/hookenz/gotailwind/v4 => github.com/p0t4t0sandwich/gotailwind/v4 v4.0.0-20250526235411-63fa87003b12
 
 require github.com/a-h/templ v0.3.865
 
