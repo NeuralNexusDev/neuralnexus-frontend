@@ -1,17 +1,13 @@
 module github.com/p0t4t0sandwich/neuralnexus-frontend
 
-go 1.24.2
-
-replace github.com/hookenz/gotailwind/v4 => github.com/p0t4t0sandwich/gotailwind/v4 v4.0.0-20250526235411-63fa87003b12
-
-require github.com/a-h/templ v0.3.865
+go 1.24.3
 
 require (
 	github.com/Oudwins/tailwind-merge-go v0.2.1
+	github.com/a-h/templ v0.3.865
+	github.com/golang-jwt/jwt/v5 v5.2.2
 	golang.org/x/oauth2 v0.30.0
 )
-
-require github.com/golang-jwt/jwt/v5 v5.2.2
 
 require (
 	dario.cat/mergo v1.0.1 // indirect
@@ -30,7 +26,7 @@ require (
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/gohugoio/hugo v0.134.3 // indirect
-	github.com/hookenz/gotailwind/v4 v4.1.7 // indirect
+	github.com/hookenz/gotailwind/v4 v4.1.9-0.20250530191256-71725aa0ff62 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/natefinch/atomic v1.0.1 // indirect
