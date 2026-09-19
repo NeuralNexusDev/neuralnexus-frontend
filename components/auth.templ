@@ -14,6 +14,10 @@ var (
 	TWITCH_CLIENT_ID     = os.Getenv("TWITCH_CLIENT_ID")
 	TWITCH_REDIRECT_URI  = os.Getenv("TWITCH_REDIRECT_URI")
 	OAUTH2_TWITCH        = templ.SafeURL(endpoints.Twitch.AuthURL + "?client_id=" + TWITCH_CLIENT_ID + "&redirect_uri=" + TWITCH_REDIRECT_URI + "&response_type=code&scope=user%3Aread%3Aemail")
+
+	MICROSOFT_CLIENT_ID     = os.Getenv("MICROSOFT_CLIENT_ID")
+	MICROSOFT_REDIRECT_URI  = os.Getenv("MICROSOFT_REDIRECT_URI")
+	OAUTH2_MICROSOFT        = templ.SafeURL("https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?client_id=" + MICROSOFT_CLIENT_ID + "&redirect_uri=" + MICROSOFT_REDIRECT_URI + "&response_type=code&scope=XboxLive.signin%20offline_access")
 )
 
 templ LoginButton() {
@@ -69,9 +73,23 @@ templ Login() {
             aTwitch.href = twitchUrl + "&state=" + encodeState(state);
         }
     }, 1000);
+    setTimeout(() => {
+        let aMicrosoft = document.getElementById("microsoft-oauth");
+        let microsoftUrl = document.getElementById("microsoft-oauth-base").innerText;
+        if (aMicrosoft) {
+            state = {
+                platform: "minecraft",
+                nonce: nonce,
+                redirect_uri: redirect,
+                mode: "login"
+            }
+            aMicrosoft.href = microsoftUrl + "&state=" + encodeState(state);
+        }
+    }, 1000);
     </script>
     <div hidden id="discord-oauth-base">{ OAUTH2_DISCORD }</div>
     <div hidden id="twitch-oauth-base">{ OAUTH2_TWITCH }</div>
+    <div hidden id="microsoft-oauth-base">{ OAUTH2_MICROSOFT }</div>
 	<div class="mx-auto max-w-sm space-y-6">
 		<div class="space-y-2 text-center">
 			<h1 class="text-3xl font-bold">Login</h1>
@@ -145,6 +163,19 @@ templ Login() {
 						<img
 							src="/public/TwitchGlitchWhite.svg"
 							alt="Twitch Logo"
+							class="w-6 h-6 mr-2"
+						/>
+					</button>
+				</a>
+				<div class="mt-2"></div>
+				<a href="" id="microsoft-oauth">
+					<button
+						class="bg-xbox_green hover:bg-green-800 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
+					>
+						<span class="mr-2">Login with Xbox</span>
+						<img
+							src="/public/XboxMarkWhite.svg"
+							alt="Xbox Logo"
 							class="w-6 h-6 mr-2"
 						/>
 					</button>
