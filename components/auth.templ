@@ -41,11 +41,8 @@ templ LoginButton() {
 	}
 }
 
-// OAuthButtons renders the OAuth login/signup buttons shared by the login
-// and registration pages. labelPrefix is prepended to each provider's name
-// ("Login with"/"Sign up with"); the OAuth flow itself is identical either
-// way - the API has no separate registration step for OAuth, a login with
-// no existing linked account just creates one.
+// OAuthButtons is shared by the login and registration pages; labelPrefix
+// is "Login with"/"Sign up with".
 templ OAuthButtons(labelPrefix string) {
     <script>
     const nonce = generateNonce();
