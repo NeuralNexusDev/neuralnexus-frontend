@@ -73,23 +73,41 @@ templ Login() {
             aTwitch.href = twitchUrl + "&state=" + encodeState(state);
         }
     }, 1000);
+    // The Xbox and Minecraft buttons both kick off the same underlying
+    // Microsoft/Xbox Live OAuth flow (the API only recognizes platform
+    // "minecraft" for it, and resolves whichever of the Xbox Live and
+    // Minecraft: Java identities the account actually has) - they're two
+    // buttons purely so players can pick whichever identity they recognize.
     setTimeout(() => {
-        let aMicrosoft = document.getElementById("microsoft-oauth");
-        let microsoftUrl = document.getElementById("microsoft-oauth-base").innerText;
-        if (aMicrosoft) {
+        let aXbox = document.getElementById("xbox-oauth");
+        let xboxLiveUrl = document.getElementById("xboxlive-oauth-base").innerText;
+        if (aXbox) {
             state = {
                 platform: "minecraft",
                 nonce: nonce,
                 redirect_uri: redirect,
                 mode: "login"
             }
-            aMicrosoft.href = microsoftUrl + "&state=" + encodeState(state);
+            aXbox.href = xboxLiveUrl + "&state=" + encodeState(state);
+        }
+    }, 1000);
+    setTimeout(() => {
+        let aMinecraft = document.getElementById("minecraft-oauth");
+        let xboxLiveUrl = document.getElementById("xboxlive-oauth-base").innerText;
+        if (aMinecraft) {
+            state = {
+                platform: "minecraft",
+                nonce: nonce,
+                redirect_uri: redirect,
+                mode: "login"
+            }
+            aMinecraft.href = xboxLiveUrl + "&state=" + encodeState(state);
         }
     }, 1000);
     </script>
     <div hidden id="discord-oauth-base">{ OAUTH2_DISCORD }</div>
     <div hidden id="twitch-oauth-base">{ OAUTH2_TWITCH }</div>
-    <div hidden id="microsoft-oauth-base">{ OAUTH2_MICROSOFT }</div>
+    <div hidden id="xboxlive-oauth-base">{ OAUTH2_MICROSOFT }</div>
 	<div class="mx-auto max-w-sm space-y-6">
 		<div class="space-y-2 text-center">
 			<h1 class="text-3xl font-bold">Login</h1>
@@ -168,7 +186,7 @@ templ Login() {
 					</button>
 				</a>
 				<div class="mt-2"></div>
-				<a href="" id="microsoft-oauth">
+				<a href="" id="xbox-oauth">
 					<button
 						class="bg-xbox_green hover:bg-green-800 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
 					>
@@ -176,6 +194,19 @@ templ Login() {
 						<img
 							src="/public/XboxMarkWhite.svg"
 							alt="Xbox Logo"
+							class="w-6 h-6 mr-2"
+						/>
+					</button>
+				</a>
+				<div class="mt-2"></div>
+				<a href="" id="minecraft-oauth">
+					<button
+						class="bg-minecraft_green hover:bg-lime-900 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
+					>
+						<span class="mr-2">Login with Minecraft</span>
+						<img
+							src="/public/MinecraftPickaxeWhite.svg"
+							alt="Minecraft Logo"
 							class="w-6 h-6 mr-2"
 						/>
 					</button>
