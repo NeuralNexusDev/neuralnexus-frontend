@@ -134,10 +134,12 @@ function generateNonce() {
  */
 
 /**
- * @description This function is used to encode the state object into a string
+ * @description This function is used to encode the state object into a string.
+ * Uses base64url, not plain base64, since the API decodes it with Go's
+ * base64.URLEncoding.
  * @param state {OAuthState} - The state object to encode
  * @returns {string} - The encoded state object
  */
 function encodeState(state) {
-    return btoa(JSON.stringify(state));
+    return btoa(JSON.stringify(state)).replace(/\+/g, '-').replace(/\//g, '_');
 }

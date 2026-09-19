@@ -30,6 +30,14 @@
     --container-2xl: 1400px;
 }
 
+@theme {
+    --color-discord_blurple: #5865F2;
+    --color-twitch_purple: #6441A5;
+    --color-xbox_bilbao: #107C10;
+    --color-minecraft_apple: #34AA2F;
+    --color-microsoft_gray: #2F2F2F;
+}
+
 :root {
     --background: hsl(0 0% 100%);
     --foreground: hsl(240 10% 3.9%);

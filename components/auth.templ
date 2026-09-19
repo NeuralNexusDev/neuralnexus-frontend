@@ -14,6 +14,13 @@ var (
 	TWITCH_CLIENT_ID     = os.Getenv("TWITCH_CLIENT_ID")
 	TWITCH_REDIRECT_URI  = os.Getenv("TWITCH_REDIRECT_URI")
 	OAUTH2_TWITCH        = templ.SafeURL(endpoints.Twitch.AuthURL + "?client_id=" + TWITCH_CLIENT_ID + "&redirect_uri=" + TWITCH_REDIRECT_URI + "&response_type=code&scope=user%3Aread%3Aemail")
+
+	MICROSOFT_CLIENT_ID     = os.Getenv("MICROSOFT_CLIENT_ID")
+	MICROSOFT_REDIRECT_URI  = os.Getenv("MICROSOFT_REDIRECT_URI")
+
+	OAUTH2_MICROSOFT = templ.SafeURL("https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?client_id=" + MICROSOFT_CLIENT_ID + "&redirect_uri=" + MICROSOFT_REDIRECT_URI + "&response_type=code&scope=openid%20profile%20email%20offline_access")
+
+	OAUTH2_XBOX_LIVE = templ.SafeURL("https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?client_id=" + MICROSOFT_CLIENT_ID + "&redirect_uri=" + MICROSOFT_REDIRECT_URI + "&response_type=code&scope=XboxLive.signin%20offline_access")
 )
 
 templ LoginButton() {
@@ -34,13 +41,17 @@ templ LoginButton() {
 	}
 }
 
-templ Login() {
+// OAuthButtons is shared by the login and registration pages; labelPrefix
+// is "Login with"/"Sign up with".
+templ OAuthButtons(labelPrefix string) {
     <script>
     const nonce = generateNonce();
 
     let redirect = window.location.href;
     if (redirect.endsWith("/login")) {
         redirect = redirect.substring(0, redirect.length - 6);
+    } else if (redirect.endsWith("/register")) {
+        redirect = redirect.substring(0, redirect.length - 9);
     }
 
     setTimeout(() => {
@@ -69,9 +80,120 @@ templ Login() {
             aTwitch.href = twitchUrl + "&state=" + encodeState(state);
         }
     }, 1000);
+    setTimeout(() => {
+        let aMicrosoft = document.getElementById("microsoft-oauth");
+        let microsoftUrl = document.getElementById("microsoft-oauth-base").innerText;
+        if (aMicrosoft) {
+            state = {
+                platform: "microsoft",
+                nonce: nonce,
+                redirect_uri: redirect,
+                mode: "login"
+            }
+            aMicrosoft.href = microsoftUrl + "&state=" + encodeState(state);
+        }
+    }, 1000);
+    setTimeout(() => {
+        let aXbox = document.getElementById("xbox-oauth");
+        let xboxLiveUrl = document.getElementById("xboxlive-oauth-base").innerText;
+        if (aXbox) {
+            state = {
+                platform: "xboxlive",
+                nonce: nonce,
+                redirect_uri: redirect,
+                mode: "login"
+            }
+            aXbox.href = xboxLiveUrl + "&state=" + encodeState(state);
+        }
+    }, 1000);
+    // Minecraft shares Xbox Live's OAuth URL/scope - the API chains the same
+    // Xbox Live sign-in into a Minecraft: Java ownership check and links
+    // both identities. Only the "platform" sent in state differs.
+    setTimeout(() => {
+        let aMinecraft = document.getElementById("minecraft-oauth");
+        let xboxLiveUrl = document.getElementById("xboxlive-oauth-base").innerText;
+        if (aMinecraft) {
+            state = {
+                platform: "minecraft",
+                nonce: nonce,
+                redirect_uri: redirect,
+                mode: "login"
+            }
+            aMinecraft.href = xboxLiveUrl + "&state=" + encodeState(state);
+        }
+    }, 1000);
     </script>
     <div hidden id="discord-oauth-base">{ OAUTH2_DISCORD }</div>
     <div hidden id="twitch-oauth-base">{ OAUTH2_TWITCH }</div>
+    <div hidden id="microsoft-oauth-base">{ OAUTH2_MICROSOFT }</div>
+    <div hidden id="xboxlive-oauth-base">{ OAUTH2_XBOX_LIVE }</div>
+	<a href="" id="discord-oauth">
+		<button
+			class="bg-discord_blurple hover:bg-blue-600 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
+		>
+			<span class="mr-2 text-white">{ labelPrefix + " Discord" }</span>
+			<img
+				src="/public/DiscordClydeWhite.svg"
+				alt="Discord Logo"
+				class="w-6 h-6 mr-2"
+			/>
+		</button>
+	</a>
+	<div class="mt-2"></div>
+	<a href="" id="twitch-oauth">
+		<button
+			class="bg-twitch_purple hover:bg-purple-800 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
+		>
+			<span class="mr-2 text-white">{ labelPrefix + " Twitch" }</span>
+			<img
+				src="/public/TwitchGlitchWhite.svg"
+				alt="Twitch Logo"
+				class="w-6 h-6 mr-2"
+			/>
+		</button>
+	</a>
+	<div class="mt-2"></div>
+	<a href="" id="microsoft-oauth">
+		<button
+			class="bg-microsoft_gray hover:bg-black inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
+		>
+			<span class="mr-2 text-white">{ labelPrefix + " Microsoft" }</span>
+			<img
+				src="/public/MicrosoftLogo.svg"
+				alt="Microsoft Logo"
+				class="w-6 h-6 mr-2"
+			/>
+		</button>
+	</a>
+	<div class="mt-2"></div>
+	<a href="" id="xbox-oauth">
+		<button
+			class="bg-xbox_bilbao hover:bg-green-800 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
+		>
+			<span class="mr-2 text-white">{ labelPrefix + " Xbox Live" }</span>
+			<img
+				src="/public/XboxSymbolWhite.svg"
+				alt="Xbox Logo"
+				class="w-6 h-6 mr-2"
+			/>
+		</button>
+	</a>
+	<div class="mt-2"></div>
+	<a href="" id="minecraft-oauth" class="flex justify-center">
+		<button
+			class="bg-minecraft_apple hover:bg-green-700 rounded-md h-10 px-4 flex items-center justify-center ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 w-full"
+		>
+			<span class="mr-2 text-white">{ labelPrefix }</span>
+			<img
+				src="/public/MinecraftLogo.svg"
+				alt="Minecraft"
+				class="h-6 w-auto"
+			/>
+		</button>
+	</a>
+}
+
+templ Login() {
 	<div class="mx-auto max-w-sm space-y-6">
 		<div class="space-y-2 text-center">
 			<h1 class="text-3xl font-bold">Login</h1>
@@ -124,31 +246,7 @@ templ Login() {
 			></div>
 			<div class="space-y-4">
 				<!-- <button class="w-full">Login with Google</button> -->
-				<a href="" id="discord-oauth">
-					<button
-						class="bg-discord_blurple hover:bg-blue-600 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
-					>
-						<span class="mr-2">Login with Discord</span>
-						<img
-							src="/public/DiscordClydeWhite.svg"
-							alt="Discord Logo"
-							class="w-6 h-6 mr-2"
-						/>
-					</button>
-				</a>
-				<div class="mt-2"></div>
-				<a href="" id="twitch-oauth">
-					<button
-						class="bg-twitch_purple hover:bg-purple-800 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
-					>
-						<span class="mr-2">Login with Twitch</span>
-						<img
-							src="/public/TwitchGlitchWhite.svg"
-							alt="Twitch Logo"
-							class="w-6 h-6 mr-2"
-						/>
-					</button>
-				</a>
+				@OAuthButtons("Login with")
 				<div class="mt-4 text-center text-sm">
 					<span class="mr-1">Don't have an account?</span>
 					<a class="underline" href="/register">Sign Up </a>
@@ -163,4 +261,107 @@ templ Login() {
 
 templ LoginPage() {
 	@WrapContents(Login())
+}
+
+templ Register() {
+	<div class="mx-auto max-w-sm space-y-6">
+		<div class="space-y-2 text-center">
+			<h1 class="text-3xl font-bold">Sign Up</h1>
+			<p class="text-gray-500 dark:text-gray-400">
+				Enter your information to create an account
+			</p>
+		</div>
+		<div>
+			<form class="space-y-4" onSubmit="event.preventDefault()">
+				<div class="space-y-2">
+					<label
+						class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+						for="username"
+					>
+						Username
+					</label>
+					<input
+						class="text-black flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+						id="username"
+						name="username"
+						placeholder="Username"
+						required
+						type="text"
+					/>
+				</div>
+				<div class="space-y-2">
+					<label
+						class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+						for="email"
+					>
+						Email
+					</label>
+					<input
+						class="text-black flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+						id="email"
+						name="email"
+						placeholder="user@example.com"
+						required
+						type="email"
+					/>
+				</div>
+				<div class="space-y-2">
+					<label
+						class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+						for="password"
+					>
+						Password
+					</label>
+					<input
+						class="text-black flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+						id="password"
+						name="password"
+						required
+						type="password"
+					/>
+				</div>
+				<div class="space-y-2">
+					<label
+						class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+						for="confirm_password"
+					>
+						Confirm Password
+					</label>
+					<input
+						class="text-black flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+						id="confirm_password"
+						name="confirm_password"
+						required
+						type="password"
+					/>
+				</div>
+				<!-- The API has no public registration endpoint yet (only
+				     POST /api/v1/auth/login for existing accounts and
+				     /api/oauth) - this form has nowhere to submit to until
+				     one exists, so submission is intentionally suppressed. -->
+				<button
+					class="border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
+					type="submit"
+				>
+					Sign Up
+				</button>
+			</form>
+			<div
+				data-orientation="horizontal"
+				role="none"
+				class="shrink-0 bg-gray-100 h-[1px] w-full my-8"
+			></div>
+			<div class="space-y-4">
+				@OAuthButtons("Sign up with")
+				<div class="mt-4 text-center text-sm">
+					<span class="mr-1">Already have an account?</span>
+					<a class="underline" href="/login">Login</a>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
+templ RegisterPage() {
+	@WrapContents(Register())
 }
