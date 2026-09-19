@@ -210,17 +210,17 @@ templ Login() {
 					</button>
 				</a>
 				<div class="mt-2"></div>
-				<a href="" id="microsoft-oauth">
-					<button
-						class="bg-microsoft_gray hover:bg-black inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
-					>
-						<span class="mr-2">Login with Microsoft</span>
-						<img
-							src="/public/MicrosoftLogoWhite.svg"
-							alt="Microsoft Logo"
-							class="w-6 h-6 mr-2"
-						/>
-					</button>
+				<a href="" id="microsoft-oauth" class="flex justify-center">
+					<img
+						src="/public/MicrosoftSignInLight.svg"
+						alt="Sign in with Microsoft"
+						class="h-10 w-auto dark:hidden"
+					/>
+					<img
+						src="/public/MicrosoftSignInDark.svg"
+						alt="Sign in with Microsoft"
+						class="h-10 w-auto hidden dark:block"
+					/>
 				</a>
 				<div class="mt-2"></div>
 				<a href="" id="xbox-oauth">
@@ -229,24 +229,21 @@ templ Login() {
 					>
 						<span class="mr-2">Login with Xbox Live</span>
 						<img
-							src="/public/XboxMarkWhite.svg"
+							src="/public/XboxSymbolWhite.svg"
 							alt="Xbox Logo"
 							class="w-6 h-6 mr-2"
 						/>
 					</button>
 				</a>
 				<div class="mt-2"></div>
-				<a href="" id="minecraft-oauth">
-					<button
-						class="bg-minecraft_green hover:bg-lime-900 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
-					>
-						<span class="mr-2">Login with Minecraft</span>
+				<a href="" id="minecraft-oauth" class="flex justify-center">
+					<div class="bg-minecraft_green hover:bg-green-700 rounded-md h-10 px-4 flex items-center justify-center transition-colors w-full">
 						<img
-							src="/public/MinecraftPickaxeWhite.svg"
-							alt="Minecraft Logo"
-							class="w-6 h-6 mr-2"
+							src="/public/MinecraftLogo.svg"
+							alt="Minecraft"
+							class="h-6 w-auto"
 						/>
-					</button>
+					</div>
 				</a>
 				<div class="mt-4 text-center text-sm">
 					<span class="mr-1">Don't have an account?</span>
