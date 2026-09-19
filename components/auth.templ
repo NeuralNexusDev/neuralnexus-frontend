@@ -17,7 +17,19 @@ var (
 
 	MICROSOFT_CLIENT_ID     = os.Getenv("MICROSOFT_CLIENT_ID")
 	MICROSOFT_REDIRECT_URI  = os.Getenv("MICROSOFT_REDIRECT_URI")
-	OAUTH2_MICROSOFT        = templ.SafeURL("https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?client_id=" + MICROSOFT_CLIENT_ID + "&redirect_uri=" + MICROSOFT_REDIRECT_URI + "&response_type=code&scope=XboxLive.signin%20offline_access")
+
+	// OAUTH2_MICROSOFT is a plain "sign in with Microsoft" login: it only
+	// asks for OIDC identity (sub/name/email), not proof of Xbox Live or
+	// Minecraft ownership. Maps to state.platform "microsoft", which the
+	// API routes to MicrosoftLoginConfig.
+	OAUTH2_MICROSOFT = templ.SafeURL("https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?client_id=" + MICROSOFT_CLIENT_ID + "&redirect_uri=" + MICROSOFT_REDIRECT_URI + "&response_type=code&scope=openid%20profile%20email%20offline_access")
+
+	// OAUTH2_XBOX_LIVE only asks for the XboxLive.signin scope, not OIDC
+	// identity - so it carries no email. It's shared by two different
+	// state.platform values the API distinguishes: "xboxlive" (Xbox Live
+	// identity only) and "minecraft" (Xbox Live, then chained into a
+	// Minecraft: Java ownership check, linking both identities).
+	OAUTH2_XBOX_LIVE = templ.SafeURL("https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?client_id=" + MICROSOFT_CLIENT_ID + "&redirect_uri=" + MICROSOFT_REDIRECT_URI + "&response_type=code&scope=XboxLive.signin%20offline_access")
 )
 
 templ LoginButton() {
@@ -73,17 +85,25 @@ templ Login() {
             aTwitch.href = twitchUrl + "&state=" + encodeState(state);
         }
     }, 1000);
-    // The Xbox and Minecraft buttons both kick off the same underlying
-    // Microsoft/Xbox Live OAuth flow (the API only recognizes platform
-    // "minecraft" for it, and resolves whichever of the Xbox Live and
-    // Minecraft: Java identities the account actually has) - they're two
-    // buttons purely so players can pick whichever identity they recognize.
+    setTimeout(() => {
+        let aMicrosoft = document.getElementById("microsoft-oauth");
+        let microsoftUrl = document.getElementById("microsoft-oauth-base").innerText;
+        if (aMicrosoft) {
+            state = {
+                platform: "microsoft",
+                nonce: nonce,
+                redirect_uri: redirect,
+                mode: "login"
+            }
+            aMicrosoft.href = microsoftUrl + "&state=" + encodeState(state);
+        }
+    }, 1000);
     setTimeout(() => {
         let aXbox = document.getElementById("xbox-oauth");
         let xboxLiveUrl = document.getElementById("xboxlive-oauth-base").innerText;
         if (aXbox) {
             state = {
-                platform: "minecraft",
+                platform: "xboxlive",
                 nonce: nonce,
                 redirect_uri: redirect,
                 mode: "login"
@@ -91,6 +111,9 @@ templ Login() {
             aXbox.href = xboxLiveUrl + "&state=" + encodeState(state);
         }
     }, 1000);
+    // Minecraft shares Xbox Live's OAuth URL/scope - the API chains the same
+    // Xbox Live sign-in into a Minecraft: Java ownership check and links
+    // both identities. Only the "platform" sent in state differs.
     setTimeout(() => {
         let aMinecraft = document.getElementById("minecraft-oauth");
         let xboxLiveUrl = document.getElementById("xboxlive-oauth-base").innerText;
@@ -107,7 +130,8 @@ templ Login() {
     </script>
     <div hidden id="discord-oauth-base">{ OAUTH2_DISCORD }</div>
     <div hidden id="twitch-oauth-base">{ OAUTH2_TWITCH }</div>
-    <div hidden id="xboxlive-oauth-base">{ OAUTH2_MICROSOFT }</div>
+    <div hidden id="microsoft-oauth-base">{ OAUTH2_MICROSOFT }</div>
+    <div hidden id="xboxlive-oauth-base">{ OAUTH2_XBOX_LIVE }</div>
 	<div class="mx-auto max-w-sm space-y-6">
 		<div class="space-y-2 text-center">
 			<h1 class="text-3xl font-bold">Login</h1>
@@ -186,11 +210,24 @@ templ Login() {
 					</button>
 				</a>
 				<div class="mt-2"></div>
+				<a href="" id="microsoft-oauth">
+					<button
+						class="bg-microsoft_gray hover:bg-black inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
+					>
+						<span class="mr-2">Login with Microsoft</span>
+						<img
+							src="/public/MicrosoftLogoWhite.svg"
+							alt="Microsoft Logo"
+							class="w-6 h-6 mr-2"
+						/>
+					</button>
+				</a>
+				<div class="mt-2"></div>
 				<a href="" id="xbox-oauth">
 					<button
 						class="bg-xbox_green hover:bg-green-800 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
 					>
-						<span class="mr-2">Login with Xbox</span>
+						<span class="mr-2">Login with Xbox Live</span>
 						<img
 							src="/public/XboxMarkWhite.svg"
 							alt="Xbox Logo"
