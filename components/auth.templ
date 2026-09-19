@@ -18,17 +18,8 @@ var (
 	MICROSOFT_CLIENT_ID     = os.Getenv("MICROSOFT_CLIENT_ID")
 	MICROSOFT_REDIRECT_URI  = os.Getenv("MICROSOFT_REDIRECT_URI")
 
-	// OAUTH2_MICROSOFT is a plain "sign in with Microsoft" login: it only
-	// asks for OIDC identity (sub/name/email), not proof of Xbox Live or
-	// Minecraft ownership. Maps to state.platform "microsoft", which the
-	// API routes to MicrosoftLoginConfig.
 	OAUTH2_MICROSOFT = templ.SafeURL("https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?client_id=" + MICROSOFT_CLIENT_ID + "&redirect_uri=" + MICROSOFT_REDIRECT_URI + "&response_type=code&scope=openid%20profile%20email%20offline_access")
 
-	// OAUTH2_XBOX_LIVE only asks for the XboxLive.signin scope, not OIDC
-	// identity - so it carries no email. It's shared by two different
-	// state.platform values the API distinguishes: "xboxlive" (Xbox Live
-	// identity only) and "minecraft" (Xbox Live, then chained into a
-	// Minecraft: Java ownership check, linking both identities).
 	OAUTH2_XBOX_LIVE = templ.SafeURL("https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?client_id=" + MICROSOFT_CLIENT_ID + "&redirect_uri=" + MICROSOFT_REDIRECT_URI + "&response_type=code&scope=XboxLive.signin%20offline_access")
 )
 
@@ -225,7 +216,7 @@ templ Login() {
 				<div class="mt-2"></div>
 				<a href="" id="xbox-oauth">
 					<button
-						class="bg-xbox_green hover:bg-green-800 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
+						class="bg-xbox_bilbao hover:bg-green-800 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
 					>
 						<span class="mr-2">Login with Xbox Live</span>
 						<img
@@ -237,7 +228,7 @@ templ Login() {
 				</a>
 				<div class="mt-2"></div>
 				<a href="" id="minecraft-oauth" class="flex justify-center">
-					<div class="bg-minecraft_green hover:bg-green-700 rounded-md h-10 px-4 flex items-center justify-center transition-colors w-full">
+					<div class="bg-minecraft_apple hover:bg-green-700 rounded-md h-10 px-4 flex items-center justify-center transition-colors w-full">
 						<img
 							src="/public/MinecraftLogo.svg"
 							alt="Minecraft"

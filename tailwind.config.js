@@ -6,8 +6,8 @@ module.exports = {
       colors: {
         discord_blurple: '#5865F2',
         twitch_purple: '#6441A5',
-        xbox_green: '#107C10',
-        minecraft_green: '#34AA2F',
+        xbox_bilbao: '#107C10',
+        minecraft_apple: '#34AA2F',
       }
     },
   },
