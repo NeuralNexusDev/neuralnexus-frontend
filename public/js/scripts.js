@@ -134,10 +134,14 @@ function generateNonce() {
  */
 
 /**
- * @description This function is used to encode the state object into a string
+ * @description This function is used to encode the state object into a string.
+ * Uses base64url (RFC 4648 §5), not plain base64, since the encoded value is
+ * appended directly to a query string without percent-encoding and the API
+ * decodes it with Go's base64.URLEncoding - plain btoa's '+'/'/' characters
+ * would either corrupt the query string or fail to decode server-side.
  * @param state {OAuthState} - The state object to encode
  * @returns {string} - The encoded state object
  */
 function encodeState(state) {
-    return btoa(JSON.stringify(state));
+    return btoa(JSON.stringify(state)).replace(/\+/g, '-').replace(/\//g, '_');
 }
