@@ -202,16 +202,20 @@ templ Login() {
 				</a>
 				<div class="mt-2"></div>
 				<a href="" id="microsoft-oauth" class="flex justify-center">
-					<img
-						src="/public/MicrosoftSignInLight.svg"
-						alt="Sign in with Microsoft"
-						class="h-10 w-auto dark:hidden"
-					/>
-					<img
-						src="/public/MicrosoftSignInDark.svg"
-						alt="Sign in with Microsoft"
-						class="h-10 w-auto hidden dark:block"
-					/>
+					<button
+						class="ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+					>
+						<img
+							src="/public/MicrosoftSignInLight.svg"
+							alt="Sign in with Microsoft"
+							class="h-10 w-auto dark:hidden"
+						/>
+						<img
+							src="/public/MicrosoftSignInDark.svg"
+							alt="Sign in with Microsoft"
+							class="h-10 w-auto hidden dark:block"
+						/>
+					</button>
 				</a>
 				<div class="mt-2"></div>
 				<a href="" id="xbox-oauth">
@@ -228,13 +232,15 @@ templ Login() {
 				</a>
 				<div class="mt-2"></div>
 				<a href="" id="minecraft-oauth" class="flex justify-center">
-					<div class="bg-minecraft_apple hover:bg-green-700 rounded-md h-10 px-4 flex items-center justify-center transition-colors w-full">
+					<button
+						class="bg-minecraft_apple hover:bg-green-700 rounded-md h-10 px-4 flex items-center justify-center ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 w-full"
+					>
 						<img
 							src="/public/MinecraftLogo.svg"
 							alt="Minecraft"
 							class="h-6 w-auto"
 						/>
-					</div>
+					</button>
 				</a>
 				<div class="mt-4 text-center text-sm">
 					<span class="mr-1">Don't have an account?</span>
