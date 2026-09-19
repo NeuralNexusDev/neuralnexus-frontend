@@ -143,3 +143,44 @@ function generateNonce() {
 function encodeState(state) {
     return btoa(JSON.stringify(state)).replace(/\+/g, '-').replace(/\//g, '_');
 }
+
+/**
+ * @description Loads the current user's profile into the account settings
+ * page, redirecting to /login if there's no usable session.
+ */
+function loadAccountProfile() {
+    const session = getSession();
+    if (!session) {
+        window.location.href = '/login';
+        return;
+    }
+
+    let userId;
+    try {
+        userId = JSON.parse(atob(session.split('.')[1])).sub;
+    } catch (error) {
+        userId = null;
+    }
+    if (!userId) {
+        window.location.href = '/login';
+        return;
+    }
+
+    fetch(`https://api.neuralnexus.dev/api/v1/users/${userId}`, {
+        headers: {
+            'Authorization': 'Bearer ' + session
+        }
+    })
+        .then((res) => {
+            if (!res.ok) {
+                throw new Error('Failed to load account: ' + res.status);
+            }
+            return res.json();
+        })
+        .then((account) => {
+            document.getElementById('account-username').innerText = account.username;
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+        });
+}
