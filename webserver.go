@@ -35,6 +35,7 @@ func (s *WebServer) Setup() http.Handler {
 
 	router.Handle("/", templ.Handler(components.HomePage()))
 	router.Handle("/login", templ.Handler(components.LoginPage()))
+	router.Handle("/register", templ.Handler(components.RegisterPage()))
 	router.Handle("/projects", templ.Handler(components.ProjectsPage()))
 	router.Handle("/project/bee-name-generator", templ.Handler(components.BeeNameGeneratorPage()))
 	router.Handle("/teapot", templ.Handler(components.TeapotPage()))
