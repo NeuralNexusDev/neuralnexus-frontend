@@ -139,11 +139,8 @@ function loadAccountProfile() {
 const LINK_PLATFORMS = ['discord', 'twitch', 'microsoft', 'xboxlive', 'minecraft'];
 
 /**
- * @description Tracks the most recent loadLinkedAccounts request. It's
- * triggered from several places (initial load, a successful unlink, a
- * successful login-enabled toggle) whose responses can arrive out of
- * order; only the response to the most recently issued request is
- * applied, so a stale refresh can't repaint the rows over a newer one.
+ * @description Guards against an out-of-order response repainting the
+ * rows with stale data.
  */
 let loadLinkedAccountsSeq = 0;
 
@@ -267,18 +264,8 @@ function handleLinkAction(platform) {
 }
 
 /**
- * @description Tracks the most recent link/unlink or login-toggle request
- * issued per platform. Both unlinkPlatform and setPlatformLoginEnabled
- * bump this before firing their request and check it in their failure
- * handler, so a slow/out-of-order failure from a request that's since
- * been superseded - by unlinking the platform, or by another toggle -
- * doesn't misleadingly revert the checkbox or pop an alert for an action
- * the user has already moved past. setPlatformLoginEnabled's success
- * handler checks it too, so a stale toggle's now-pointless success
- * doesn't trigger an extra refresh once a newer action for the same
- * platform has taken over; unlinkPlatform's own success always refreshes
- * unconditionally, since an unlink is never itself superseded by a
- * later-issued toggle response - its own DELETE result is authoritative.
+ * @description Guards per-platform against acting on a stale, superseded
+ * link/unlink/toggle response.
  */
 const platformActionSeq = {};
 

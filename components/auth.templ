@@ -193,10 +193,8 @@ templ OAuthButtons(labelPrefix string) {
 	</a>
 }
 
-// linkAccountRow renders one platform's connection card. Brand icon is
-// passed in as children since only some logos need a colored badge behind
-// them; every control starts blank/disabled until loadLinkedAccounts()
-// (scripts.js) populates it.
+// linkAccountRow renders one platform's connection card; brand icon is
+// passed in as children since only some logos need a colored badge behind them.
 templ linkAccountRow(platform string, name string) {
     <div class="rounded-lg border border-input p-3 space-y-2">
         <div class="flex items-center gap-2">
@@ -250,9 +248,7 @@ templ linkAccountRow(platform string, name string) {
     </div>
 }
 
-// LinkAccountButtons lets an already-logged-in user attach another
-// provider to their account, see each platform's verified/login-enabled
-// state, toggle whether it can be used to log in, and unlink it.
+// LinkAccountButtons lists every linkable provider as a connection row.
 templ LinkAccountButtons() {
     <script>
     const linkNonce = generateNonce();
