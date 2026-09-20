@@ -193,22 +193,10 @@ templ OAuthButtons(labelPrefix string) {
 	</a>
 }
 
-// linkAccountRow renders one platform's connection card, Discord-settings
-// style: brand icon, then a title/subtitle pair, a verified checkmark, and
-// Unlink on the first line; an "Allow logins" toggle switch on the
-// second - still a plain checkbox underneath (same id, same onchange),
-// just restyled with a sr-only input and a peer-checked thumb, so the JS
-// never had to change. Once linked, the title becomes the caller's
-// platform_username and the platform's display name drops down to a
-// subtitle, matching how Discord's own connections page leads with the
-// connected identity rather than the platform name; while unlinked (no
-// username to show yet) the display name stays the title and the
-// subtitle is hidden. The brand icon is passed in as children since
-// Discord, Twitch and Xbox's white logos need a colored badge behind them
-// to be visible on a light background, while Microsoft's and Minecraft's
-// own logos don't. Every control starts blank/disabled and is populated
-// by loadLinkedAccounts() (see scripts.js) once GET .../users/{id}/links
-// resolves, since a platform's linked state isn't known until then.
+// linkAccountRow renders one platform's connection card. Brand icon is
+// passed in as children since only some logos need a colored badge behind
+// them; every control starts blank/disabled until loadLinkedAccounts()
+// (scripts.js) populates it.
 templ linkAccountRow(platform string, name string) {
     <div class="rounded-lg border border-input p-3 space-y-2">
         <div class="flex items-center gap-2">

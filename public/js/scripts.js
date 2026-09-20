@@ -104,11 +104,8 @@ function encodeState(state) {
 }
 
 /**
- * @description Loads the current user's profile into the account settings
- * page, redirecting to /login if the session is missing or expired. Uses
- * the /me self-service routes, which resolve identity from the session
- * cookie the browser attaches automatically (credentials: 'include') -
- * the frontend never needs to know its own user ID.
+ * @description Loads the profile into the account page via /me, since the
+ * session cookie resolves identity server-side - no user ID needed here.
  */
 function loadAccountProfile() {
     fetch('https://api.neuralnexus.dev/api/v1/users/me', {
@@ -142,11 +139,22 @@ function loadAccountProfile() {
 const LINK_PLATFORMS = ['discord', 'twitch', 'microsoft', 'xboxlive', 'minecraft'];
 
 /**
+ * @description Tracks the most recent loadLinkedAccounts request. It's
+ * triggered from several places (initial load, a successful unlink, a
+ * successful login-enabled toggle) whose responses can arrive out of
+ * order; only the response to the most recently issued request is
+ * applied, so a stale refresh can't repaint the rows over a newer one.
+ */
+let loadLinkedAccountsSeq = 0;
+
+/**
  * @description Fetches the caller's linked accounts and updates each
  * platform row's verified/login-enabled/unlink state, redirecting to
  * /login if the session is missing or expired.
  */
 function loadLinkedAccounts() {
+    const seq = ++loadLinkedAccountsSeq;
+
     fetch('https://api.neuralnexus.dev/api/v1/users/me/links', {
         credentials: 'include'
     })
@@ -161,7 +169,7 @@ function loadLinkedAccounts() {
             return res.json();
         })
         .then((links) => {
-            if (!links) {
+            if (!links || seq !== loadLinkedAccountsSeq) {
                 return;
             }
             const byPlatform = {};
@@ -178,11 +186,7 @@ function loadLinkedAccounts() {
 }
 
 /**
- * @description Reflects one platform's linked-account state (or lack of
- * one) onto its row: the title/subtitle (platform_username once linked,
- * falling back to the platform's display name), the verified
- * checkmark/status text, the "Allow logins" checkbox, and the
- * link/unlink action's label/state.
+ * @description Reflects one platform's linked-account state onto its row.
  * @param platform {string}
  * @param link {?{platform_username: string, verified: boolean, login_enabled: boolean}}
  */
@@ -263,6 +267,22 @@ function handleLinkAction(platform) {
 }
 
 /**
+ * @description Tracks the most recent link/unlink or login-toggle request
+ * issued per platform. Both unlinkPlatform and setPlatformLoginEnabled
+ * bump this before firing their request and check it in their failure
+ * handler, so a slow/out-of-order failure from a request that's since
+ * been superseded - by unlinking the platform, or by another toggle -
+ * doesn't misleadingly revert the checkbox or pop an alert for an action
+ * the user has already moved past. setPlatformLoginEnabled's success
+ * handler checks it too, so a stale toggle's now-pointless success
+ * doesn't trigger an extra refresh once a newer action for the same
+ * platform has taken over; unlinkPlatform's own success always refreshes
+ * unconditionally, since an unlink is never itself superseded by a
+ * later-issued toggle response - its own DELETE result is authoritative.
+ */
+const platformActionSeq = {};
+
+/**
  * @description Unlinks a platform from the caller's account after
  * confirmation, then refreshes the linked-accounts rows.
  * @param platform {string}
@@ -272,11 +292,18 @@ function unlinkPlatform(platform) {
         return;
     }
 
+    const seq = (platformActionSeq[platform] || 0) + 1;
+    platformActionSeq[platform] = seq;
+
     fetch(`https://api.neuralnexus.dev/api/v1/users/me/link/${platform}`, {
         method: 'DELETE',
         credentials: 'include'
     })
         .then((res) => {
+            if (res.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
             if (res.status === 204) {
                 loadLinkedAccounts();
                 return;
@@ -286,28 +313,23 @@ function unlinkPlatform(platform) {
             });
         })
         .catch((error) => {
-            alert(error.message);
+            if (platformActionSeq[platform] === seq) {
+                alert(error.message);
+            }
         });
 }
 
 /**
- * @description Tracks the most recent setPlatformLoginEnabled request per
- * platform, so a slow/out-of-order response from an earlier toggle can't
- * clobber a later one (e.g. reverting the checkbox after the user has
- * already flipped it again and that newer request already succeeded).
- */
-const platformLoginRequestSeq = {};
-
-/**
  * @description Sets whether a linked platform can be used to log in, from
  * its "Allow logins" checkbox. Reverts the checkbox if the request fails,
- * unless a newer request for the same platform has since been made.
+ * unless a newer link/unlink/toggle request for the same platform has
+ * since been made.
  * @param platform {string}
  * @param enabled {boolean}
  */
 function setPlatformLoginEnabled(platform, enabled) {
-    const seq = (platformLoginRequestSeq[platform] || 0) + 1;
-    platformLoginRequestSeq[platform] = seq;
+    const seq = (platformActionSeq[platform] || 0) + 1;
+    platformActionSeq[platform] = seq;
 
     fetch(`https://api.neuralnexus.dev/api/v1/users/me/link/${platform}`, {
         method: 'PATCH',
@@ -318,8 +340,12 @@ function setPlatformLoginEnabled(platform, enabled) {
         body: JSON.stringify({login_enabled: enabled})
     })
         .then((res) => {
+            if (res.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
             if (res.status === 204) {
-                if (platformLoginRequestSeq[platform] === seq) {
+                if (platformActionSeq[platform] === seq) {
                     loadLinkedAccounts();
                 }
                 return;
@@ -329,7 +355,7 @@ function setPlatformLoginEnabled(platform, enabled) {
             });
         })
         .catch((error) => {
-            if (platformLoginRequestSeq[platform] === seq) {
+            if (platformActionSeq[platform] === seq) {
                 document.getElementById(`link-${platform}-login-enabled`).checked = !enabled;
                 alert(error.message);
             }
