@@ -11,6 +11,12 @@ const repoRoot = path.dirname(path.dirname(path.dirname(fileURLToPath(import.met
 // to spawning the real server ourselves.
 const baseURL = process.env.BASE_URL || 'http://localhost:8099';
 
+// The single source of truth for the backend origin the app (and every
+// spec file, via process.env.API_BASE_URL) mocks against - resolved once
+// here so both sides can never drift apart.
+const apiBaseUrl = process.env.API_BASE_URL || 'https://api.neuralnexus.dev';
+process.env.API_BASE_URL = apiBaseUrl;
+
 export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
@@ -36,7 +42,7 @@ export default defineConfig({
           'go run .',
         cwd: repoRoot,
         url: baseURL,
-        env: { ADDRESS: '0.0.0.0:8099' },
+        env: { ADDRESS: '0.0.0.0:8099', API_BASE_URL: apiBaseUrl },
         reuseExistingServer: !process.env.CI,
         timeout: 60_000,
       },
