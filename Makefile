@@ -33,3 +33,21 @@ dev:
 	export DISCORD_CLIENT_ID=1107039927230791680 DISCORD_REDIRECT_URI=https://api.neuralnexus.dev/api/oauth TWITCH_CLIENT_ID=cx0nr5h65pexo8huupaywy08ry79pw TWITCH_REDIRECT_URI=https://api.neuralnexus.dev/api/oauth
 	make tailwind-clean
 	make -j3 tailwind-watch templ server
+
+# --- Top-to-bottom test environment (containerized app + Playwright) ---
+
+test-env-up:
+	docker compose -f test/docker-compose.test.yml up -d --build --wait frontend
+
+test-env-down:
+	docker compose -f test/docker-compose.test.yml down -v
+
+test-env-logs:
+	docker compose -f test/docker-compose.test.yml logs -f
+
+# Runs the Playwright suite against the real, containerized app - drives
+# it in a real browser and mocks only the sibling API. Needs nothing but
+# Docker: no local Node or browser install. Brings up the environment,
+# runs the suite, then tears it down regardless of outcome.
+test: test-env-up
+	docker compose -f test/docker-compose.test.yml run --rm playwright; status=$$?; $(MAKE) test-env-down; exit $$status

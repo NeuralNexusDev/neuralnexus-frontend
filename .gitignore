@@ -28,3 +28,8 @@ tmp
 # Generated files
 /components/**/*.go
 /public/css/styles.css
+
+# Playwright output
+/test/integration/test-results
+/test/integration/playwright-report
+/test/integration/blob-report

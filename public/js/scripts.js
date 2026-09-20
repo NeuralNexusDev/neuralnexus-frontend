@@ -1,4 +1,14 @@
 /**
+ * @description Reads the backend's base URL from the hidden element
+ * WrapContents renders on every page - lets tests point the frontend at a
+ * different backend without editing this file.
+ * @returns {string}
+ */
+function apiBaseUrl() {
+    return document.getElementById('api-base-url').innerText;
+}
+
+/**
  * @description This function is used to set a cookie
  * @param name {string} - The name of the cookie to set
  * @param value {string} - The value of the cookie
@@ -8,28 +18,8 @@ function setCookie(name, value, expires) {
     document.cookie = name + "=" + value + "; expires=" + expires + "; path=/; domain=.neuralnexus.dev; SameSite=None; Secure=true";
 }
 
-/**
- * @description A session object
- * @typedef {Object} Session
- * @property {string} session - The session JWT
- */
-
-/**
- * @description This function is used to get the user ID from the cookie
- * @param data {Session} - The data object containing the user ID
- */
-function updateSession(data) {
-    if (data.session) {
-        const payload = JSON.parse(atob(data.session.split('.')[1]));
-        if (payload && payload.exp) {
-            const exp = payload.exp * 1000;
-            setCookie('session', payload.session, new Date(exp).toUTCString());
-        }
-    }
-}
-
 function logout() {
-    fetch('https://api.neuralnexus.dev/api/v1/auth/logout', {
+    fetch(`${apiBaseUrl()}/api/v1/auth/logout`, {
         method: 'POST',
         credentials: 'include'
     })
@@ -59,18 +49,26 @@ function submitLoginForm() {
     } else {
         json.username = username
     }
-    fetch('https://api.neuralnexus.dev/api/v1/auth/login', {
+    fetch(`${apiBaseUrl()}/api/v1/auth/login`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify(json)
     })
-        .then((res) => res.json())
-        .then((data) => updateSession(data))
-        .catch((error) => {
-            console.error('Error:', error)
+        .then((res) => {
+            if (res.ok) {
+                window.location.href = '/';
+                return;
+            }
+            return res.json().then((problem) => {
+                throw new Error(problem.detail || 'Failed to log in');
+            });
         })
+        .catch((error) => {
+            alert(error.message);
+        });
 }
 
 /**
@@ -79,7 +77,7 @@ function submitLoginForm() {
  */
 function generateNonce() {
     const nonce = Math.random().toString(36).substring(2, 15);
-    setCookie('nonce', nonce, new Date(Date.now() + 60 * 1000).toUTCString());
+    setCookie('nonce', nonce, new Date(Date.now() + 5 * 60 * 1000).toUTCString());
     return nonce;
 }
 
@@ -108,7 +106,7 @@ function encodeState(state) {
  * session cookie resolves identity server-side - no user ID needed here.
  */
 function loadAccountProfile() {
-    fetch('https://api.neuralnexus.dev/api/v1/users/me', {
+    fetch(`${apiBaseUrl()}/api/v1/users/me`, {
         credentials: 'include'
     })
         .then((res) => {
@@ -152,7 +150,7 @@ let loadLinkedAccountsSeq = 0;
 function loadLinkedAccounts() {
     const seq = ++loadLinkedAccountsSeq;
 
-    fetch('https://api.neuralnexus.dev/api/v1/users/me/links', {
+    fetch(`${apiBaseUrl()}/api/v1/users/me/links`, {
         credentials: 'include'
     })
         .then((res) => {
@@ -282,7 +280,7 @@ function unlinkPlatform(platform) {
     const seq = (platformActionSeq[platform] || 0) + 1;
     platformActionSeq[platform] = seq;
 
-    fetch(`https://api.neuralnexus.dev/api/v1/users/me/link/${platform}`, {
+    fetch(`${apiBaseUrl()}/api/v1/users/me/link/${platform}`, {
         method: 'DELETE',
         credentials: 'include'
     })
@@ -318,7 +316,7 @@ function setPlatformLoginEnabled(platform, enabled) {
     const seq = (platformActionSeq[platform] || 0) + 1;
     platformActionSeq[platform] = seq;
 
-    fetch(`https://api.neuralnexus.dev/api/v1/users/me/link/${platform}`, {
+    fetch(`${apiBaseUrl()}/api/v1/users/me/link/${platform}`, {
         method: 'PATCH',
         credentials: 'include',
         headers: {

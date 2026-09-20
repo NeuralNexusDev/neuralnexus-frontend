@@ -1,5 +1,17 @@
 package components
 
+import "os"
+
+func apiBaseURL() string {
+	v := os.Getenv("API_BASE_URL")
+	if v == "" {
+		panic("API_BASE_URL environment variable must be set")
+	}
+	return v
+}
+
+var API_BASE_URL = apiBaseURL()
+
 templ WrapContents(contents templ.Component) {
 	<!DOCTYPE html>
 	<html lang="en">
@@ -17,6 +29,7 @@ templ WrapContents(contents templ.Component) {
 		<script src="/public/js/scripts.js"></script>
 		<script src="/public/js/theming.js"></script>
 		<body>
+			<div hidden id="api-base-url">{ API_BASE_URL }</div>
 			@Header()
 			<div class="relative isolate px-6 pt-14 lg:px-8">
 				@contents
