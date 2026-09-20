@@ -3,7 +3,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const baseURL = 'http://localhost:8099';
+
+// BASE_URL is set by docker-compose.test.yml, pointing at the containerized
+// "frontend" service - in that mode the server is already running as its
+// own container, so we skip webServer below. With no BASE_URL (a plain
+// `npx playwright test` on a host with Go + Node installed), we fall back
+// to spawning the real server ourselves.
+const baseURL = process.env.BASE_URL || 'http://localhost:8099';
 
 export default defineConfig({
   testDir: './tests',
@@ -21,15 +27,17 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: {
-    command:
-      'go tool templ generate && ' +
-      'go tool gotailwind -i ./assets/css/input.css -o ./public/css/styles.css --minify && ' +
-      'go run .',
-    cwd: repoRoot,
-    url: baseURL,
-    env: { ADDRESS: '0.0.0.0:8099' },
-    reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
-  },
+  webServer: process.env.BASE_URL
+    ? undefined
+    : {
+        command:
+          'go tool templ generate && ' +
+          'go tool gotailwind -i ./assets/css/input.css -o ./public/css/styles.css --minify && ' +
+          'go run .',
+        cwd: repoRoot,
+        url: baseURL,
+        env: { ADDRESS: '0.0.0.0:8099' },
+        reuseExistingServer: !process.env.CI,
+        timeout: 60_000,
+      },
 });

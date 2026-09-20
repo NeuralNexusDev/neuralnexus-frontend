@@ -1,0 +1,22 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8090/"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.56.1-noble
+    working_dir: /work
+    volumes:
+      - ./e2e:/work
+    environment:
+      BASE_URL: http://frontend:8090
+    depends_on:
+      frontend:
+        condition: service_healthy
+    command: sh -c "npm ci && npx playwright test"
