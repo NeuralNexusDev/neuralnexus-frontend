@@ -1,25 +1,4 @@
 /**
- * @description This function is used to get a cookie by name
- * @param cname {string} - The name of the cookie to get
- * @returns {string} - The value of the cookie
- */
-function getCookie(cname) {
-    let name = cname + "=";
-    let decodedCookie = decodeURIComponent(document.cookie);
-    let ca = decodedCookie.split(';');
-    for(let i = 0; i <ca.length; i++) {
-        let c = ca[i];
-        while (c.charAt(0) === ' ') {
-            c = c.substring(1);
-        }
-        if (c.indexOf(name) === 0) {
-            return c.substring(name.length, c.length);
-        }
-    }
-    return "";
-}
-
-/**
  * @description This function is used to set a cookie
  * @param name {string} - The name of the cookie to set
  * @param value {string} - The value of the cookie
@@ -27,22 +6,6 @@ function getCookie(cname) {
  */
 function setCookie(name, value, expires) {
     document.cookie = name + "=" + value + "; expires=" + expires + "; path=/; domain=.neuralnexus.dev; SameSite=None; Secure=true";
-}
-
-/**
- * @description This function is used to delete a cookie
- * @param name {string} - The name of the cookie to delete
- */
-function deleteCookie(name) {
-    document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-}
-
-/**
- * @description This function is used to get the session ID from the cookie
- * @returns {string} - The session ID
- */
-function getSession() {
-    return getCookie('session');
 }
 
 /**
@@ -68,14 +31,10 @@ function updateSession(data) {
 function logout() {
     fetch('https://api.neuralnexus.dev/api/v1/auth/logout', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + getSession()
-        }
+        credentials: 'include'
     })
         .then((res) => {
             if (res.status === 204) {
-                deleteCookie('session');
                 window.location.href = '/'
             } else {
                 console.error('Logout failed');
@@ -145,54 +104,36 @@ function encodeState(state) {
 }
 
 /**
- * @description Reads the user ID (JWT "sub" claim) out of the current
- * session cookie.
- * @returns {?string} - The user ID, or null if there's no session or it
- * can't be decoded.
- */
-function getSessionUserId() {
-    const session = getSession();
-    if (!session) {
-        return null;
-    }
-    try {
-        return JSON.parse(atob(session.split('.')[1])).sub || null;
-    } catch (error) {
-        return null;
-    }
-}
-
-/**
  * @description Loads the current user's profile into the account settings
- * page, redirecting to /login if there's no usable session.
+ * page, redirecting to /login if the session is missing or expired. Uses
+ * the /me self-service routes, which resolve identity from the session
+ * cookie the browser attaches automatically (credentials: 'include') -
+ * the frontend never needs to know its own user ID.
  */
 function loadAccountProfile() {
-    const session = getSession();
-    const userId = getSessionUserId();
-    if (!session || !userId) {
-        window.location.href = '/login';
-        return;
-    }
-
-    fetch(`https://api.neuralnexus.dev/api/v1/users/${userId}`, {
-        headers: {
-            'Authorization': 'Bearer ' + session
-        }
+    fetch('https://api.neuralnexus.dev/api/v1/users/me', {
+        credentials: 'include'
     })
         .then((res) => {
+            if (res.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
             if (!res.ok) {
                 throw new Error('Failed to load account: ' + res.status);
             }
             return res.json();
         })
         .then((account) => {
-            document.getElementById('account-username').innerText = account.username;
+            if (account) {
+                document.getElementById('account-username').innerText = account.username;
+            }
         })
         .catch((error) => {
             console.error('Error:', error);
         });
 
-    loadLinkedAccounts(userId, session);
+    loadLinkedAccounts();
 }
 
 /**
@@ -202,25 +143,29 @@ const LINK_PLATFORMS = ['discord', 'twitch', 'microsoft', 'xboxlive', 'minecraft
 
 /**
  * @description Fetches the caller's linked accounts and updates each
- * platform row's verified/login-enabled/unlink state.
- * @param userId {string}
- * @param session {string}
+ * platform row's verified/login-enabled/unlink state, redirecting to
+ * /login if the session is missing or expired.
  */
-function loadLinkedAccounts(userId, session) {
-    fetch(`https://api.neuralnexus.dev/api/v1/users/${userId}/links`, {
-        headers: {
-            'Authorization': 'Bearer ' + session
-        }
+function loadLinkedAccounts() {
+    fetch('https://api.neuralnexus.dev/api/v1/users/me/links', {
+        credentials: 'include'
     })
         .then((res) => {
+            if (res.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
             if (!res.ok) {
                 throw new Error('Failed to load linked accounts: ' + res.status);
             }
             return res.json();
         })
         .then((links) => {
+            if (!links) {
+                return;
+            }
             const byPlatform = {};
-            (links || []).forEach((link) => {
+            links.forEach((link) => {
                 byPlatform[link.platform] = link;
             });
             LINK_PLATFORMS.forEach((platform) => {
@@ -327,22 +272,13 @@ function unlinkPlatform(platform) {
         return;
     }
 
-    const session = getSession();
-    const userId = getSessionUserId();
-    if (!session || !userId) {
-        window.location.href = '/login';
-        return;
-    }
-
-    fetch(`https://api.neuralnexus.dev/api/v1/users/${userId}/link/${platform}`, {
+    fetch(`https://api.neuralnexus.dev/api/v1/users/me/link/${platform}`, {
         method: 'DELETE',
-        headers: {
-            'Authorization': 'Bearer ' + session
-        }
+        credentials: 'include'
     })
         .then((res) => {
             if (res.status === 204) {
-                loadLinkedAccounts(userId, session);
+                loadLinkedAccounts();
                 return;
             }
             return res.json().then((problem) => {
@@ -355,30 +291,37 @@ function unlinkPlatform(platform) {
 }
 
 /**
+ * @description Tracks the most recent setPlatformLoginEnabled request per
+ * platform, so a slow/out-of-order response from an earlier toggle can't
+ * clobber a later one (e.g. reverting the checkbox after the user has
+ * already flipped it again and that newer request already succeeded).
+ */
+const platformLoginRequestSeq = {};
+
+/**
  * @description Sets whether a linked platform can be used to log in, from
- * its "Allow logins" checkbox. Reverts the checkbox if the request fails.
+ * its "Allow logins" checkbox. Reverts the checkbox if the request fails,
+ * unless a newer request for the same platform has since been made.
  * @param platform {string}
  * @param enabled {boolean}
  */
 function setPlatformLoginEnabled(platform, enabled) {
-    const session = getSession();
-    const userId = getSessionUserId();
-    if (!session || !userId) {
-        window.location.href = '/login';
-        return;
-    }
+    const seq = (platformLoginRequestSeq[platform] || 0) + 1;
+    platformLoginRequestSeq[platform] = seq;
 
-    fetch(`https://api.neuralnexus.dev/api/v1/users/${userId}/link/${platform}`, {
+    fetch(`https://api.neuralnexus.dev/api/v1/users/me/link/${platform}`, {
         method: 'PATCH',
+        credentials: 'include',
         headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + session
+            'Content-Type': 'application/json'
         },
         body: JSON.stringify({login_enabled: enabled})
     })
         .then((res) => {
             if (res.status === 204) {
-                loadLinkedAccounts(userId, session);
+                if (platformLoginRequestSeq[platform] === seq) {
+                    loadLinkedAccounts();
+                }
                 return;
             }
             return res.json().then((problem) => {
@@ -386,7 +329,9 @@ function setPlatformLoginEnabled(platform, enabled) {
             });
         })
         .catch((error) => {
-            document.getElementById(`link-${platform}-login-enabled`).checked = !enabled;
-            alert(error.message);
+            if (platformLoginRequestSeq[platform] === seq) {
+                document.getElementById(`link-${platform}-login-enabled`).checked = !enabled;
+                alert(error.message);
+            }
         });
 }
