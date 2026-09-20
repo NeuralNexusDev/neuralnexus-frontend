@@ -18,26 +18,6 @@ function setCookie(name, value, expires) {
     document.cookie = name + "=" + value + "; expires=" + expires + "; path=/; domain=.neuralnexus.dev; SameSite=None; Secure=true";
 }
 
-/**
- * @description A session object
- * @typedef {Object} Session
- * @property {string} session - The session JWT
- */
-
-/**
- * @description This function is used to get the user ID from the cookie
- * @param data {Session} - The data object containing the user ID
- */
-function updateSession(data) {
-    if (data.session) {
-        const payload = JSON.parse(atob(data.session.split('.')[1]));
-        if (payload && payload.exp) {
-            const exp = payload.exp * 1000;
-            setCookie('session', payload.session, new Date(exp).toUTCString());
-        }
-    }
-}
-
 function logout() {
     fetch(`${apiBaseUrl()}/api/v1/auth/logout`, {
         method: 'POST',
@@ -71,16 +51,24 @@ function submitLoginForm() {
     }
     fetch(`${apiBaseUrl()}/api/v1/auth/login`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify(json)
     })
-        .then((res) => res.json())
-        .then((data) => updateSession(data))
-        .catch((error) => {
-            console.error('Error:', error)
+        .then((res) => {
+            if (res.ok) {
+                window.location.href = '/';
+                return;
+            }
+            return res.json().then((problem) => {
+                throw new Error(problem.detail || 'Failed to log in');
+            });
         })
+        .catch((error) => {
+            alert(error.message);
+        });
 }
 
 /**
@@ -89,7 +77,7 @@ function submitLoginForm() {
  */
 function generateNonce() {
     const nonce = Math.random().toString(36).substring(2, 15);
-    setCookie('nonce', nonce, new Date(Date.now() + 60 * 1000).toUTCString());
+    setCookie('nonce', nonce, new Date(Date.now() + 5 * 60 * 1000).toUTCString());
     return nonce;
 }
 
