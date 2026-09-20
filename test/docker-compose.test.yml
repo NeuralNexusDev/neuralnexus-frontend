@@ -1,7 +1,9 @@
+name: neuralnexus-frontend-test
+
 services:
   frontend:
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile
     environment:
       API_BASE_URL: https://api.neuralnexus.dev
@@ -15,7 +17,7 @@ services:
     image: mcr.microsoft.com/playwright:v1.56.1-noble
     working_dir: /work
     volumes:
-      - ./test/integration:/work
+      - ./integration:/work
     environment:
       BASE_URL: http://frontend:8090
       API_BASE_URL: https://api.neuralnexus.dev

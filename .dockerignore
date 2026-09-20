@@ -3,6 +3,5 @@ Dockerfile
 .gitignore
 .dockerignore
 docker-compose.yml
-docker-compose.test.yml
 .github
 test
