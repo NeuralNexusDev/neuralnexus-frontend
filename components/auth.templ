@@ -193,149 +193,109 @@ templ OAuthButtons(labelPrefix string) {
 	</a>
 }
 
+// linkAccountRow renders one platform's connection card, Discord-settings
+// style: brand icon, then a title/subtitle pair, a verified checkmark, and
+// Unlink on the first line; an "Allow logins" toggle switch on the
+// second - still a plain checkbox underneath (same id, same onchange),
+// just restyled with a sr-only input and a peer-checked thumb, so the JS
+// never had to change. Once linked, the title becomes the caller's
+// platform_username and the platform's display name drops down to a
+// subtitle, matching how Discord's own connections page leads with the
+// connected identity rather than the platform name; while unlinked (no
+// username to show yet) the display name stays the title and the
+// subtitle is hidden. The brand icon is passed in as children since
+// Discord, Twitch and Xbox's white logos need a colored badge behind them
+// to be visible on a light background, while Microsoft's and Minecraft's
+// own logos don't. Every control starts blank/disabled and is populated
+// by loadLinkedAccounts() (see scripts.js) once GET .../users/{id}/links
+// resolves, since a platform's linked state isn't known until then.
+templ linkAccountRow(platform string, name string) {
+    <div class="rounded-lg border border-input p-3 space-y-2">
+        <div class="flex items-center gap-2">
+            { children... }
+            <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-1">
+                    <span id={ "link-" + platform + "-title" } data-name={ name } class="text-sm font-medium truncate">
+                        { name }
+                    </span>
+                    <svg
+                        id={ "link-" + platform + "-verified-icon" }
+                        class="hidden w-4 h-4 shrink-0 text-green-600 dark:text-green-500"
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                    >
+                        <title>Verified</title>
+                        <path fill="currentColor" d="M9.55 18L3.85 12.3l1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path>
+                    </svg>
+                    <span id={ "link-" + platform + "-status" } class="text-xs text-muted-foreground"></span>
+                </div>
+                <span id={ "link-" + platform + "-subtitle" } class="hidden text-xs text-muted-foreground">
+                    { name }
+                </span>
+            </div>
+            <button
+                id={ "link-" + platform + "-action" }
+                data-platform={ platform }
+                data-linked="false"
+                onclick="handleLinkAction(this.dataset.platform)"
+                class="shrink-0 text-xs underline"
+            >
+                Link
+            </button>
+        </div>
+        <div class="flex items-center justify-between pl-9">
+            <label for={ "link-" + platform + "-login-enabled" } class="text-xs text-muted-foreground">
+                Allow logins
+            </label>
+            <label class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full bg-gray-300 transition-colors has-[:checked]:bg-primary has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 dark:bg-gray-600">
+                <input
+                    type="checkbox"
+                    id={ "link-" + platform + "-login-enabled" }
+                    data-platform={ platform }
+                    disabled
+                    onchange="setPlatformLoginEnabled(this.dataset.platform, this.checked)"
+                    class="peer sr-only"
+                />
+                <span class="pointer-events-none inline-block h-4 w-4 translate-x-0.5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-4"></span>
+            </label>
+        </div>
+    </div>
+}
+
 // LinkAccountButtons lets an already-logged-in user attach another
-// provider to their account. It reuses the same OAuth apps as
-// OAuthButtons, but sends mode "link" instead of "login" so the API
-// attaches the identity to the caller's session instead of starting a new
-// one. Unlinking has no API endpoint yet, so those buttons stay disabled.
+// provider to their account, see each platform's verified/login-enabled
+// state, toggle whether it can be used to log in, and unlink it.
 templ LinkAccountButtons() {
     <script>
     const linkNonce = generateNonce();
     const linkRedirect = window.location.href;
-
-    function setLinkHref(anchorId, baseId, platform) {
-        const a = document.getElementById(anchorId);
-        const base = document.getElementById(baseId);
-        if (!a || !base) {
-            return;
-        }
-        const state = {
-            platform: platform,
-            nonce: linkNonce,
-            redirect_uri: linkRedirect,
-            mode: "link"
-        };
-        a.href = base.innerText + "&state=" + encodeState(state);
-    }
-
-    setTimeout(() => {
-        setLinkHref("link-discord-oauth", "link-discord-oauth-base", "discord");
-        setLinkHref("link-twitch-oauth", "link-twitch-oauth-base", "twitch");
-        setLinkHref("link-microsoft-oauth", "link-microsoft-oauth-base", "microsoft");
-        setLinkHref("link-xbox-oauth", "link-xboxlive-oauth-base", "xboxlive");
-        setLinkHref("link-minecraft-oauth", "link-xboxlive-oauth-base", "minecraft");
-    }, 1000);
     </script>
     <div hidden id="link-discord-oauth-base">{ OAUTH2_DISCORD }</div>
     <div hidden id="link-twitch-oauth-base">{ OAUTH2_TWITCH }</div>
     <div hidden id="link-microsoft-oauth-base">{ OAUTH2_MICROSOFT }</div>
     <div hidden id="link-xboxlive-oauth-base">{ OAUTH2_XBOX_LIVE }</div>
     <div class="space-y-2">
-        <div class="flex gap-2">
-            <a href="" id="link-discord-oauth" class="flex-1">
-                <button
-                    class="bg-discord_blurple hover:bg-blue-600 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
-                >
-                    <span class="mr-2 text-white">Link Discord</span>
-                    <img
-                        src="/public/DiscordClydeWhite.svg"
-                        alt="Discord Logo"
-                        class="w-6 h-6 mr-2"
-                    />
-                </button>
-            </a>
-            <button
-                disabled
-                title="Unlinking isn't available yet"
-                class="w-20 h-10 rounded-md border border-input text-sm text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            >
-                Unlink
-            </button>
-        </div>
-        <div class="flex gap-2">
-            <a href="" id="link-twitch-oauth" class="flex-1">
-                <button
-                    class="bg-twitch_purple hover:bg-purple-800 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
-                >
-                    <span class="mr-2 text-white">Link Twitch</span>
-                    <img
-                        src="/public/TwitchGlitchWhite.svg"
-                        alt="Twitch Logo"
-                        class="w-6 h-6 mr-2"
-                    />
-                </button>
-            </a>
-            <button
-                disabled
-                title="Unlinking isn't available yet"
-                class="w-20 h-10 rounded-md border border-input text-sm text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            >
-                Unlink
-            </button>
-        </div>
-        <div class="flex gap-2">
-            <a href="" id="link-microsoft-oauth" class="flex-1">
-                <button
-                    class="bg-microsoft_gray hover:bg-black inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
-                >
-                    <span class="mr-2 text-white">Link Microsoft</span>
-                    <img
-                        src="/public/MicrosoftLogo.svg"
-                        alt="Microsoft Logo"
-                        class="w-6 h-6 mr-2"
-                    />
-                </button>
-            </a>
-            <button
-                disabled
-                title="Unlinking isn't available yet"
-                class="w-20 h-10 rounded-md border border-input text-sm text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            >
-                Unlink
-            </button>
-        </div>
-        <div class="flex gap-2">
-            <a href="" id="link-xbox-oauth" class="flex-1">
-                <button
-                    class="bg-xbox_bilbao hover:bg-green-800 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
-                >
-                    <span class="mr-2 text-white">Link Xbox Live</span>
-                    <img
-                        src="/public/XboxSymbolWhite.svg"
-                        alt="Xbox Logo"
-                        class="w-6 h-6 mr-2"
-                    />
-                </button>
-            </a>
-            <button
-                disabled
-                title="Unlinking isn't available yet"
-                class="w-20 h-10 rounded-md border border-input text-sm text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            >
-                Unlink
-            </button>
-        </div>
-        <div class="flex gap-2">
-            <a href="" id="link-minecraft-oauth" class="flex-1 flex justify-center">
-                <button
-                    class="bg-minecraft_apple hover:bg-green-700 rounded-md h-10 px-4 flex items-center justify-center ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 w-full"
-                >
-                    <span class="mr-2 text-white">Link</span>
-                    <img
-                        src="/public/MinecraftLogo.svg"
-                        alt="Minecraft"
-                        class="h-6 w-auto"
-                    />
-                </button>
-            </a>
-            <button
-                disabled
-                title="Unlinking isn't available yet"
-                class="w-20 h-10 rounded-md border border-input text-sm text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            >
-                Unlink
-            </button>
-        </div>
+        @linkAccountRow("discord", "Discord") {
+            <div class="flex items-center justify-center w-7 h-7 rounded-md bg-discord_blurple shrink-0">
+                <img src="/public/DiscordClydeWhite.svg" alt="Discord Logo" class="w-4 h-4"/>
+            </div>
+        }
+        @linkAccountRow("twitch", "Twitch") {
+            <div class="flex items-center justify-center w-7 h-7 rounded-md bg-twitch_purple shrink-0">
+                <img src="/public/TwitchGlitchWhite.svg" alt="Twitch Logo" class="w-4 h-4"/>
+            </div>
+        }
+        @linkAccountRow("microsoft", "Microsoft") {
+            <img src="/public/MicrosoftLogo.svg" alt="Microsoft Logo" class="w-5 h-5 shrink-0"/>
+        }
+        @linkAccountRow("xboxlive", "Xbox Live") {
+            <div class="flex items-center justify-center w-7 h-7 rounded-md bg-xbox_bilbao shrink-0">
+                <img src="/public/XboxSymbolWhite.svg" alt="Xbox Logo" class="w-4 h-4"/>
+            </div>
+        }
+        @linkAccountRow("minecraft", "") {
+            <img src="/public/MinecraftLogo.svg" alt="Minecraft Logo" class="h-5 w-auto shrink-0"/>
+        }
     </div>
 }
 
