@@ -118,8 +118,8 @@ func SessionMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("session")
 		if err == nil {
-			session, sessionErr := SessionFromJWT(cookie.Value)
-			if sessionErr == nil {
+			session, err := SessionFromJWT(cookie.Value)
+			if err == nil {
 				ctx := r.Context()
 				ctx = context.WithValue(ctx, SessionKey, session)
 				r = r.WithContext(ctx)
