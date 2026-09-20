@@ -119,13 +119,11 @@ func SessionMiddleware(next http.Handler) http.Handler {
 		cookie, err := r.Cookie("session")
 		if err == nil {
 			session, err := SessionFromJWT(cookie.Value)
-			if err != nil {
-				return
+			if err == nil {
+				ctx := r.Context()
+				ctx = context.WithValue(ctx, SessionKey, session)
+				r = r.WithContext(ctx)
 			}
-
-			ctx := r.Context()
-			ctx = context.WithValue(ctx, SessionKey, session)
-			r = r.WithContext(ctx)
 		}
 
 		next.ServeHTTP(w, r)
