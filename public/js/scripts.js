@@ -1,4 +1,14 @@
 /**
+ * @description Reads the backend's base URL from the hidden element
+ * WrapContents renders on every page - lets tests point the frontend at a
+ * different backend without editing this file.
+ * @returns {string}
+ */
+function apiBaseUrl() {
+    return document.getElementById('api-base-url').innerText;
+}
+
+/**
  * @description This function is used to set a cookie
  * @param name {string} - The name of the cookie to set
  * @param value {string} - The value of the cookie
@@ -29,7 +39,7 @@ function updateSession(data) {
 }
 
 function logout() {
-    fetch('https://api.neuralnexus.dev/api/v1/auth/logout', {
+    fetch(`${apiBaseUrl()}/api/v1/auth/logout`, {
         method: 'POST',
         credentials: 'include'
     })
@@ -59,7 +69,7 @@ function submitLoginForm() {
     } else {
         json.username = username
     }
-    fetch('https://api.neuralnexus.dev/api/v1/auth/login', {
+    fetch(`${apiBaseUrl()}/api/v1/auth/login`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -108,7 +118,7 @@ function encodeState(state) {
  * session cookie resolves identity server-side - no user ID needed here.
  */
 function loadAccountProfile() {
-    fetch('https://api.neuralnexus.dev/api/v1/users/me', {
+    fetch(`${apiBaseUrl()}/api/v1/users/me`, {
         credentials: 'include'
     })
         .then((res) => {
@@ -152,7 +162,7 @@ let loadLinkedAccountsSeq = 0;
 function loadLinkedAccounts() {
     const seq = ++loadLinkedAccountsSeq;
 
-    fetch('https://api.neuralnexus.dev/api/v1/users/me/links', {
+    fetch(`${apiBaseUrl()}/api/v1/users/me/links`, {
         credentials: 'include'
     })
         .then((res) => {
@@ -282,7 +292,7 @@ function unlinkPlatform(platform) {
     const seq = (platformActionSeq[platform] || 0) + 1;
     platformActionSeq[platform] = seq;
 
-    fetch(`https://api.neuralnexus.dev/api/v1/users/me/link/${platform}`, {
+    fetch(`${apiBaseUrl()}/api/v1/users/me/link/${platform}`, {
         method: 'DELETE',
         credentials: 'include'
     })
@@ -318,7 +328,7 @@ function setPlatformLoginEnabled(platform, enabled) {
     const seq = (platformActionSeq[platform] || 0) + 1;
     platformActionSeq[platform] = seq;
 
-    fetch(`https://api.neuralnexus.dev/api/v1/users/me/link/${platform}`, {
+    fetch(`${apiBaseUrl()}/api/v1/users/me/link/${platform}`, {
         method: 'PATCH',
         credentials: 'include',
         headers: {

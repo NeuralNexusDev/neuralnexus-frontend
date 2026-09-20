@@ -1,5 +1,17 @@
 package components
 
+import "os"
+
+// API_BASE_URL lets tests (and local dev) point the frontend at a
+// different backend without touching scripts.js - defaults to the real
+// API so unset behaves exactly as before.
+var API_BASE_URL = func() string {
+	if v := os.Getenv("API_BASE_URL"); v != "" {
+		return v
+	}
+	return "https://api.neuralnexus.dev"
+}()
+
 templ WrapContents(contents templ.Component) {
 	<!DOCTYPE html>
 	<html lang="en">
@@ -17,6 +29,7 @@ templ WrapContents(contents templ.Component) {
 		<script src="/public/js/scripts.js"></script>
 		<script src="/public/js/theming.js"></script>
 		<body>
+			<div hidden id="api-base-url">{ API_BASE_URL }</div>
 			@Header()
 			<div class="relative isolate px-6 pt-14 lg:px-8">
 				@contents

@@ -21,6 +21,15 @@ test.describe('static pages', () => {
     expect(res.status()).toBe(200);
     await expect(page.getByText('Sign up with Discord')).toBeVisible();
   });
+
+  // Regression test for the hidden #api-base-url element scripts.js reads
+  // instead of hardcoding the backend's origin. Only checks the default
+  // (API_BASE_URL unset) - the override path is exercised by pointing the
+  // whole suite at a containerized backend via BASE_URL/API_BASE_URL.
+  test('exposes the API base URL for scripts.js to read', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('#api-base-url')).toHaveText('https://api.neuralnexus.dev');
+  });
 });
 
 test.describe('OAuth state encoding', () => {
