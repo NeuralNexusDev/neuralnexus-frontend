@@ -33,3 +33,9 @@ dev:
 	export DISCORD_CLIENT_ID=1107039927230791680 DISCORD_REDIRECT_URI=https://api.neuralnexus.dev/api/oauth TWITCH_CLIENT_ID=cx0nr5h65pexo8huupaywy08ry79pw TWITCH_REDIRECT_URI=https://api.neuralnexus.dev/api/oauth
 	make tailwind-clean
 	make -j3 tailwind-watch templ server
+
+# Top-to-bottom Playwright tests: builds and runs the real server, drives
+# it in a real browser, and mocks the sibling API rather than hitting it
+# for real.
+test-integration:
+	cd e2e && npm ci && npx playwright install --with-deps chromium && npx playwright test
