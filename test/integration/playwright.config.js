@@ -12,10 +12,16 @@ const repoRoot = path.dirname(path.dirname(path.dirname(fileURLToPath(import.met
 const baseURL = process.env.BASE_URL || 'http://localhost:8099';
 
 // The single source of truth for the backend origin the app (and every
-// spec file, via process.env.API_BASE_URL) mocks against - resolved once
+// spec file, via process.env.NN_API_URL) mocks against - resolved once
 // here so both sides can never drift apart.
-const apiBaseUrl = process.env.API_BASE_URL || 'https://api.neuralnexus.dev';
-process.env.API_BASE_URL = apiBaseUrl;
+const nnApiUrl = process.env.NN_API_URL || 'https://api.neuralnexus.dev';
+process.env.NN_API_URL = nnApiUrl;
+
+// Same pattern for Steam's OpenID endpoint - defaults to the real one, but
+// lets tests point it at a local stand-in instead of routing around a
+// hardcoded steamcommunity.com literal.
+const steamOpenIdLoginUrl = process.env.STEAM_OPENID_LOGIN_URL || 'https://steamcommunity.com/openid/login';
+process.env.STEAM_OPENID_LOGIN_URL = steamOpenIdLoginUrl;
 
 export default defineConfig({
   testDir: './tests',
@@ -42,7 +48,7 @@ export default defineConfig({
           'go run .',
         cwd: repoRoot,
         url: baseURL,
-        env: { ADDRESS: '0.0.0.0:8099', API_BASE_URL: apiBaseUrl },
+        env: { ADDRESS: '0.0.0.0:8099', NN_API_URL: nnApiUrl, STEAM_OPENID_LOGIN_URL: steamOpenIdLoginUrl },
         reuseExistingServer: !process.env.CI,
         timeout: 60_000,
       },

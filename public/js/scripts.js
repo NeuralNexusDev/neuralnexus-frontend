@@ -9,13 +9,104 @@ function apiBaseUrl() {
 }
 
 /**
- * @description This function is used to set a cookie
- * @param name {string} - The name of the cookie to set
- * @param value {string} - The value of the cookie
- * @param expires {string} - The expiration date of the cookie
+ * @description Reads the RFC 9457 problem the API embeds in a "problem"
+ * query param when an OAuth/OpenID redirect fails (auth.go's
+ * redirectWithError) - base64 (URL-safe) encoded, same alphabet as the
+ * "state" param but padded, since it's produced by Go's base64.URLEncoding
+ * rather than this file's own hand-rolled encodeState(). Shows the
+ * problem's detail in the page's #auth-error banner and strips the param
+ * from the URL so a refresh or share doesn't repeat it.
  */
-function setCookie(name, value, expires) {
-    document.cookie = name + "=" + value + "; expires=" + expires + "; path=/; domain=.neuralnexus.dev; SameSite=None; Secure=true";
+function showAuthErrorFromQuery() {
+    const params = new URLSearchParams(window.location.search);
+    const problemB64 = params.get('problem');
+    if (!problemB64) {
+        return;
+    }
+
+    params.delete('problem');
+    const cleanQuery = params.toString();
+    const cleanUrl = window.location.pathname + (cleanQuery ? `?${cleanQuery}` : '') + window.location.hash;
+    history.replaceState(null, '', cleanUrl);
+
+    try {
+        const json = atob(problemB64.replace(/-/g, '+').replace(/_/g, '/'));
+        const problem = JSON.parse(json);
+        const banner = document.getElementById('auth-error');
+        if (banner) {
+            banner.textContent = problem.detail || 'Something went wrong. Please try again.';
+            banner.hidden = false;
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+/**
+ * @description Reads Steam's OpenID login endpoint from the hidden element
+ * WrapContents renders on every page - defaults to the real Steam endpoint,
+ * overridable so tests can point it at a local stand-in instead of routing
+ * around a hardcoded steamcommunity.com literal.
+ * @returns {string}
+ */
+function steamOpenIdLoginUrl() {
+    return document.getElementById('steam-openid-login-url').innerText;
+}
+
+/**
+ * @description Generates a fresh nonce for the OAuth/OpenID flow and sets
+ * it as a short-lived cookie the API checks on the callback, returning the
+ * nonce. Called at the moment the user clicks a login/link button (not on
+ * page load) so its 5-minute TTL covers the provider round-trip rather than
+ * however long the user sat on the page first. The hardcoded production
+ * domain/Secure/SameSite=None only apply on neuralnexus.dev itself - a
+ * browser rejects a Domain attribute that doesn't match the current host,
+ * so on localhost (or any other dev/test host) this falls back to a
+ * host-only cookie with SameSite=Lax and no Secure flag.
+ * @returns {string} - The generated nonce
+ */
+function createNonce() {
+    const nonce = Math.random().toString(36).substring(2, 15);
+
+    const host = location.hostname;
+    const isProdDomain = host === 'neuralnexus.dev' || host.endsWith('.neuralnexus.dev');
+    const domainAttr = isProdDomain ? '; domain=.neuralnexus.dev' : '';
+    const secureAttr = location.protocol === 'https:' ? '; Secure' : '';
+    const sameSite = secureAttr ? 'None' : 'Lax';
+    const expires = new Date(Date.now() + 5 * 60 * 1000).toUTCString();
+    document.cookie = `nonce=${nonce}; expires=${expires}; path=/${domainAttr}; SameSite=${sameSite}${secureAttr}`;
+
+    return nonce;
+}
+
+/**
+ * @description Toggles the header's account section (username + settings
+ * gear) and Login/Logout button based on whether the session cookie is
+ * still valid, checked via /users/me. Runs on every page load since the
+ * session cookie is HttpOnly and can't be read from JS.
+ */
+function checkHeaderAuthState() {
+    fetch(`${apiBaseUrl()}/api/v1/users/me`, {
+        credentials: 'include'
+    })
+        .then((res) => {
+            const loggedIn = res.ok;
+            const loginBtn = document.getElementById('header-login-btn');
+            const logoutBtn = document.getElementById('header-logout-btn');
+            const accountSection = document.getElementById('header-account');
+            if (loginBtn) loginBtn.hidden = loggedIn;
+            if (logoutBtn) logoutBtn.hidden = !loggedIn;
+            if (accountSection) accountSection.hidden = !loggedIn;
+            if (!loggedIn) return;
+
+            return res.json().then((account) => {
+                const usernameEl = document.getElementById('header-account-username');
+                if (usernameEl && account) usernameEl.innerText = account.username;
+            });
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+        });
 }
 
 function logout() {
@@ -72,16 +163,6 @@ function submitLoginForm() {
 }
 
 /**
- * @description Generate a random nonce for the OAuth flow
- * @returns {string} - The generated nonce
- */
-function generateNonce() {
-    const nonce = Math.random().toString(36).substring(2, 15);
-    setCookie('nonce', nonce, new Date(Date.now() + 5 * 60 * 1000).toUTCString());
-    return nonce;
-}
-
-/**
  * @description an OAuthState object
  * @typedef {Object} OAuthState
  * @property {string} platform - The platform to redirect to
@@ -99,6 +180,48 @@ function generateNonce() {
  */
 function encodeState(state) {
     return btoa(JSON.stringify(state)).replace(/\+/g, '-').replace(/\//g, '_');
+}
+
+/**
+ * @description Builds Steam's OpenID 2.0 login request URL. Steam has no
+ * OAuth app/client ID to pre-render a base URL from, so unlike the other
+ * providers this is built entirely client-side, and state travels inside
+ * openid.return_to instead of as a query param appended after the fact.
+ * @param state {OAuthState} - The state object to round-trip through Steam
+ * @returns {string}
+ */
+function buildSteamOpenIDURL(state) {
+    const returnTo = `${apiBaseUrl()}/api/openid?state=${encodeState(state)}`;
+    const params = new URLSearchParams({
+        'openid.ns': 'http://specs.openid.net/auth/2.0',
+        'openid.mode': 'checkid_setup',
+        'openid.return_to': returnTo,
+        'openid.realm': `${apiBaseUrl()}/`,
+        'openid.identity': 'http://specs.openid.net/auth/2.0/identifier_select',
+        'openid.claimed_id': 'http://specs.openid.net/auth/2.0/identifier_select'
+    });
+    return `${steamOpenIdLoginUrl()}?${params.toString()}`;
+}
+
+/**
+ * @description Starts an OAuth/OpenID login for platform: mints a fresh
+ * nonce right now via createNonce() rather than on page load, then
+ * navigates to the provider with the resulting state appended. baseUrl is
+ * the pre-rendered authorize URL for OAuth providers, or null for Steam,
+ * which has none and builds its whole URL via buildSteamOpenIDURL.
+ * @param platform {string}
+ * @param baseUrl {string|null}
+ */
+function startOAuthLogin(platform, baseUrl) {
+    let redirect = window.location.href;
+    if (redirect.endsWith('/login')) {
+        redirect = redirect.substring(0, redirect.length - 6);
+    } else if (redirect.endsWith('/register')) {
+        redirect = redirect.substring(0, redirect.length - 9);
+    }
+
+    const state = { platform: platform, nonce: createNonce(), redirect_uri: redirect, mode: 'login' };
+    window.location.href = platform === 'steam' ? buildSteamOpenIDURL(state) : baseUrl + '&state=' + encodeState(state);
 }
 
 /**
@@ -248,16 +371,22 @@ function handleLinkAction(platform) {
         return;
     }
 
+    const state = {
+        platform: platform,
+        nonce: createNonce(),
+        redirect_uri: linkRedirect,
+        mode: 'link'
+    };
+
+    if (platform === 'steam') {
+        window.location.href = buildSteamOpenIDURL(state);
+        return;
+    }
+
     const base = document.getElementById(LINK_OAUTH_BASE_IDS[platform]);
     if (!base) {
         return;
     }
-    const state = {
-        platform: platform,
-        nonce: linkNonce,
-        redirect_uri: linkRedirect,
-        mode: 'link'
-    };
     window.location.href = base.innerText + '&state=' + encodeState(state);
 }
 

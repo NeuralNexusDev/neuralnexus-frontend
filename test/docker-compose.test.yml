@@ -6,7 +6,7 @@ services:
       context: ..
       dockerfile: Dockerfile
     environment:
-      API_BASE_URL: https://api.neuralnexus.dev
+      NN_API_URL: https://api.neuralnexus.dev
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8090/"]
       interval: 2s
@@ -20,7 +20,7 @@ services:
       - ./integration:/work
     environment:
       BASE_URL: http://frontend:8090
-      API_BASE_URL: https://api.neuralnexus.dev
+      NN_API_URL: https://api.neuralnexus.dev
     depends_on:
       frontend:
         condition: service_healthy

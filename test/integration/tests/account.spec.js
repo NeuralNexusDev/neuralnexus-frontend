@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const API = `${process.env.API_BASE_URL}/api/v1`;
+const API = `${process.env.NN_API_URL}/api/v1`;
 
 async function mockMe(page, { username = 'testuser', status = 200 } = {}) {
   await page.route(`${API}/users/me`, (route) => {
@@ -36,6 +36,33 @@ test.describe('account page - loading', () => {
     // Never linked: falls back to the platform's display name as the title.
     await expect(page.locator('#link-microsoft-title')).toHaveText('Microsoft');
     await expect(page.locator('#link-microsoft-action')).toHaveText('Link');
+
+    await expect(page.locator('#link-steam-title')).toHaveText('Steam');
+    await expect(page.locator('#link-steam-action')).toHaveText('Link');
+  });
+
+  test('clicking Link on Steam navigates to a Steam OpenID URL, not a pre-rendered base href', async ({ page }) => {
+    await mockMe(page, { username: 'testuser' });
+    await mockLinks(page, []);
+    // Intercept rather than let the browser actually reach Steam - only the
+    // request URL buildSteamOpenIDURL() produced matters here.
+    const steamUrl = process.env.STEAM_OPENID_LOGIN_URL;
+    await page.route(`${steamUrl}*`, (route) => {
+      route.fulfill({ status: 200, contentType: 'text/plain', body: 'stub' });
+    });
+
+    await page.goto('/account');
+    await page.locator('#link-steam-action').click();
+    await page.waitForURL((url) => url.href.startsWith(steamUrl));
+
+    const url = new URL(page.url());
+    expect(url.searchParams.get('openid.mode')).toBe('checkid_setup');
+    const returnTo = new URL(url.searchParams.get('openid.return_to'));
+    const state = JSON.parse(
+      Buffer.from(returnTo.searchParams.get('state').replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')
+    );
+    expect(state.platform).toBe('steam');
+    expect(state.mode).toBe('link');
   });
 
   test.describe('401 handling', () => {

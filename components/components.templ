@@ -2,15 +2,27 @@ package components
 
 import "os"
 
-func apiBaseURL() string {
-	v := os.Getenv("API_BASE_URL")
+func nnApiURL() string {
+	v := os.Getenv("NN_API_URL")
 	if v == "" {
-		panic("API_BASE_URL environment variable must be set")
+		panic("NN_API_URL environment variable must be set")
 	}
 	return v
 }
 
-var API_BASE_URL = apiBaseURL()
+var NN_API_URL = nnApiURL()
+
+// steamOpenIDLoginURL defaults to the real endpoint - unlike NN_API_URL,
+// tests are the only reason to ever override it, so unset shouldn't panic.
+func steamOpenIDLoginURL() string {
+	v := os.Getenv("STEAM_OPENID_LOGIN_URL")
+	if v == "" {
+		v = "https://steamcommunity.com/openid/login"
+	}
+	return v
+}
+
+var STEAM_OPENID_LOGIN_URL = steamOpenIDLoginURL()
 
 templ WrapContents(contents templ.Component) {
 	<!DOCTYPE html>
@@ -29,7 +41,8 @@ templ WrapContents(contents templ.Component) {
 		<script src="/public/js/scripts.js"></script>
 		<script src="/public/js/theming.js"></script>
 		<body>
-			<div hidden id="api-base-url">{ API_BASE_URL }</div>
+			<div hidden id="api-base-url">{ NN_API_URL }</div>
+			<div hidden id="steam-openid-login-url">{ STEAM_OPENID_LOGIN_URL }</div>
 			@Header()
 			<div class="relative isolate px-6 pt-14 lg:px-8">
 				@contents
@@ -43,9 +56,22 @@ templ HomePage() {
 }
 
 templ Home() {
+	@ErrorBanner()
 	<h1 class="text-4xl font-bold tracking-tight sm:text-6xl text-red-600">
 		NeuralNexus
 	</h1>
+	<script>
+		showAuthErrorFromQuery();
+	</script>
+}
+
+// ErrorBanner is a hidden, page-level error banner that
+// showAuthErrorFromQuery() (scripts.js) reveals when the page was reached
+// via an OAuth/OpenID redirect carrying a problem+json error - a nonce
+// mismatch or a disallowed redirect_uri lands here (on Home) rather than
+// wherever the flow started, since the API can't trust that URI yet.
+templ ErrorBanner() {
+	<div id="auth-error" hidden class="mx-auto max-w-sm rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive mb-4"></div>
 }
 
 templ ThemeToggle() {

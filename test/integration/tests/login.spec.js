@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const API = `${process.env.API_BASE_URL}/api/v1`;
+const API = `${process.env.NN_API_URL}/api/v1`;
 
 test.describe('password login', () => {
   test('a successful login redirects home', async ({ page }) => {

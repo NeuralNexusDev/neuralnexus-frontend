@@ -1,6 +1,7 @@
 package components
 
 templ Account() {
+	@ErrorBanner()
 	<div class="mx-auto max-w-sm space-y-6">
 		<div class="space-y-2 text-center">
 			<h1 class="text-3xl font-bold">Account Settings</h1>
@@ -30,6 +31,7 @@ templ Account() {
 		</div>
 	</div>
 	<script>
+		showAuthErrorFromQuery();
 		loadAccountProfile();
 	</script>
 }
