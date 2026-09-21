@@ -9,13 +9,24 @@ function apiBaseUrl() {
 }
 
 /**
- * @description This function is used to set a cookie
+ * @description This function is used to set a cookie. The hardcoded
+ * production domain/Secure/SameSite=None only apply on neuralnexus.dev
+ * itself - a browser rejects a Domain attribute that doesn't match the
+ * current host, so on localhost (or any other dev/test host) this silently
+ * dropped the cookie entirely. Falls back to a host-only cookie with
+ * SameSite=Lax and no Secure flag when not on the production domain or not
+ * served over HTTPS.
  * @param name {string} - The name of the cookie to set
  * @param value {string} - The value of the cookie
  * @param expires {string} - The expiration date of the cookie
  */
 function setCookie(name, value, expires) {
-    document.cookie = name + "=" + value + "; expires=" + expires + "; path=/; domain=.neuralnexus.dev; SameSite=None; Secure=true";
+    const host = location.hostname;
+    const isProdDomain = host === 'neuralnexus.dev' || host.endsWith('.neuralnexus.dev');
+    const domainAttr = isProdDomain ? '; domain=.neuralnexus.dev' : '';
+    const secureAttr = location.protocol === 'https:' ? '; Secure' : '';
+    const sameSite = secureAttr ? 'None' : 'Lax';
+    document.cookie = `${name}=${value}; expires=${expires}; path=/${domainAttr}; SameSite=${sameSite}${secureAttr}`;
 }
 
 /**
