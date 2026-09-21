@@ -14,10 +14,10 @@ function apiBaseUrl() {
  * redirectWithError) - base64 (URL-safe) encoded, same alphabet as the
  * "state" param but padded, since it's produced by Go's base64.URLEncoding
  * rather than this file's own hand-rolled encodeState(). Shows the
- * problem's detail in the page's #oauth-error banner and strips the param
+ * problem's detail in the page's #auth-error banner and strips the param
  * from the URL so a refresh or share doesn't repeat it.
  */
-function showOAuthErrorFromQuery() {
+function showAuthErrorFromQuery() {
     const params = new URLSearchParams(window.location.search);
     const problemB64 = params.get('problem');
     if (!problemB64) {
@@ -32,7 +32,7 @@ function showOAuthErrorFromQuery() {
     try {
         const json = atob(problemB64.replace(/-/g, '+').replace(/_/g, '/'));
         const problem = JSON.parse(json);
-        const banner = document.getElementById('oauth-error');
+        const banner = document.getElementById('auth-error');
         if (banner) {
             banner.textContent = problem.detail || 'Something went wrong. Please try again.';
             banner.hidden = false;

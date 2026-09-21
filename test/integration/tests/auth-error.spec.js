@@ -15,8 +15,8 @@ test.describe('OAuth/OpenID error redirects', () => {
     const problem = encodeProblem({ type: 'about:blank', status: 400, title: 'Bad Request', detail: 'Invalid state' });
     await page.goto(`/login?problem=${problem}`);
 
-    await expect(page.locator('#oauth-error')).toBeVisible();
-    await expect(page.locator('#oauth-error')).toHaveText('Invalid state');
+    await expect(page.locator('#auth-error')).toBeVisible();
+    await expect(page.locator('#auth-error')).toHaveText('Invalid state');
     expect(new URL(page.url()).searchParams.has('problem')).toBe(false);
   });
 
@@ -24,8 +24,8 @@ test.describe('OAuth/OpenID error redirects', () => {
     const problem = encodeProblem({ type: 'about:blank', status: 400, title: 'Bad Request', detail: 'Invalid request' });
     await page.goto(`/?problem=${problem}`);
 
-    await expect(page.locator('#oauth-error')).toBeVisible();
-    await expect(page.locator('#oauth-error')).toHaveText('Invalid request');
+    await expect(page.locator('#auth-error')).toBeVisible();
+    await expect(page.locator('#auth-error')).toHaveText('Invalid request');
   });
 
   test('shows the problem detail on /account (link-mode failures redirect here)', async ({ page }) => {
@@ -37,14 +37,14 @@ test.describe('OAuth/OpenID error redirects', () => {
     const problem = encodeProblem({ type: 'about:blank', status: 401, title: 'Unauthorized', detail: 'You must be logged in to link an account' });
     await page.goto(`/account?problem=${problem}`);
 
-    await expect(page.locator('#oauth-error')).toHaveText('You must be logged in to link an account');
+    await expect(page.locator('#auth-error')).toHaveText('You must be logged in to link an account');
   });
 
   test('preserves other query params while stripping only "problem"', async ({ page }) => {
     const problem = encodeProblem({ type: 'about:blank', status: 500, title: 'Internal Server Error', detail: 'Authentication failed' });
     await page.goto(`/login?next=/account&problem=${problem}`);
 
-    await expect(page.locator('#oauth-error')).toHaveText('Authentication failed');
+    await expect(page.locator('#auth-error')).toHaveText('Authentication failed');
     const url = new URL(page.url());
     expect(url.searchParams.has('problem')).toBe(false);
     expect(url.searchParams.get('next')).toBe('/account');
@@ -52,6 +52,6 @@ test.describe('OAuth/OpenID error redirects', () => {
 
   test('no banner shown when there is no problem param', async ({ page }) => {
     await page.goto('/login');
-    await expect(page.locator('#oauth-error')).toBeHidden();
+    await expect(page.locator('#auth-error')).toBeHidden();
   });
 });

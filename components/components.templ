@@ -48,17 +48,17 @@ templ Home() {
 		NeuralNexus
 	</h1>
 	<script>
-		showOAuthErrorFromQuery();
+		showAuthErrorFromQuery();
 	</script>
 }
 
 // ErrorBanner is a hidden, page-level error banner that
-// showOAuthErrorFromQuery() (scripts.js) reveals when the page was reached
+// showAuthErrorFromQuery() (scripts.js) reveals when the page was reached
 // via an OAuth/OpenID redirect carrying a problem+json error - a nonce
 // mismatch or a disallowed redirect_uri lands here (on Home) rather than
 // wherever the flow started, since the API can't trust that URI yet.
 templ ErrorBanner() {
-	<div id="oauth-error" hidden class="mx-auto max-w-sm rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive mb-4"></div>
+	<div id="auth-error" hidden class="mx-auto max-w-sm rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive mb-4"></div>
 }
 
 templ ThemeToggle() {
