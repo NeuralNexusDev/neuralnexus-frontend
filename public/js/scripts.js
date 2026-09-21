@@ -263,7 +263,7 @@ let passwordAuthSeq = 0;
 
 /**
  * @description Loads the caller's account settings and reflects
- * password_auth_enabled onto the toggle.
+ * password_auth onto the toggle.
  */
 function loadAccountSettings() {
     fetch(`${apiBaseUrl()}/api/v1/users/me/settings`, {
@@ -285,7 +285,7 @@ function loadAccountSettings() {
             }
             const checkbox = document.getElementById('password-auth-enabled');
             if (checkbox) {
-                checkbox.checked = settings.password_auth_enabled;
+                checkbox.checked = settings.password_auth;
                 checkbox.disabled = false;
             }
         })
@@ -309,7 +309,7 @@ function setPasswordAuthEnabled(enabled) {
         headers: {
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify({password_auth_enabled: enabled})
+        body: JSON.stringify({password_auth: enabled})
     })
         .then((res) => {
             if (res.status === 401) {

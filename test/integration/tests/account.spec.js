@@ -19,7 +19,7 @@ async function mockSettings(page, { passwordAuthEnabled = true } = {}) {
     if (route.request().method() !== 'GET') {
       return route.fallback();
     }
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ password_auth_enabled: passwordAuthEnabled }) });
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ password_auth: passwordAuthEnabled }) });
   });
 }
 
@@ -231,7 +231,7 @@ test.describe('account page - password login toggle', () => {
       if (route.request().method() !== 'PATCH') {
         return route.fallback();
       }
-      expect(route.request().postDataJSON()).toEqual({ password_auth_enabled: true });
+      expect(route.request().postDataJSON()).toEqual({ password_auth: true });
       route.fulfill({ status: 204 });
     });
 
