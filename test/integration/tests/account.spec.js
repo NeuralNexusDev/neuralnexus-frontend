@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const API = `${process.env.API_BASE_URL}/api/v1`;
+const API = `${process.env.NN_API_URL}/api/v1`;
 
 async function mockMe(page, { username = 'testuser', status = 200 } = {}) {
   await page.route(`${API}/users/me`, (route) => {

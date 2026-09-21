@@ -2,17 +2,17 @@ package components
 
 import "os"
 
-func apiBaseURL() string {
-	v := os.Getenv("API_BASE_URL")
+func nnApiURL() string {
+	v := os.Getenv("NN_API_URL")
 	if v == "" {
-		panic("API_BASE_URL environment variable must be set")
+		panic("NN_API_URL environment variable must be set")
 	}
 	return v
 }
 
-var API_BASE_URL = apiBaseURL()
+var NN_API_URL = nnApiURL()
 
-// steamOpenIDLoginURL defaults to the real endpoint - unlike API_BASE_URL,
+// steamOpenIDLoginURL defaults to the real endpoint - unlike NN_API_URL,
 // tests are the only reason to ever override it, so unset shouldn't panic.
 func steamOpenIDLoginURL() string {
 	v := os.Getenv("STEAM_OPENID_LOGIN_URL")
@@ -41,7 +41,7 @@ templ WrapContents(contents templ.Component) {
 		<script src="/public/js/scripts.js"></script>
 		<script src="/public/js/theming.js"></script>
 		<body>
-			<div hidden id="api-base-url">{ API_BASE_URL }</div>
+			<div hidden id="api-base-url">{ NN_API_URL }</div>
 			<div hidden id="steam-openid-login-url">{ STEAM_OPENID_LOGIN_URL }</div>
 			@Header()
 			<div class="relative isolate px-6 pt-14 lg:px-8">

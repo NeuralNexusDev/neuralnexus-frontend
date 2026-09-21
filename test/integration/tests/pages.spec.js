@@ -28,7 +28,7 @@ test.describe('static pages', () => {
   // instead of hardcoding the backend's origin.
   test('exposes the API base URL for scripts.js to read', async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('#api-base-url')).toHaveText(process.env.API_BASE_URL);
+    await expect(page.locator('#api-base-url')).toHaveText(process.env.NN_API_URL);
   });
 });
 
@@ -99,10 +99,10 @@ test.describe('OAuth state encoding', () => {
     expect(url.origin + url.pathname).toBe(steamUrl);
     expect(url.searchParams.get('openid.ns')).toBe('http://specs.openid.net/auth/2.0');
     expect(url.searchParams.get('openid.mode')).toBe('checkid_setup');
-    expect(url.searchParams.get('openid.realm')).toBe(`${process.env.API_BASE_URL}/`);
+    expect(url.searchParams.get('openid.realm')).toBe(`${process.env.NN_API_URL}/`);
 
     const returnTo = new URL(url.searchParams.get('openid.return_to'));
-    expect(returnTo.origin + returnTo.pathname).toBe(`${process.env.API_BASE_URL}/api/openid`);
+    expect(returnTo.origin + returnTo.pathname).toBe(`${process.env.NN_API_URL}/api/openid`);
     const state = returnTo.searchParams.get('state');
     expect(state).toBeTruthy();
     expect(state).not.toMatch(/[+/]/);
