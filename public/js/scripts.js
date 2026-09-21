@@ -18,6 +18,27 @@ function setCookie(name, value, expires) {
     document.cookie = name + "=" + value + "; expires=" + expires + "; path=/; domain=.neuralnexus.dev; SameSite=None; Secure=true";
 }
 
+/**
+ * @description Toggles the header's Login/Logout button based on whether
+ * the session cookie is still valid, checked via /users/me. Runs on every
+ * page load since the session cookie is HttpOnly and can't be read from JS.
+ */
+function checkHeaderAuthState() {
+    fetch(`${apiBaseUrl()}/api/v1/users/me`, {
+        credentials: 'include'
+    })
+        .then((res) => {
+            const loggedIn = res.ok;
+            const loginBtn = document.getElementById('header-login-btn');
+            const logoutBtn = document.getElementById('header-logout-btn');
+            if (loginBtn) loginBtn.hidden = loggedIn;
+            if (logoutBtn) logoutBtn.hidden = !loggedIn;
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+        });
+}
+
 function logout() {
     fetch(`${apiBaseUrl()}/api/v1/auth/logout`, {
         method: 'POST',

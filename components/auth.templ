@@ -23,22 +23,30 @@ var (
 	OAUTH2_XBOX_LIVE = templ.SafeURL("https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?client_id=" + MICROSOFT_CLIENT_ID + "&redirect_uri=" + MICROSOFT_REDIRECT_URI + "&response_type=code&scope=XboxLive.signin%20offline_access")
 )
 
+// LoginButton renders both the Login and Logout buttons, hidden until
+// checkHeaderAuthState() (run on every page load) picks the right one based
+// on whether the session cookie set by the API is still valid - the cookie
+// itself is HttpOnly, so this can't be decided from the markup alone.
 templ LoginButton() {
-	if (false) {
+	<span id="header-logout-btn" hidden>
 		<button
 			class="py-2 px-4 rounded-lg bg-red-600 text-black font-bold hover:bg-black hover:text-red-600"
 			onclick="logout()"
 		>
 			Logout
 		</button>
-	} else {
+	</span>
+	<span id="header-login-btn" hidden>
 	    @button.Button(button.Props{
             Class: "ml-auto py-2 px-4 rounded-lg bg-red-600 text-black font-bold hover:bg-black hover:text-red-600",
             Href: "/login",
         }) {
             Login
         }
-	}
+    </span>
+	<script>
+		checkHeaderAuthState();
+	</script>
 }
 
 // OAuthButtons is shared by the login and registration pages; labelPrefix
