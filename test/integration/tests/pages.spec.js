@@ -14,8 +14,6 @@ test.describe('static pages', () => {
       await expect(page.locator(`#${id}`)).toBeAttached();
     }
     await expect(page.getByText('Login with Discord')).toBeVisible();
-    // Steam's button is Valve's own pre-made asset, not our text - it always
-    // reads "Sign in through Steam" regardless of page/labelPrefix.
     await expect(page.getByAltText('Sign in through Steam')).toBeVisible();
   });
 

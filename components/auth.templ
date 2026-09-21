@@ -226,11 +226,6 @@ templ OAuthButtons(labelPrefix string) {
 		</button>
 	</a>
 	<div class="mt-2 flex justify-center">
-		<!-- Valve's brand guidelines require this exact "Sign in through
-		     Steam" button be used as provided, standing alone rather than
-		     composited into our own button styling like the other
-		     providers - it always reads "Sign in", regardless of
-		     labelPrefix, since that's the only button Valve provides. -->
 		<a href="" id="steam-oauth">
 			<img src="/public/SteamSignIn.png" alt="Sign in through Steam"/>
 		</a>
@@ -325,10 +320,8 @@ templ LinkAccountButtons() {
             <img src="/public/MinecraftLogo.svg" alt="Minecraft Logo" class="h-5 w-auto shrink-0"/>
         }
         @linkAccountRow("steam", "Steam") {
-            <!-- Standalone, uncomposited logo (no colored badge) per Valve's
-                 brand guidelines - same treatment as Microsoft's row above.
-                 Swaps for the theme since the guidelines only provide flat
-                 black/white variants, unlike Microsoft's fixed 4-color mark. -->
+            <!-- Swaps per theme since these are flat black/white variants,
+                 unlike Microsoft's fixed 4-color mark above. -->
             <img src="/public/SteamLogo.svg" alt="Steam Logo" class="w-5 h-5 shrink-0 dark:hidden"/>
             <img src="/public/SteamLogoWhite.svg" alt="Steam Logo" class="w-5 h-5 shrink-0 hidden dark:block"/>
         }
