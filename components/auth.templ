@@ -336,6 +336,7 @@ templ LinkAccountButtons() {
 }
 
 templ Login() {
+	@ErrorBanner()
 	<div class="mx-auto max-w-sm space-y-6">
 		<div class="space-y-2 text-center">
 			<h1 class="text-3xl font-bold">Login</h1>
@@ -399,6 +400,9 @@ templ Login() {
 			</div>
 		</div>
 	</div>
+	<script>
+		showOAuthErrorFromQuery();
+	</script>
 }
 
 templ LoginPage() {
@@ -406,6 +410,7 @@ templ LoginPage() {
 }
 
 templ Register() {
+	@ErrorBanner()
 	<div class="mx-auto max-w-sm space-y-6">
 		<div class="space-y-2 text-center">
 			<h1 class="text-3xl font-bold">Sign Up</h1>
@@ -502,6 +507,9 @@ templ Register() {
 			</div>
 		</div>
 	</div>
+	<script>
+		showOAuthErrorFromQuery();
+	</script>
 }
 
 templ RegisterPage() {

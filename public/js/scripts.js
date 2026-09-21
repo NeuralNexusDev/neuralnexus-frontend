@@ -9,6 +9,40 @@ function apiBaseUrl() {
 }
 
 /**
+ * @description Reads the RFC 9457 problem the API embeds in a "problem"
+ * query param when an OAuth/OpenID redirect fails (auth.go's
+ * redirectWithError) - base64 (URL-safe) encoded, same alphabet as the
+ * "state" param but padded, since it's produced by Go's base64.URLEncoding
+ * rather than this file's own hand-rolled encodeState(). Shows the
+ * problem's detail in the page's #oauth-error banner and strips the param
+ * from the URL so a refresh or share doesn't repeat it.
+ */
+function showOAuthErrorFromQuery() {
+    const params = new URLSearchParams(window.location.search);
+    const problemB64 = params.get('problem');
+    if (!problemB64) {
+        return;
+    }
+
+    params.delete('problem');
+    const cleanQuery = params.toString();
+    const cleanUrl = window.location.pathname + (cleanQuery ? `?${cleanQuery}` : '') + window.location.hash;
+    history.replaceState(null, '', cleanUrl);
+
+    try {
+        const json = atob(problemB64.replace(/-/g, '+').replace(/_/g, '/'));
+        const problem = JSON.parse(json);
+        const banner = document.getElementById('oauth-error');
+        if (banner) {
+            banner.textContent = problem.detail || 'Something went wrong. Please try again.';
+            banner.hidden = false;
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+/**
  * @description This function is used to set a cookie. The hardcoded
  * production domain/Secure/SameSite=None only apply on neuralnexus.dev
  * itself - a browser rejects a Domain attribute that doesn't match the
