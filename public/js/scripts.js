@@ -30,9 +30,10 @@ function setCookie(name, value, expires) {
 }
 
 /**
- * @description Toggles the header's Login/Logout button based on whether
- * the session cookie is still valid, checked via /users/me. Runs on every
- * page load since the session cookie is HttpOnly and can't be read from JS.
+ * @description Toggles the header's account section (username + settings
+ * gear) and Login/Logout button based on whether the session cookie is
+ * still valid, checked via /users/me. Runs on every page load since the
+ * session cookie is HttpOnly and can't be read from JS.
  */
 function checkHeaderAuthState() {
     fetch(`${apiBaseUrl()}/api/v1/users/me`, {
@@ -42,8 +43,16 @@ function checkHeaderAuthState() {
             const loggedIn = res.ok;
             const loginBtn = document.getElementById('header-login-btn');
             const logoutBtn = document.getElementById('header-logout-btn');
+            const accountSection = document.getElementById('header-account');
             if (loginBtn) loginBtn.hidden = loggedIn;
             if (logoutBtn) logoutBtn.hidden = !loggedIn;
+            if (accountSection) accountSection.hidden = !loggedIn;
+            if (!loggedIn) return;
+
+            return res.json().then((account) => {
+                const usernameEl = document.getElementById('header-account-username');
+                if (usernameEl && account) usernameEl.innerText = account.username;
+            });
         })
         .catch((error) => {
             console.error('Error:', error);
