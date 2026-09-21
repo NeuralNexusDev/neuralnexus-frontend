@@ -7,19 +7,21 @@ test.describe('static pages', () => {
     await expect(page.getByRole('heading', { name: 'NeuralNexus' })).toBeVisible();
   });
 
-  test('login page renders all five OAuth buttons', async ({ page }) => {
+  test('login page renders all six OAuth/OpenID buttons', async ({ page }) => {
     const res = await page.goto('/login');
     expect(res.status()).toBe(200);
-    for (const id of ['discord-oauth', 'twitch-oauth', 'microsoft-oauth', 'xbox-oauth', 'minecraft-oauth']) {
+    for (const id of ['discord-oauth', 'twitch-oauth', 'microsoft-oauth', 'xbox-oauth', 'minecraft-oauth', 'steam-oauth']) {
       await expect(page.locator(`#${id}`)).toBeAttached();
     }
     await expect(page.getByText('Login with Discord')).toBeVisible();
+    await expect(page.getByText('Login with Steam')).toBeVisible();
   });
 
-  test('register page renders all five OAuth buttons with Sign up labels', async ({ page }) => {
+  test('register page renders all six OAuth/OpenID buttons with Sign up labels', async ({ page }) => {
     const res = await page.goto('/register');
     expect(res.status()).toBe(200);
     await expect(page.getByText('Sign up with Discord')).toBeVisible();
+    await expect(page.getByText('Sign up with Steam')).toBeVisible();
   });
 
   // Regression test for the hidden #api-base-url element scripts.js reads
@@ -54,5 +56,32 @@ test.describe('OAuth state encoding', () => {
       const parsed = JSON.parse(decoded);
       expect(parsed.mode).toBe('login');
     }
+  });
+
+  // Steam has no OAuth app/client ID - its login URL is built entirely
+  // client-side (buildSteamOpenIDURL) with state embedded inside
+  // openid.return_to rather than appended as a top-level query param, so it
+  // needs its own assertion shape rather than joining the loop above.
+  test('Steam login href is a well-formed OpenID 2.0 request with base64url state', async ({ page }) => {
+    await page.goto('/login?next=/some/path?a=1&b=2');
+    await page.waitForTimeout(1200);
+
+    const href = await page.locator('#steam-oauth').getAttribute('href');
+    const url = new URL(href);
+    expect(url.origin + url.pathname).toBe('https://steamcommunity.com/openid/login');
+    expect(url.searchParams.get('openid.ns')).toBe('http://specs.openid.net/auth/2.0');
+    expect(url.searchParams.get('openid.mode')).toBe('checkid_setup');
+    expect(url.searchParams.get('openid.realm')).toBe(`${process.env.API_BASE_URL}/`);
+
+    const returnTo = new URL(url.searchParams.get('openid.return_to'));
+    expect(returnTo.origin + returnTo.pathname).toBe(`${process.env.API_BASE_URL}/api/openid`);
+    const state = returnTo.searchParams.get('state');
+    expect(state).toBeTruthy();
+    expect(state).not.toMatch(/[+/]/);
+
+    const decoded = Buffer.from(state.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+    const parsed = JSON.parse(decoded);
+    expect(parsed.platform).toBe('steam');
+    expect(parsed.mode).toBe('login');
   });
 });

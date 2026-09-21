@@ -143,6 +143,27 @@ function encodeState(state) {
 }
 
 /**
+ * @description Builds Steam's OpenID 2.0 login request URL. Steam has no
+ * OAuth app/client ID to pre-render a base URL from, so unlike the other
+ * providers this is built entirely client-side, and state travels inside
+ * openid.return_to instead of as a query param appended after the fact.
+ * @param state {OAuthState} - The state object to round-trip through Steam
+ * @returns {string}
+ */
+function buildSteamOpenIDURL(state) {
+    const returnTo = `${apiBaseUrl()}/api/openid?state=${encodeState(state)}`;
+    const params = new URLSearchParams({
+        'openid.ns': 'http://specs.openid.net/auth/2.0',
+        'openid.mode': 'checkid_setup',
+        'openid.return_to': returnTo,
+        'openid.realm': `${apiBaseUrl()}/`,
+        'openid.identity': 'http://specs.openid.net/auth/2.0/identifier_select',
+        'openid.claimed_id': 'http://specs.openid.net/auth/2.0/identifier_select'
+    });
+    return `https://steamcommunity.com/openid/login?${params.toString()}`;
+}
+
+/**
  * @description Loads the profile into the account page via /me, since the
  * session cookie resolves identity server-side - no user ID needed here.
  */
@@ -289,16 +310,22 @@ function handleLinkAction(platform) {
         return;
     }
 
-    const base = document.getElementById(LINK_OAUTH_BASE_IDS[platform]);
-    if (!base) {
-        return;
-    }
     const state = {
         platform: platform,
         nonce: linkNonce,
         redirect_uri: linkRedirect,
         mode: 'link'
     };
+
+    if (platform === 'steam') {
+        window.location.href = buildSteamOpenIDURL(state);
+        return;
+    }
+
+    const base = document.getElementById(LINK_OAUTH_BASE_IDS[platform]);
+    if (!base) {
+        return;
+    }
     window.location.href = base.innerText + '&state=' + encodeState(state);
 }
 

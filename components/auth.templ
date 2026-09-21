@@ -141,6 +141,21 @@ templ OAuthButtons(labelPrefix string) {
             aMinecraft.href = xboxLiveUrl + "&state=" + encodeState(state);
         }
     }, 1000);
+    // Steam has no OAuth app/client ID - it uses OpenID 2.0 instead, so its
+    // login URL is built entirely client-side rather than filled in from a
+    // pre-rendered "-base" element.
+    setTimeout(() => {
+        let aSteam = document.getElementById("steam-oauth");
+        if (aSteam) {
+            state = {
+                platform: "steam",
+                nonce: nonce,
+                redirect_uri: redirect,
+                mode: "login"
+            }
+            aSteam.href = buildSteamOpenIDURL(state);
+        }
+    }, 1000);
     </script>
     <div hidden id="discord-oauth-base">{ OAUTH2_DISCORD }</div>
     <div hidden id="twitch-oauth-base">{ OAUTH2_TWITCH }</div>
@@ -208,6 +223,18 @@ templ OAuthButtons(labelPrefix string) {
 				alt="Minecraft"
 				class="h-6 w-auto"
 			/>
+		</button>
+	</a>
+	<div class="mt-2"></div>
+	<a href="" id="steam-oauth">
+		<button
+			class="bg-steam_dark hover:bg-black inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
+		>
+			<span class="mr-2 text-white">{ labelPrefix + " Steam" }</span>
+			<!-- Placeholder mark - swap for a proper Steam brand asset
+			     (matching the DiscordClydeWhite.svg/etc pattern) when one's
+			     available. -->
+			<span class="flex items-center justify-center w-6 h-6 rounded-full bg-white text-steam_dark text-xs font-bold mr-2">S</span>
 		</button>
 	</a>
 }
@@ -298,6 +325,11 @@ templ LinkAccountButtons() {
         }
         @linkAccountRow("minecraft", "") {
             <img src="/public/MinecraftLogo.svg" alt="Minecraft Logo" class="h-5 w-auto shrink-0"/>
+        }
+        @linkAccountRow("steam", "Steam") {
+            <div class="flex items-center justify-center w-7 h-7 rounded-md bg-steam_dark shrink-0">
+                <span class="text-white text-xs font-bold">S</span>
+            </div>
         }
     </div>
 }

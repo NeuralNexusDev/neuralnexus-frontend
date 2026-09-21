@@ -8,6 +8,7 @@ module.exports = {
         twitch_purple: '#6441A5',
         xbox_bilbao: '#107C10',
         minecraft_apple: '#34AA2F',
+        steam_dark: '#171A21',
       }
     },
   },
