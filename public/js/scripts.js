@@ -251,7 +251,84 @@ function loadAccountProfile() {
             console.error('Error:', error);
         });
 
+    loadAccountSettings();
     loadLinkedAccounts();
+}
+
+/**
+ * @description Guards against a stale response repainting the password
+ * toggle after a newer request has since been made.
+ */
+let passwordAuthSeq = 0;
+
+/**
+ * @description Loads the caller's account settings and reflects
+ * password_auth onto the toggle.
+ */
+function loadAccountSettings() {
+    fetch(`${apiBaseUrl()}/api/v1/users/me/settings`, {
+        credentials: 'include'
+    })
+        .then((res) => {
+            if (res.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
+            if (!res.ok) {
+                throw new Error('Failed to load account settings: ' + res.status);
+            }
+            return res.json();
+        })
+        .then((settings) => {
+            if (!settings) {
+                return;
+            }
+            const checkbox = document.getElementById('password-auth-enabled');
+            if (checkbox) {
+                checkbox.checked = settings.password_auth;
+                checkbox.disabled = false;
+            }
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+        });
+}
+
+/**
+ * @description Toggles whether the account's password can be used to log
+ * in. Reverts the checkbox if the request fails, unless a newer request has
+ * since been made.
+ * @param enabled {boolean}
+ */
+function setPasswordAuthEnabled(enabled) {
+    const seq = ++passwordAuthSeq;
+
+    fetch(`${apiBaseUrl()}/api/v1/users/me/settings`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({password_auth: enabled})
+    })
+        .then((res) => {
+            if (res.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
+            if (res.status === 204) {
+                return;
+            }
+            return res.json().then((problem) => {
+                throw new Error(problem.detail || 'Failed to update account settings');
+            });
+        })
+        .catch((error) => {
+            if (passwordAuthSeq === seq) {
+                document.getElementById('password-auth-enabled').checked = !enabled;
+                alert(error.message);
+            }
+        });
 }
 
 /**

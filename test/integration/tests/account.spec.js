@@ -14,9 +14,19 @@ async function mockLinks(page, links) {
   });
 }
 
+async function mockSettings(page, { passwordAuthEnabled = true } = {}) {
+  await page.route(`${API}/users/me/settings`, (route) => {
+    if (route.request().method() !== 'GET') {
+      return route.fallback();
+    }
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ password_auth: passwordAuthEnabled }) });
+  });
+}
+
 test.describe('account page - loading', () => {
   test('renders profile and linked-account rows', async ({ page }) => {
     await mockMe(page, { username: 'testuser' });
+    await mockSettings(page);
     await mockLinks(page, [
       { platform: 'discord', platform_username: 'someone#1234', verified: true, login_enabled: true },
       { platform: 'twitch', platform_username: 'streamer99', verified: false, login_enabled: false },
@@ -209,6 +219,53 @@ test.describe('account page - login-enabled toggle', () => {
     await page.goto('/account');
     await page.evaluate(() => setPlatformLoginEnabled('discord', false));
     await page.waitForURL('**/login');
+  });
+});
+
+test.describe('account page - password login toggle', () => {
+  test('reflects the loaded setting and round-trips a toggle', async ({ page }) => {
+    await mockMe(page);
+    await mockLinks(page, []);
+    await mockSettings(page, { passwordAuthEnabled: false });
+    await page.route(`${API}/users/me/settings`, (route) => {
+      if (route.request().method() !== 'PATCH') {
+        return route.fallback();
+      }
+      expect(route.request().postDataJSON()).toEqual({ password_auth: true });
+      route.fulfill({ status: 204 });
+    });
+
+    await page.goto('/account');
+    await expect(page.locator('#password-auth-enabled')).not.toBeChecked();
+
+    await page.locator('#password-auth-enabled').locator('..').click();
+
+    await expect(page.locator('#password-auth-enabled')).toBeChecked();
+  });
+
+  test('a rejected toggle reverts the checkbox and alerts with the API detail', async ({ page }) => {
+    await mockMe(page);
+    await mockLinks(page, []);
+    await mockSettings(page, { passwordAuthEnabled: true });
+    await page.route(`${API}/users/me/settings`, (route) => {
+      if (route.request().method() !== 'PATCH') {
+        return route.fallback();
+      }
+      route.fulfill({ status: 400, contentType: 'application/problem+json', body: JSON.stringify({ detail: 'Link and enable another login method before disabling your password' }) });
+    });
+
+    await page.goto('/account');
+
+    let alertMessage = null;
+    page.on('dialog', async (d) => {
+      alertMessage = d.message();
+      await d.dismiss();
+    });
+
+    await page.evaluate(() => setPasswordAuthEnabled(false));
+
+    await expect.poll(() => alertMessage).toBe('Link and enable another login method before disabling your password');
+    await expect(page.locator('#password-auth-enabled')).toBeChecked();
   });
 });
 
