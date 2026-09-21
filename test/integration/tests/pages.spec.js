@@ -14,14 +14,16 @@ test.describe('static pages', () => {
       await expect(page.locator(`#${id}`)).toBeAttached();
     }
     await expect(page.getByText('Login with Discord')).toBeVisible();
-    await expect(page.getByText('Login with Steam')).toBeVisible();
+    // Steam's button is Valve's own pre-made asset, not our text - it always
+    // reads "Sign in through Steam" regardless of page/labelPrefix.
+    await expect(page.getByAltText('Sign in through Steam')).toBeVisible();
   });
 
   test('register page renders all six OAuth/OpenID buttons with Sign up labels', async ({ page }) => {
     const res = await page.goto('/register');
     expect(res.status()).toBe(200);
     await expect(page.getByText('Sign up with Discord')).toBeVisible();
-    await expect(page.getByText('Sign up with Steam')).toBeVisible();
+    await expect(page.getByAltText('Sign in through Steam')).toBeVisible();
   });
 
   // Regression test for the hidden #api-base-url element scripts.js reads
