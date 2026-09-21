@@ -118,7 +118,6 @@ templ OAuthButtons(labelPrefix string) {
 			/>
 		</button>
 	</a>
-	<!-- Disabled pending Mojang API approval. -->
 	if false {
 		<div class="mt-2"></div>
 		<a href="" id="minecraft-oauth" class="flex justify-center" onclick="startOAuthLogin('minecraft', document.getElementById('xboxlive-oauth-base').innerText); return false;">
@@ -224,7 +223,6 @@ templ LinkAccountButtons() {
                 <img src="/public/XboxSymbolWhite.svg" alt="Xbox Logo" class="w-4 h-4"/>
             </div>
         }
-        <!-- Disabled pending Mojang API approval - see OAuthButtons above. -->
         if false {
             @linkAccountRow("minecraft", "") {
                 <img src="/public/MinecraftLogo.svg" alt="Minecraft Logo" class="h-5 w-auto shrink-0"/>
