@@ -118,22 +118,22 @@ templ OAuthButtons(labelPrefix string) {
 			/>
 		</button>
 	</a>
-	<div class="mt-2"></div>
-	<!-- Minecraft shares Xbox Live's OAuth URL/scope - the API chains the
-	     same Xbox Live sign-in into a Minecraft: Java ownership check and
-	     links both identities. Only the "platform" sent in state differs. -->
-	<a href="" id="minecraft-oauth" class="flex justify-center" onclick="startOAuthLogin('minecraft', document.getElementById('xboxlive-oauth-base').innerText); return false;">
-		<button
-			class="bg-minecraft_apple hover:bg-green-700 rounded-md h-10 px-4 flex items-center justify-center ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 w-full"
-		>
-			<span class="mr-2 text-white">{ labelPrefix }</span>
-			<img
-				src="/public/MinecraftLogo.svg"
-				alt="Minecraft"
-				class="h-6 w-auto"
-			/>
-		</button>
-	</a>
+	<!-- Disabled pending Mojang API approval. -->
+	if false {
+		<div class="mt-2"></div>
+		<a href="" id="minecraft-oauth" class="flex justify-center" onclick="startOAuthLogin('minecraft', document.getElementById('xboxlive-oauth-base').innerText); return false;">
+			<button
+				class="bg-minecraft_apple hover:bg-green-700 rounded-md h-10 px-4 flex items-center justify-center ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 w-full"
+			>
+				<span class="mr-2 text-white">{ labelPrefix }</span>
+				<img
+					src="/public/MinecraftLogo.svg"
+					alt="Minecraft"
+					class="h-6 w-auto"
+				/>
+			</button>
+		</a>
+	}
 	<div class="mt-2 flex justify-center">
 		<a href="" id="steam-oauth" onclick="startOAuthLogin('steam', null); return false;">
 			<img src="/public/SteamSignIn.png" alt="Sign in through Steam"/>
@@ -224,8 +224,11 @@ templ LinkAccountButtons() {
                 <img src="/public/XboxSymbolWhite.svg" alt="Xbox Logo" class="w-4 h-4"/>
             </div>
         }
-        @linkAccountRow("minecraft", "") {
-            <img src="/public/MinecraftLogo.svg" alt="Minecraft Logo" class="h-5 w-auto shrink-0"/>
+        <!-- Disabled pending Mojang API approval - see OAuthButtons above. -->
+        if false {
+            @linkAccountRow("minecraft", "") {
+                <img src="/public/MinecraftLogo.svg" alt="Minecraft Logo" class="h-5 w-auto shrink-0"/>
+            }
         }
         @linkAccountRow("steam", "Steam") {
             <!-- Swaps per theme since these are flat black/white variants,

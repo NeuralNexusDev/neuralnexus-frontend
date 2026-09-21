@@ -257,7 +257,7 @@ function loadAccountProfile() {
 /**
  * @description The platforms shown as rows on the account settings page.
  */
-const LINK_PLATFORMS = ['discord', 'twitch', 'microsoft', 'xboxlive', 'minecraft', 'steam'];
+const LINK_PLATFORMS = ['discord', 'twitch', 'microsoft', 'xboxlive', 'steam'];
 
 /**
  * @description Guards against an out-of-order response repainting the
@@ -344,15 +344,12 @@ function updateLinkRow(platform, link) {
 
 /**
  * @description The hidden element holding each platform's base OAuth URL.
- * Minecraft has no OAuth app of its own - it shares Xbox Live's, and the
- * API tells the two apart by the "platform" field in the OAuth state.
  */
 const LINK_OAUTH_BASE_IDS = {
     discord: 'link-discord-oauth-base',
     twitch: 'link-twitch-oauth-base',
     microsoft: 'link-microsoft-oauth-base',
-    xboxlive: 'link-xboxlive-oauth-base',
-    minecraft: 'link-xboxlive-oauth-base'
+    xboxlive: 'link-xboxlive-oauth-base'
 };
 
 /**

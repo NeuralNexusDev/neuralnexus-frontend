@@ -7,17 +7,17 @@ test.describe('static pages', () => {
     await expect(page.getByRole('heading', { name: 'NeuralNexus' })).toBeVisible();
   });
 
-  test('login page renders all six OAuth/OpenID buttons', async ({ page }) => {
+  test('login page renders all five OAuth/OpenID buttons', async ({ page }) => {
     const res = await page.goto('/login');
     expect(res.status()).toBe(200);
-    for (const id of ['discord-oauth', 'twitch-oauth', 'microsoft-oauth', 'xbox-oauth', 'minecraft-oauth', 'steam-oauth']) {
+    for (const id of ['discord-oauth', 'twitch-oauth', 'microsoft-oauth', 'xbox-oauth', 'steam-oauth']) {
       await expect(page.locator(`#${id}`)).toBeAttached();
     }
     await expect(page.getByText('Login with Discord')).toBeVisible();
     await expect(page.getByAltText('Sign in through Steam')).toBeVisible();
   });
 
-  test('register page renders all six OAuth/OpenID buttons with Sign up labels', async ({ page }) => {
+  test('register page renders all five OAuth/OpenID buttons with Sign up labels', async ({ page }) => {
     const res = await page.goto('/register');
     expect(res.status()).toBe(200);
     await expect(page.getByText('Sign up with Discord')).toBeVisible();
@@ -67,7 +67,7 @@ test.describe('OAuth state encoding', () => {
       await page.route((url) => url.hostname === host, (route) => route.fulfill({ status: 200, contentType: 'text/plain', body: 'stub' }));
     }
 
-    for (const id of ['discord-oauth', 'twitch-oauth', 'microsoft-oauth', 'xbox-oauth', 'minecraft-oauth']) {
+    for (const id of ['discord-oauth', 'twitch-oauth', 'microsoft-oauth', 'xbox-oauth']) {
       await page.goto('/login?next=/some/path?a=1&b=2');
       await page.locator(`#${id}`).click();
       await page.waitForURL((url) => url.pathname !== '/login');
