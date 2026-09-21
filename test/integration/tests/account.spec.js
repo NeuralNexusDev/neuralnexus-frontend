@@ -41,6 +41,21 @@ test.describe('account page - loading', () => {
     await expect(page.locator('#link-steam-action')).toHaveText('Link');
   });
 
+  // Regression test: LINK_PLATFORMS (the list loadLinkedAccounts() actually
+  // updates rows for) wasn't updated when Steam was added, so a linked
+  // Steam account never reflected on the row - it just kept showing
+  // whatever the server initially rendered, regardless of the API response.
+  test('reflects an already-linked Steam account on the row', async ({ page }) => {
+    await mockMe(page, { username: 'testuser' });
+    await mockLinks(page, [{ platform: 'steam', platform_username: 'gearhead', verified: true, login_enabled: true }]);
+
+    await page.goto('/account');
+
+    await expect(page.locator('#link-steam-title')).toHaveText('gearhead');
+    await expect(page.locator('#link-steam-action')).toHaveText('Unlink');
+    await expect(page.locator('#link-steam-login-enabled')).toBeChecked();
+  });
+
   test('clicking Link on Steam navigates to a Steam OpenID URL, not a pre-rendered base href', async ({ page }) => {
     await mockMe(page, { username: 'testuser' });
     await mockLinks(page, []);

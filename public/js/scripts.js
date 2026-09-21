@@ -257,7 +257,7 @@ function loadAccountProfile() {
 /**
  * @description The platforms shown as rows on the account settings page.
  */
-const LINK_PLATFORMS = ['discord', 'twitch', 'microsoft', 'xboxlive', 'minecraft'];
+const LINK_PLATFORMS = ['discord', 'twitch', 'microsoft', 'xboxlive', 'minecraft', 'steam'];
 
 /**
  * @description Guards against an out-of-order response repainting the
