@@ -43,24 +43,40 @@ function showAuthErrorFromQuery() {
 }
 
 /**
- * @description This function is used to set a cookie. The hardcoded
- * production domain/Secure/SameSite=None only apply on neuralnexus.dev
- * itself - a browser rejects a Domain attribute that doesn't match the
- * current host, so on localhost (or any other dev/test host) this silently
- * dropped the cookie entirely. Falls back to a host-only cookie with
- * SameSite=Lax and no Secure flag when not on the production domain or not
- * served over HTTPS.
- * @param name {string} - The name of the cookie to set
- * @param value {string} - The value of the cookie
- * @param expires {string} - The expiration date of the cookie
+ * @description Reads Steam's OpenID login endpoint from the hidden element
+ * WrapContents renders on every page - defaults to the real Steam endpoint,
+ * overridable so tests can point it at a local stand-in instead of routing
+ * around a hardcoded steamcommunity.com literal.
+ * @returns {string}
  */
-function setCookie(name, value, expires) {
+function steamOpenIdLoginUrl() {
+    return document.getElementById('steam-openid-login-url').innerText;
+}
+
+/**
+ * @description Generates a fresh nonce for the OAuth/OpenID flow and sets
+ * it as a short-lived cookie the API checks on the callback, returning the
+ * nonce. Called at the moment the user clicks a login/link button (not on
+ * page load) so its 5-minute TTL covers the provider round-trip rather than
+ * however long the user sat on the page first. The hardcoded production
+ * domain/Secure/SameSite=None only apply on neuralnexus.dev itself - a
+ * browser rejects a Domain attribute that doesn't match the current host,
+ * so on localhost (or any other dev/test host) this falls back to a
+ * host-only cookie with SameSite=Lax and no Secure flag.
+ * @returns {string} - The generated nonce
+ */
+function createNonce() {
+    const nonce = Math.random().toString(36).substring(2, 15);
+
     const host = location.hostname;
     const isProdDomain = host === 'neuralnexus.dev' || host.endsWith('.neuralnexus.dev');
     const domainAttr = isProdDomain ? '; domain=.neuralnexus.dev' : '';
     const secureAttr = location.protocol === 'https:' ? '; Secure' : '';
     const sameSite = secureAttr ? 'None' : 'Lax';
-    document.cookie = `${name}=${value}; expires=${expires}; path=/${domainAttr}; SameSite=${sameSite}${secureAttr}`;
+    const expires = new Date(Date.now() + 5 * 60 * 1000).toUTCString();
+    document.cookie = `nonce=${nonce}; expires=${expires}; path=/${domainAttr}; SameSite=${sameSite}${secureAttr}`;
+
+    return nonce;
 }
 
 /**
@@ -147,16 +163,6 @@ function submitLoginForm() {
 }
 
 /**
- * @description Generate a random nonce for the OAuth flow
- * @returns {string} - The generated nonce
- */
-function generateNonce() {
-    const nonce = Math.random().toString(36).substring(2, 15);
-    setCookie('nonce', nonce, new Date(Date.now() + 5 * 60 * 1000).toUTCString());
-    return nonce;
-}
-
-/**
  * @description an OAuthState object
  * @typedef {Object} OAuthState
  * @property {string} platform - The platform to redirect to
@@ -194,7 +200,28 @@ function buildSteamOpenIDURL(state) {
         'openid.identity': 'http://specs.openid.net/auth/2.0/identifier_select',
         'openid.claimed_id': 'http://specs.openid.net/auth/2.0/identifier_select'
     });
-    return `https://steamcommunity.com/openid/login?${params.toString()}`;
+    return `${steamOpenIdLoginUrl()}?${params.toString()}`;
+}
+
+/**
+ * @description Starts an OAuth/OpenID login for platform: mints a fresh
+ * nonce right now via createNonce() rather than on page load, then
+ * navigates to the provider with the resulting state appended. baseUrl is
+ * the pre-rendered authorize URL for OAuth providers, or null for Steam,
+ * which has none and builds its whole URL via buildSteamOpenIDURL.
+ * @param platform {string}
+ * @param baseUrl {string|null}
+ */
+function startOAuthLogin(platform, baseUrl) {
+    let redirect = window.location.href;
+    if (redirect.endsWith('/login')) {
+        redirect = redirect.substring(0, redirect.length - 6);
+    } else if (redirect.endsWith('/register')) {
+        redirect = redirect.substring(0, redirect.length - 9);
+    }
+
+    const state = { platform: platform, nonce: createNonce(), redirect_uri: redirect, mode: 'login' };
+    window.location.href = platform === 'steam' ? buildSteamOpenIDURL(state) : baseUrl + '&state=' + encodeState(state);
 }
 
 /**
@@ -346,7 +373,7 @@ function handleLinkAction(platform) {
 
     const state = {
         platform: platform,
-        nonce: linkNonce,
+        nonce: createNonce(),
         redirect_uri: linkRedirect,
         mode: 'link'
     };

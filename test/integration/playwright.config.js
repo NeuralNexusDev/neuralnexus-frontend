@@ -17,6 +17,12 @@ const baseURL = process.env.BASE_URL || 'http://localhost:8099';
 const apiBaseUrl = process.env.API_BASE_URL || 'https://api.neuralnexus.dev';
 process.env.API_BASE_URL = apiBaseUrl;
 
+// Same pattern for Steam's OpenID endpoint - defaults to the real one, but
+// lets tests point it at a local stand-in instead of routing around a
+// hardcoded steamcommunity.com literal.
+const steamOpenIdLoginUrl = process.env.STEAM_OPENID_LOGIN_URL || 'https://steamcommunity.com/openid/login';
+process.env.STEAM_OPENID_LOGIN_URL = steamOpenIdLoginUrl;
+
 export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
@@ -42,7 +48,7 @@ export default defineConfig({
           'go run .',
         cwd: repoRoot,
         url: baseURL,
-        env: { ADDRESS: '0.0.0.0:8099', API_BASE_URL: apiBaseUrl },
+        env: { ADDRESS: '0.0.0.0:8099', API_BASE_URL: apiBaseUrl, STEAM_OPENID_LOGIN_URL: steamOpenIdLoginUrl },
         reuseExistingServer: !process.env.CI,
         timeout: 60_000,
       },

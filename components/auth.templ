@@ -63,105 +63,11 @@ templ LoginButton() {
 // OAuthButtons is shared by the login and registration pages; labelPrefix
 // is "Login with"/"Sign up with".
 templ OAuthButtons(labelPrefix string) {
-    <script>
-    const nonce = generateNonce();
-
-    let redirect = window.location.href;
-    if (redirect.endsWith("/login")) {
-        redirect = redirect.substring(0, redirect.length - 6);
-    } else if (redirect.endsWith("/register")) {
-        redirect = redirect.substring(0, redirect.length - 9);
-    }
-
-    setTimeout(() => {
-        let aDiscord = document.getElementById("discord-oauth");
-        let discordUrl = document.getElementById("discord-oauth-base").innerText;
-        if (aDiscord) {
-            state = {
-                platform: "discord",
-                nonce: nonce,
-                redirect_uri: redirect,
-                mode: "login"
-            }
-            aDiscord.href = discordUrl + "&state=" + encodeState(state);
-        }
-    }, 1000);
-    setTimeout(() => {
-        let aTwitch = document.getElementById("twitch-oauth");
-        let twitchUrl = document.getElementById("twitch-oauth-base").innerText;
-        if (aTwitch) {
-            state = {
-                platform: "twitch",
-                nonce: nonce,
-                redirect_uri: redirect,
-                mode: "login"
-            }
-            aTwitch.href = twitchUrl + "&state=" + encodeState(state);
-        }
-    }, 1000);
-    setTimeout(() => {
-        let aMicrosoft = document.getElementById("microsoft-oauth");
-        let microsoftUrl = document.getElementById("microsoft-oauth-base").innerText;
-        if (aMicrosoft) {
-            state = {
-                platform: "microsoft",
-                nonce: nonce,
-                redirect_uri: redirect,
-                mode: "login"
-            }
-            aMicrosoft.href = microsoftUrl + "&state=" + encodeState(state);
-        }
-    }, 1000);
-    setTimeout(() => {
-        let aXbox = document.getElementById("xbox-oauth");
-        let xboxLiveUrl = document.getElementById("xboxlive-oauth-base").innerText;
-        if (aXbox) {
-            state = {
-                platform: "xboxlive",
-                nonce: nonce,
-                redirect_uri: redirect,
-                mode: "login"
-            }
-            aXbox.href = xboxLiveUrl + "&state=" + encodeState(state);
-        }
-    }, 1000);
-    // Minecraft shares Xbox Live's OAuth URL/scope - the API chains the same
-    // Xbox Live sign-in into a Minecraft: Java ownership check and links
-    // both identities. Only the "platform" sent in state differs.
-    setTimeout(() => {
-        let aMinecraft = document.getElementById("minecraft-oauth");
-        let xboxLiveUrl = document.getElementById("xboxlive-oauth-base").innerText;
-        if (aMinecraft) {
-            state = {
-                platform: "minecraft",
-                nonce: nonce,
-                redirect_uri: redirect,
-                mode: "login"
-            }
-            aMinecraft.href = xboxLiveUrl + "&state=" + encodeState(state);
-        }
-    }, 1000);
-    // Steam has no OAuth app/client ID - it uses OpenID 2.0 instead, so its
-    // login URL is built entirely client-side rather than filled in from a
-    // pre-rendered "-base" element.
-    setTimeout(() => {
-        let aSteam = document.getElementById("steam-oauth");
-        if (aSteam) {
-            state = {
-                platform: "steam",
-                nonce: nonce,
-                redirect_uri: redirect,
-                mode: "login"
-            }
-            aSteam.href = buildSteamOpenIDURL(state);
-        }
-    }, 1000);
-    </script>
     <div hidden id="discord-oauth-base">{ OAUTH2_DISCORD }</div>
     <div hidden id="twitch-oauth-base">{ OAUTH2_TWITCH }</div>
     <div hidden id="microsoft-oauth-base">{ OAUTH2_MICROSOFT }</div>
     <div hidden id="xboxlive-oauth-base">{ OAUTH2_XBOX_LIVE }</div>
-	<a href="" id="discord-oauth">
+	<a href="" id="discord-oauth" onclick="startOAuthLogin('discord', document.getElementById('discord-oauth-base').innerText); return false;">
 		<button
 			class="bg-discord_blurple hover:bg-blue-600 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
 		>
@@ -174,7 +80,7 @@ templ OAuthButtons(labelPrefix string) {
 		</button>
 	</a>
 	<div class="mt-2"></div>
-	<a href="" id="twitch-oauth">
+	<a href="" id="twitch-oauth" onclick="startOAuthLogin('twitch', document.getElementById('twitch-oauth-base').innerText); return false;">
 		<button
 			class="bg-twitch_purple hover:bg-purple-800 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
 		>
@@ -187,7 +93,7 @@ templ OAuthButtons(labelPrefix string) {
 		</button>
 	</a>
 	<div class="mt-2"></div>
-	<a href="" id="microsoft-oauth">
+	<a href="" id="microsoft-oauth" onclick="startOAuthLogin('microsoft', document.getElementById('microsoft-oauth-base').innerText); return false;">
 		<button
 			class="bg-microsoft_gray hover:bg-black inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
 		>
@@ -200,7 +106,7 @@ templ OAuthButtons(labelPrefix string) {
 		</button>
 	</a>
 	<div class="mt-2"></div>
-	<a href="" id="xbox-oauth">
+	<a href="" id="xbox-oauth" onclick="startOAuthLogin('xboxlive', document.getElementById('xboxlive-oauth-base').innerText); return false;">
 		<button
 			class="bg-xbox_bilbao hover:bg-green-800 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
 		>
@@ -213,7 +119,10 @@ templ OAuthButtons(labelPrefix string) {
 		</button>
 	</a>
 	<div class="mt-2"></div>
-	<a href="" id="minecraft-oauth" class="flex justify-center">
+	<!-- Minecraft shares Xbox Live's OAuth URL/scope - the API chains the
+	     same Xbox Live sign-in into a Minecraft: Java ownership check and
+	     links both identities. Only the "platform" sent in state differs. -->
+	<a href="" id="minecraft-oauth" class="flex justify-center" onclick="startOAuthLogin('minecraft', document.getElementById('xboxlive-oauth-base').innerText); return false;">
 		<button
 			class="bg-minecraft_apple hover:bg-green-700 rounded-md h-10 px-4 flex items-center justify-center ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 w-full"
 		>
@@ -226,7 +135,7 @@ templ OAuthButtons(labelPrefix string) {
 		</button>
 	</a>
 	<div class="mt-2 flex justify-center">
-		<a href="" id="steam-oauth">
+		<a href="" id="steam-oauth" onclick="startOAuthLogin('steam', null); return false;">
 			<img src="/public/SteamSignIn.png" alt="Sign in through Steam"/>
 		</a>
 	</div>
@@ -290,7 +199,6 @@ templ linkAccountRow(platform string, name string) {
 // LinkAccountButtons lists every linkable provider as a connection row.
 templ LinkAccountButtons() {
     <script>
-    const linkNonce = generateNonce();
     const linkRedirect = window.location.href;
     </script>
     <div hidden id="link-discord-oauth-base">{ OAUTH2_DISCORD }</div>

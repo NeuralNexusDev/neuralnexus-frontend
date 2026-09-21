@@ -12,6 +12,18 @@ func apiBaseURL() string {
 
 var API_BASE_URL = apiBaseURL()
 
+// steamOpenIDLoginURL defaults to the real endpoint - unlike API_BASE_URL,
+// tests are the only reason to ever override it, so unset shouldn't panic.
+func steamOpenIDLoginURL() string {
+	v := os.Getenv("STEAM_OPENID_LOGIN_URL")
+	if v == "" {
+		v = "https://steamcommunity.com/openid/login"
+	}
+	return v
+}
+
+var STEAM_OPENID_LOGIN_URL = steamOpenIDLoginURL()
+
 templ WrapContents(contents templ.Component) {
 	<!DOCTYPE html>
 	<html lang="en">
@@ -30,6 +42,7 @@ templ WrapContents(contents templ.Component) {
 		<script src="/public/js/theming.js"></script>
 		<body>
 			<div hidden id="api-base-url">{ API_BASE_URL }</div>
+			<div hidden id="steam-openid-login-url">{ STEAM_OPENID_LOGIN_URL }</div>
 			@Header()
 			<div class="relative isolate px-6 pt-14 lg:px-8">
 				@contents

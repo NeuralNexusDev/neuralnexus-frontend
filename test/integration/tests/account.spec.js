@@ -46,13 +46,14 @@ test.describe('account page - loading', () => {
     await mockLinks(page, []);
     // Intercept rather than let the browser actually reach Steam - only the
     // request URL buildSteamOpenIDURL() produced matters here.
-    await page.route('https://steamcommunity.com/openid/login*', (route) => {
+    const steamUrl = process.env.STEAM_OPENID_LOGIN_URL;
+    await page.route(`${steamUrl}*`, (route) => {
       route.fulfill({ status: 200, contentType: 'text/plain', body: 'stub' });
     });
 
     await page.goto('/account');
     await page.locator('#link-steam-action').click();
-    await page.waitForURL((url) => url.hostname === 'steamcommunity.com');
+    await page.waitForURL((url) => url.href.startsWith(steamUrl));
 
     const url = new URL(page.url());
     expect(url.searchParams.get('openid.mode')).toBe('checkid_setup');
