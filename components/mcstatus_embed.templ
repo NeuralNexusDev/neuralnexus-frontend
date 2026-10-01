@@ -68,8 +68,8 @@ func (d McStatusEmbedData) IconURL() string {
 }
 
 const (
-	maxEmbedMotdRunes    = 200
-	maxEmbedVersionRunes = 64
+	MaxEmbedMotdRunes    = 200
+	MaxEmbedVersionRunes = 64
 )
 
 func truncateRunes(s string, max int) string {
@@ -84,12 +84,12 @@ func (d McStatusEmbedData) Description() string {
 		return "Server offline or unreachable"
 	}
 	lines := []string{}
-	if motd := truncateRunes(strings.Join(d.Motd, "\n"), maxEmbedMotdRunes); motd != "" {
+	if motd := truncateRunes(strings.Join(d.Motd, "\n"), MaxEmbedMotdRunes); motd != "" {
 		lines = append(lines, motd)
 	}
 	lines = append(lines, "Players: "+strconv.Itoa(d.Players)+"/"+strconv.Itoa(d.Max))
 	if d.Version != "" {
-		lines = append(lines, "Version: "+truncateRunes(d.Version, maxEmbedVersionRunes))
+		lines = append(lines, "Version: "+truncateRunes(d.Version, MaxEmbedVersionRunes))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -102,12 +102,19 @@ templ McStatusEmbedPage(data McStatusEmbedData) {
 templ mcStatusEmbedHead(data McStatusEmbedData, description string) {
 	{{ iconURL := data.IconURL() }}
 	<meta property="og:site_name" content="Powered by NeuralNexus.dev"/>
+	<meta property="og:type" content="website"/>
+	<meta name="twitter:card" content="summary"/>
+	<meta name="robots" content="noindex"/>
+	<link rel="canonical" href={ data.PageURL() }/>
 	<meta name="theme-color" content="#7C0014"/>
 	<meta property="og:title" content={ "IP: " + data.Host }/>
 	<meta property="og:description" content={ description }/>
 	<meta property="og:url" content={ data.PageURL() }/>
 	if iconURL != "" {
 		<meta property="og:image" content={ iconURL }/>
+		<meta property="og:image:alt" content={ data.Host + " server icon" }/>
+		<meta property="og:image:width" content="64"/>
+		<meta property="og:image:height" content="64"/>
 	}
 }
 

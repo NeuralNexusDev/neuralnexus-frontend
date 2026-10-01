@@ -645,13 +645,18 @@ function syncMcStatusQueryOption() {
 }
 
 function parseMcPort(value) {
-    const port = typeof value === 'number' ? value : /^\d+$/.test(value) ? Number(value) : 0;
-    return Number.isInteger(port) && port >= 1 && port <= 65535 ? port : null;
+    const port = /^\d+$/.test(value) ? Number(value) : 0;
+    return port >= 1 && port <= 65535 ? port : null;
+}
+
+function validateMcQueryPort() {
+    const input = document.getElementById('mc-status-query-port');
+    input.setCustomValidity(input.value === '' || parseMcPort(input.value) !== null ? '' : 'Enter a port from 1 to 65535');
 }
 
 function mcStatusQueryPort() {
     const input = document.getElementById('mc-status-query-port');
-    return input.disabled ? null : parseMcPort(input.valueAsNumber);
+    return input.disabled ? null : parseMcPort(input.value);
 }
 
 function abortMcStatus() {
@@ -726,7 +731,7 @@ function checkMcStatus(event) {
                     showMcStatusError("Couldn't reach that server", 'The lookup timed out.');
                     return;
                 }
-                if (res.status === 404) {
+                if (res.status === 404 && (res.headers.get('content-type') || '').includes('application/problem+json')) {
                     showMcStatusError("Couldn't reach that server", detail);
                 } else if (res.status === 429) {
                     showMcStatusError('Too many lookups', 'Please try again in a minute.');

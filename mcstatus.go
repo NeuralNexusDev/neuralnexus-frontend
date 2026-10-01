@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -18,12 +19,14 @@ import (
 const (
 	mcStatusTimeout  = 15 * time.Second
 	maxMcStatusBody  = 1 << 20
+	noStore          = "no-store"
 	onlineMaxAge     = "public, max-age=60"
 	offlineMaxAge    = "public, max-age=30"
 	unavailableRetry = "30"
 	rateLimitedRetry = "60"
 	maxMcHostname    = 253
 	maxMcPort        = 65535
+	problemJSON      = "application/problem+json"
 )
 
 var (
@@ -62,8 +65,10 @@ func motdLines(motd string) []string {
 	return lines
 }
 
-// 404 means the server gave no status; 429 and 500 must not be cached as
-// "offline". This client sends no Authorization header, so 401 is unexpected.
+// 404 means the server gave no status, but only as a problem+json response: a
+// bare 404 comes from a proxy or a wrong API URL and must not be cached as
+// "offline". 429 and 500 must not be cached as "offline" either. This client
+// sends no Authorization header, so 401 is unexpected.
 func fetchMcStatus(r *http.Request, data components.McStatusEmbedData) (apiMcStatus, lookupResult) {
 	var status apiMcStatus
 	endpoint := config.APIURL + "/api/v1/mcstatus/" + url.PathEscape(data.Host)
@@ -82,6 +87,9 @@ func fetchMcStatus(r *http.Request, data components.McStatusEmbedData) (apiMcSta
 	switch res.StatusCode {
 	case http.StatusOK:
 	case http.StatusNotFound:
+		if mediaType, _, _ := mime.ParseMediaType(res.Header.Get("Content-Type")); mediaType != problemJSON {
+			return status, lookupUnexpected
+		}
 		return status, lookupOffline
 	case http.StatusInternalServerError:
 		return status, lookupUnavailable
@@ -123,14 +131,14 @@ func writeLookupFailure(w http.ResponseWriter, code int, message, retryAfter str
 	if retryAfter != "" {
 		w.Header().Set("Retry-After", retryAfter)
 	}
-	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Cache-Control", noStore)
 	http.Error(w, message, code)
 }
 
 func McStatusEmbedHandler(w http.ResponseWriter, r *http.Request) {
 	host, ok := normalizeMcHost(r.PathValue("host"))
 	if !ok {
-		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Cache-Control", noStore)
 		http.Error(w, "invalid server address", http.StatusBadRequest)
 		return
 	}
