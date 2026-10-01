@@ -54,23 +54,46 @@ function steamOpenIdLoginUrl() {
 }
 
 /**
+ * @description Works out the cookie Domain that lets the site and the API
+ * share a cookie: the labels their hostnames have in common, when that's
+ * at least two (a bare TLD can't be a cookie domain). Returns '' when the
+ * hosts are identical, either is an IP address, or they share too little -
+ * a host-only cookie is already enough (or the browser would reject the
+ * attribute outright).
+ * @param {string} siteHost - Hostname the page is served from
+ * @param {string} apiHost - Hostname of the API
+ * @returns {string} - Domain attribute value such as ".example.com", or ''
+ */
+function sharedCookieDomain(siteHost, apiHost) {
+    const isIp = (host) => /^[\d.]+$/.test(host) || host.includes(':');
+    if (siteHost === apiHost || isIp(siteHost) || isIp(apiHost)) {
+        return '';
+    }
+    const siteLabels = siteHost.split('.').reverse();
+    const apiLabels = apiHost.split('.').reverse();
+    const shared = [];
+    while (shared.length < siteLabels.length && siteLabels[shared.length] === apiLabels[shared.length]) {
+        shared.push(siteLabels[shared.length]);
+    }
+    return shared.length >= 2 ? `.${shared.reverse().join('.')}` : '';
+}
+
+/**
  * @description Generates a fresh nonce for the OAuth/OpenID flow and sets
  * it as a short-lived cookie the API checks on the callback, returning the
  * nonce. Called at the moment the user clicks a login/link button (not on
  * page load) so its 5-minute TTL covers the provider round-trip rather than
- * however long the user sat on the page first. The hardcoded production
- * domain/Secure/SameSite=None only apply on neuralnexus.dev itself - a
- * browser rejects a Domain attribute that doesn't match the current host,
- * so on localhost (or any other dev/test host) this falls back to a
- * host-only cookie with SameSite=Lax and no Secure flag.
+ * however long the user sat on the page first. When the site and API are on
+ * different subdomains the cookie is scoped to their shared parent domain so
+ * the API receives it; otherwise (e.g. localhost) it stays host-only.
+ * SameSite=None/Secure only apply over https.
  * @returns {string} - The generated nonce
  */
 function createNonce() {
     const nonce = Math.random().toString(36).substring(2, 15);
 
-    const host = location.hostname;
-    const isProdDomain = host === 'neuralnexus.dev' || host.endsWith('.neuralnexus.dev');
-    const domainAttr = isProdDomain ? '; domain=.neuralnexus.dev' : '';
+    const domain = sharedCookieDomain(location.hostname, new URL(apiBaseUrl()).hostname);
+    const domainAttr = domain ? `; domain=${domain}` : '';
     const secureAttr = location.protocol === 'https:' ? '; Secure' : '';
     const sameSite = secureAttr ? 'None' : 'Lax';
     const expires = new Date(Date.now() + 5 * 60 * 1000).toUTCString();

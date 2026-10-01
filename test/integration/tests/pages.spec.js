@@ -52,6 +52,25 @@ test.describe('nonce timing', () => {
   });
 });
 
+test.describe('nonce cookie domain', () => {
+  const cases = [
+    ['neuralnexus.dev', 'api.neuralnexus.dev', '.neuralnexus.dev'],
+    ['www.neuralnexus.dev', 'api.neuralnexus.dev', '.neuralnexus.dev'],
+    ['staging.example.com', 'api.staging.example.com', '.staging.example.com'],
+    ['localhost', 'localhost', ''],
+    ['localhost', 'api.neuralnexus.dev', ''],
+    ['neuralnexus.dev', 'other.dev', ''],
+    ['10.0.0.1', '192.168.0.1', ''],
+  ];
+  for (const [site, api, expected] of cases) {
+    test(`${site} + ${api} -> "${expected}"`, async ({ page }) => {
+      await page.goto('/');
+      const domain = await page.evaluate(([s, a]) => sharedCookieDomain(s, a), [site, api]);
+      expect(domain).toBe(expected);
+    });
+  }
+});
+
 test.describe('OAuth state encoding', () => {
   // Regression test for a historical bug: encodeState() originally used
   // plain base64 (btoa), but the API decodes the "state" query param with
