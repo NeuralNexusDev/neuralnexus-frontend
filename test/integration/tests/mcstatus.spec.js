@@ -58,6 +58,13 @@ test.describe('mc status page - form', () => {
     await expect(page.locator('#mc-status-error')).toBeHidden();
   });
 
+  test('the address field text is readable in dark mode', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.goto('/project/mc-status');
+    const foreground = await page.evaluate(() => getComputedStyle(document.body).color);
+    await expect(page.locator('#mc-status-host')).toHaveCSS('color', foreground);
+  });
+
   test('the query box is on by default and disabled for Bedrock, restoring the choice after', async ({ page }) => {
     await page.goto('/project/mc-status');
     await openAdvanced(page);
@@ -111,7 +118,7 @@ test.describe('mc status page - lookups', () => {
     await lookup(page, 'play.example.net');
 
     await expect(page.locator('#mc-status-result')).toBeVisible();
-    await expect(page.locator('#mc-status-name')).toHaveText('Hypixel Network');
+    await expect(page.locator('#mc-status-name')).toHaveText('play.example.net');
     await expect(page.locator('#mc-status-pill')).toHaveText('Online');
     await expect(page.locator('#mc-status-type')).toHaveText('Java');
     await expect(page.locator('#mc-status-version')).toHaveText('Paper 1.21');
@@ -144,7 +151,6 @@ test.describe('mc status page - lookups', () => {
     await mockMcStatus(page, () =>
       json({
         ...ONLINE,
-        name: '<img src=x onerror=window.__xss=1>',
         motd: '<script>window.__xss=1</script>',
         version: '<b>1.21</b>',
         players: [{ name: '<i>mallory</i>' }],
@@ -152,7 +158,6 @@ test.describe('mc status page - lookups', () => {
     );
     await page.goto('/project/mc-status');
     await lookup(page, 'play.example.net');
-    await expect(page.locator('#mc-status-name')).toHaveText('<img src=x onerror=window.__xss=1>');
     await expect(page.locator('#mc-status-motd')).toHaveText('<script>window.__xss=1</script>');
     await expect(page.locator('#mc-status-version')).toHaveText('<b>1.21</b>');
     await expect(page.locator('#mc-status-players li').first()).toHaveText('<i>mallory</i>');
@@ -239,7 +244,7 @@ test.describe('mc status page - lookups', () => {
     await expect(page.locator('#mc-status-icon')).toBeHidden();
   });
 
-  test('a Bedrock lookup sends bedrock=true, no query, and no icon request', async ({ page }) => {
+  test('a Bedrock lookup sends bedrock=true and no query, and loads the icon with bedrock=true', async ({ page }) => {
     const requests = await mockMcStatus(page, () => json(ONLINE));
     await page.goto('/project/mc-status');
     await pickEdition(page, 'bedrock');
@@ -248,8 +253,10 @@ test.describe('mc status page - lookups', () => {
     await expect(page.locator('#mc-status-type')).toHaveText('Bedrock');
     expect(requests.status[0].searchParams.get('bedrock')).toBe('true');
     expect(requests.status[0].searchParams.has('query')).toBe(false);
-    await expect(page.locator('#mc-status-icon')).not.toHaveAttribute('src', /.+/);
-    expect(requests.icon).toHaveLength(0);
+    await expect(page.locator('#mc-status-icon')).toBeVisible();
+    expect(requests.icon).toHaveLength(1);
+    expect(requests.icon[0].pathname).toBe(`${API_PATH}/mcstatus/icon/bedrock.example.net`);
+    expect(requests.icon[0].searchParams.get('bedrock')).toBe('true');
   });
 
   test('turning the query off sends no query parameter', async ({ page }) => {
@@ -542,7 +549,7 @@ test.describe('mc status page - request sequencing', () => {
     await page.route(`${API}/mcstatus/old.example.net*`, () => new Promise(() => {}));
     await page.route(`${API}/mcstatus/new.example.net*`, async (route) => {
       await newestReleased;
-      await route.fulfill(json({ ...ONLINE, name: 'Newest' }));
+      await route.fulfill(json(ONLINE));
     });
 
     await page.goto('/project/mc-status');
@@ -553,7 +560,7 @@ test.describe('mc status page - request sequencing', () => {
     await expect(page.locator('#mc-status-error')).toBeHidden();
 
     releaseNewest();
-    await expect(page.locator('#mc-status-name')).toHaveText('Newest');
+    await expect(page.locator('#mc-status-name')).toHaveText('new.example.net');
     await expect(page.locator('#mc-status-submit')).toHaveText('Check');
   });
 
@@ -571,11 +578,11 @@ test.describe('mc status page - request sequencing', () => {
     );
     await page.route(`${API}/mcstatus/slow.example.net*`, async (route) => {
       await slow;
-      await route.fulfill(json({ ...ONLINE, name: 'Slow' })).catch(() => {});
+      await route.fulfill(json(ONLINE)).catch(() => {});
       slowServed();
     });
-    await page.route(`${API}/mcstatus/fast.example.net*`, (route) => route.fulfill(json({ ...ONLINE, name: 'Fast' })));
-    await page.route(`${API}/mcstatus/last.example.net*`, (route) => route.fulfill(json({ ...ONLINE, name: 'Last' })));
+    await page.route(`${API}/mcstatus/fast.example.net*`, (route) => route.fulfill(json(ONLINE)));
+    await page.route(`${API}/mcstatus/last.example.net*`, (route) => route.fulfill(json(ONLINE)));
 
     await page.goto('/project/mc-status');
     await page.evaluate(() => {
@@ -588,13 +595,13 @@ test.describe('mc status page - request sequencing', () => {
 
     await lookup(page, 'slow.example.net');
     await lookup(page, 'fast.example.net');
-    await expect(page.locator('#mc-status-name')).toHaveText('Fast');
+    await expect(page.locator('#mc-status-name')).toHaveText('fast.example.net');
 
     releaseSlow();
     await slowDone;
     await lookup(page, 'last.example.net');
-    await expect(page.locator('#mc-status-name')).toHaveText('Last');
-    expect(await page.evaluate(() => window.__names)).not.toContain('Slow');
+    await expect(page.locator('#mc-status-name')).toHaveText('last.example.net');
+    expect(await page.evaluate(() => window.__names)).not.toContain('slow.example.net');
     await expect(page.locator('#mc-status-submit')).toHaveText('Check');
   });
 });

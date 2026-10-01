@@ -93,7 +93,7 @@ func TestEmbedOnline(t *testing.T) {
 
 	h := head(t, rec.Body.String())
 	for _, want := range []string{
-		`property="og:title" content="IP: play.example.net:80"`,
+		`property="og:title" content="play.example.net:80"`,
 		"Hello\nWorld\nPlayers: 3/20\nVersion: Paper 1.21",
 		`property="og:url" content="` + testSiteURL + `/mcstatus/play.example.net:80"`,
 		`property="og:image" content="` + f.server.URL + `/api/v1/mcstatus/icon/play.example.net:80"`,
@@ -153,16 +153,17 @@ func TestEmbedForwardsOptions(t *testing.T) {
 	}
 }
 
-func TestEmbedBedrockHasNoImage(t *testing.T) {
-	newFakeAPI(t, http.StatusOK, onlineBody)
+func TestEmbedBedrockHasAnImage(t *testing.T) {
+	f := newFakeAPI(t, http.StatusOK, onlineBody)
 	rec := getEmbed("a.com", "bedrock=true")
-	if strings.Contains(head(t, rec.Body.String()), "og:image") {
-		t.Error("Bedrock servers have no icon, og:image should be absent")
+	want := `property="og:image" content="` + f.server.URL + `/api/v1/mcstatus/icon/a.com?bedrock=true"`
+	if !strings.Contains(head(t, rec.Body.String()), want) {
+		t.Errorf("missing %s", want)
 	}
 }
 
 func TestEmbedOffline(t *testing.T) {
-	newFakeAPI(t, http.StatusNotFound, `{"status":404}`)
+	f := newFakeAPI(t, http.StatusNotFound, `{"status":404}`)
 	rec := getEmbed("a.com", "")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d", rec.Code)
@@ -174,8 +175,9 @@ func TestEmbedOffline(t *testing.T) {
 	if !strings.Contains(h, "Server offline or unreachable") {
 		t.Errorf("missing offline description:\n%s", h)
 	}
-	if strings.Contains(h, "og:image") {
-		t.Error("offline servers should not advertise an icon")
+	want := `property="og:image" content="` + f.server.URL + `/api/v1/mcstatus/icon/a.com"`
+	if !strings.Contains(h, want) {
+		t.Errorf("missing %s", want)
 	}
 }
 
@@ -538,7 +540,7 @@ func TestEmbedRouteWiring(t *testing.T) {
 
 	get := httptest.NewRecorder()
 	router.ServeHTTP(get, httptest.NewRequest(http.MethodGet, "/mcstatus/Play.Example.com:25570?query=false", nil))
-	if get.Code != http.StatusOK || !strings.Contains(get.Body.String(), `property="og:title" content="IP: play.example.com:25570"`) {
+	if get.Code != http.StatusOK || !strings.Contains(get.Body.String(), `property="og:title" content="play.example.com:25570"`) {
 		t.Fatalf("GET /mcstatus/{host} did not reach the handler: %d %s", get.Code, get.Body.String())
 	}
 	if f.request == nil || f.request.URL.Path != "/api/v1/mcstatus/play.example.com:25570" {

@@ -581,7 +581,7 @@ function renderMcStatus(status, bedrock, host) {
     const numPlayers = status.num_players ?? 0;
     const players = status.players || [];
 
-    document.getElementById('mc-status-name').textContent = status.name || status.host;
+    document.getElementById('mc-status-name').textContent = host;
     document.getElementById('mc-status-motd').textContent = formatMcMotd(status.motd || '');
     document.getElementById('mc-status-version').textContent = status.version || 'Unknown version';
     document.getElementById('mc-status-type').textContent = bedrock ? 'Bedrock' : 'Java';
@@ -597,9 +597,7 @@ function renderMcStatus(status, bedrock, host) {
     icon.hidden = true;
     icon.onload = () => { icon.hidden = false; };
     icon.removeAttribute('src');
-    if (!bedrock) {
-        icon.src = `${apiBaseUrl()}/api/v1/mcstatus/icon/${encodeURIComponent(host)}`;
-    }
+    icon.src = `${apiBaseUrl()}/api/v1/mcstatus/icon/${encodeURIComponent(host)}${bedrock ? '?bedrock=true' : ''}`;
 
     const pill = document.getElementById('mc-status-pill');
     pill.textContent = 'Online';

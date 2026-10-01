@@ -64,12 +64,13 @@ func (d McStatusEmbedData) InteractiveURL() string {
 	return "/project/mc-status?" + v.Encode()
 }
 
-// IconURL returns the API icon URL, or an empty string when there is no icon.
+// IconURL returns the API icon URL for the host.
 func (d McStatusEmbedData) IconURL() string {
-	if !d.Online || d.Bedrock {
-		return ""
+	u := config.APIURL + "/api/v1/mcstatus/icon/" + url.PathEscape(d.Host)
+	if d.Bedrock {
+		u += "?bedrock=true"
 	}
-	return config.APIURL + "/api/v1/mcstatus/icon/" + url.PathEscape(d.Host)
+	return u
 }
 
 const (
@@ -103,26 +104,23 @@ func (d McStatusEmbedData) Description() string {
 // McStatusEmbedPage renders the link-preview page for data.
 templ McStatusEmbedPage(data McStatusEmbedData) {
 	{{ description := data.Description() }}
-	@WrapContentsWithHead("IP: "+data.Host, mcStatusEmbedHead(data, description), mcStatusEmbed(data, description))
+	@WrapContentsWithHead(data.Host, mcStatusEmbedHead(data, description), mcStatusEmbed(data, description))
 }
 
 templ mcStatusEmbedHead(data McStatusEmbedData, description string) {
-	{{ iconURL := data.IconURL() }}
 	<meta property="og:site_name" content="Powered by NeuralNexus.dev"/>
 	<meta property="og:type" content="website"/>
 	<meta name="twitter:card" content="summary"/>
 	<meta name="robots" content="noindex"/>
 	<link rel="canonical" href={ data.PageURL() }/>
 	<meta name="theme-color" content="#7C0014"/>
-	<meta property="og:title" content={ "IP: " + data.Host }/>
+	<meta property="og:title" content={ data.Host }/>
 	<meta property="og:description" content={ description }/>
 	<meta property="og:url" content={ data.PageURL() }/>
-	if iconURL != "" {
-		<meta property="og:image" content={ iconURL }/>
-		<meta property="og:image:alt" content={ data.Host + " server icon" }/>
-		<meta property="og:image:width" content="64"/>
-		<meta property="og:image:height" content="64"/>
-	}
+	<meta property="og:image" content={ data.IconURL() }/>
+	<meta property="og:image:alt" content={ data.Host + " server icon" }/>
+	<meta property="og:image:width" content="64"/>
+	<meta property="og:image:height" content="64"/>
 }
 
 templ mcStatusEmbed(data McStatusEmbedData, description string) {
