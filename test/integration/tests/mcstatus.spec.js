@@ -221,6 +221,24 @@ test.describe('mc status page - lookups', () => {
     await expect(page.locator('#mc-status-icon')).toBeHidden();
   });
 
+  test('a failed icon on a later lookup hides the previous server icon', async ({ page }) => {
+    await page.route(`${API}/mcstatus/icon/with-icon.example.net*`, (route) =>
+      route.fulfill({ status: 200, contentType: 'image/png', body: PNG_1X1 })
+    );
+    await page.route(`${API}/mcstatus/icon/no-icon.example.net*`, (route) => route.fulfill({ status: 404 }));
+    await page.route(`${API}/mcstatus/*.example.net*`, (route) => route.fulfill(json(ONLINE)));
+    await page.goto('/project/mc-status');
+
+    await lookup(page, 'with-icon.example.net');
+    await expect(page.locator('#mc-status-icon')).toBeVisible();
+
+    const iconResponse = page.waitForResponse((res) => res.url().includes('/mcstatus/icon/no-icon'));
+    await lookup(page, 'no-icon.example.net');
+    await iconResponse;
+    await expect(page.locator('#mc-status-icon')).toHaveJSProperty('complete', true);
+    await expect(page.locator('#mc-status-icon')).toBeHidden();
+  });
+
   test('a Bedrock lookup sends bedrock=true, no query, and no icon request', async ({ page }) => {
     const requests = await mockMcStatus(page, () => json(ONLINE));
     await page.goto('/project/mc-status');
@@ -290,7 +308,7 @@ test.describe('mc status page - query port', () => {
       await lookup(page, 'play.example.net');
       await expect(page.locator('#mc-status-advanced')).toHaveAttribute('open', '');
       await expect(page.locator('#mc-status-query-port')).toBeFocused();
-        expect(requests.status).toHaveLength(0);
+      expect(requests.status).toHaveLength(0);
     });
   }
 });
@@ -436,6 +454,7 @@ test.describe('mc status page - timeout', () => {
     await page.clock.install();
     await page.route(`${API}/mcstatus/**`, () => new Promise(() => {}));
     await page.goto('/project/mc-status');
+    // Without pausing, real time keeps advancing the fake clock and the 30 s timer can fire early.
     await page.clock.pauseAt(new Date(Date.now() + 1000));
     await lookup(page, 'play.example.net');
     await expect(page.locator('#mc-status-submit')).toHaveText('Checking...');
