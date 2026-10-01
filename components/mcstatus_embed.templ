@@ -29,16 +29,26 @@ func (d McStatusEmbedData) Options() url.Values {
 	return v
 }
 
+func (d McStatusEmbedData) ShareOptions() url.Values {
+	v := url.Values{}
+	if d.Bedrock {
+		v.Set("bedrock", "true")
+	} else if !d.Query {
+		v.Set("query", "false")
+	}
+	return v
+}
+
 func (d McStatusEmbedData) PageURL() string {
 	u := config.SiteURL + "/mcstatus/" + url.PathEscape(d.Host)
-	if q := d.Options().Encode(); q != "" {
+	if q := d.ShareOptions().Encode(); q != "" {
 		u += "?" + q
 	}
 	return u
 }
 
 func (d McStatusEmbedData) InteractiveURL() string {
-	v := d.Options()
+	v := d.ShareOptions()
 	v.Set("host", d.Host)
 	return "/project/mc-status?" + v.Encode()
 }
@@ -50,44 +60,54 @@ func (d McStatusEmbedData) IconURL() string {
 	return config.APIURL + "/api/v1/mcstatus/icon/" + url.PathEscape(d.Host)
 }
 
-const maxEmbedDescriptionRunes = 300
+const (
+	maxEmbedMotdRunes    = 200
+	maxEmbedVersionRunes = 64
+)
+
+func truncateRunes(s string, max int) string {
+	if runes := []rune(s); len(runes) > max {
+		return string(runes[:max]) + "…"
+	}
+	return s
+}
 
 func (d McStatusEmbedData) Description() string {
 	if !d.Online {
 		return "Server offline or unreachable"
 	}
-	lines := append([]string{}, d.Motd...)
+	lines := []string{}
+	if motd := truncateRunes(strings.Join(d.Motd, "\n"), maxEmbedMotdRunes); motd != "" {
+		lines = append(lines, motd)
+	}
 	lines = append(lines,
 		"Players: "+strconv.Itoa(d.Players)+"/"+strconv.Itoa(d.Max),
-		"Version: "+d.Version,
+		"Version: "+truncateRunes(d.Version, maxEmbedVersionRunes),
 	)
-	description := strings.Join(lines, "\n")
-	if runes := []rune(description); len(runes) > maxEmbedDescriptionRunes {
-		description = string(runes[:maxEmbedDescriptionRunes]) + "…"
-	}
-	return description
+	return strings.Join(lines, "\n")
 }
 
 templ McStatusEmbedPage(data McStatusEmbedData) {
-	@WrapContentsWithHead("IP: "+data.Host, mcStatusEmbedHead(data), McStatusEmbed(data))
+	{{ description := data.Description() }}
+	@WrapContentsWithHead("IP: "+data.Host, mcStatusEmbedHead(data, description), McStatusEmbed(data, description))
 }
 
-templ mcStatusEmbedHead(data McStatusEmbedData) {
+templ mcStatusEmbedHead(data McStatusEmbedData, description string) {
 	{{ iconURL := data.IconURL() }}
 	<meta property="og:site_name" content="Powered by NeuralNexus.dev"/>
 	<meta name="theme-color" content="#7C0014"/>
 	<meta property="og:title" content={ "IP: " + data.Host }/>
-	<meta property="og:description" content={ data.Description() }/>
+	<meta property="og:description" content={ description }/>
 	<meta property="og:url" content={ data.PageURL() }/>
 	if iconURL != "" {
 		<meta property="og:image" content={ iconURL }/>
 	}
 }
 
-templ McStatusEmbed(data McStatusEmbedData) {
+templ McStatusEmbed(data McStatusEmbedData, description string) {
 	<div class="mx-auto max-w-md space-y-4 text-center">
 		<h1 class="break-words text-2xl font-bold [overflow-wrap:anywhere]">{ data.Host }</h1>
-		<p class="whitespace-pre-line break-words text-sm [overflow-wrap:anywhere]">{ data.Description() }</p>
+		<p class="whitespace-pre-line break-words text-sm [overflow-wrap:anywhere]">{ description }</p>
 		<a class="text-sm underline" href={ templ.SafeURL(data.InteractiveURL()) }>Open in MC Status</a>
 	</div>
 }

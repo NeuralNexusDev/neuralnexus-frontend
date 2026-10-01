@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,13 +21,15 @@ const (
 	onlineMaxAge     = "public, max-age=60"
 	offlineMaxAge    = "public, max-age=30"
 	unavailableRetry = "30"
+	maxMcHostname    = 253
+	maxMcPort        = 65535
 )
 
 var (
 	mcStatusClient = &http.Client{Timeout: mcStatusTimeout}
 	mcHexColor     = regexp.MustCompile(`§x(?:§[0-9a-fA-F]){6}`)
 	mcColorCode    = regexp.MustCompile(`(?s)§.`)
-	mcHostPattern  = regexp.MustCompile(`^(?:[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?|\[[0-9A-Fa-f:.]+\])(?::[0-9]{1,5})?$`)
+	mcHostPattern  = regexp.MustCompile(`^(?P<host>(?:[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*)|\[[0-9A-Fa-f:.]+\])(?::(?P<port>[0-9]{1,5}))?$`)
 )
 
 type lookupResult int
@@ -87,9 +90,24 @@ func fetchMcStatus(r *http.Request, data components.McStatusEmbedData) (apiMcSta
 	return status, lookupOnline
 }
 
+func normalizeMcHost(raw string) (string, bool) {
+	m := mcHostPattern.FindStringSubmatch(raw)
+	if m == nil || len(m[1]) > maxMcHostname {
+		return "", false
+	}
+	if port := m[2]; port != "" {
+		if n, err := strconv.Atoi(port); err != nil || n < 1 || n > maxMcPort {
+			return "", false
+		}
+		return strings.ToLower(m[1]) + ":" + port, true
+	}
+	return strings.ToLower(m[1]), true
+}
+
 func McStatusEmbedHandler(w http.ResponseWriter, r *http.Request) {
-	host := r.PathValue("host")
-	if !mcHostPattern.MatchString(host) || len(host) > 259 {
+	host, ok := normalizeMcHost(r.PathValue("host"))
+	if !ok {
+		w.Header().Set("Cache-Control", "no-store")
 		http.Error(w, "invalid server address", http.StatusBadRequest)
 		return
 	}
@@ -97,7 +115,7 @@ func McStatusEmbedHandler(w http.ResponseWriter, r *http.Request) {
 	data := components.McStatusEmbedData{
 		Host:    host,
 		Bedrock: query.Get("bedrock") == "true",
-		Query:   query.Get("query") == "true",
+		Query:   query.Get("query") != "false",
 	}
 	status, result := fetchMcStatus(r, data)
 	switch result {

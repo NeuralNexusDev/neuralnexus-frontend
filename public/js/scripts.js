@@ -639,13 +639,13 @@ function showMcStatusError(message, detail) {
     document.getElementById('mc-status-error').hidden = false;
 }
 
+let mcQueryPreference = true;
+
 function syncMcStatusQueryOption() {
     const bedrock = document.querySelector('input[name="mc-edition"]:checked').value === 'bedrock';
     const query = document.getElementById('mc-status-query');
     query.disabled = bedrock;
-    if (bedrock) {
-        query.checked = false;
-    }
+    query.checked = !bedrock && mcQueryPreference;
 }
 
 function abortMcStatus() {
@@ -677,7 +677,11 @@ function checkMcStatus(event) {
         params.set('query', 'true');
     }
     const urlParams = new URLSearchParams({ host });
-    params.forEach((value, key) => urlParams.set(key, value));
+    if (bedrock) {
+        urlParams.set('bedrock', 'true');
+    } else if (!query) {
+        urlParams.set('query', 'false');
+    }
     history.replaceState(null, '', `${window.location.pathname}?${urlParams}`);
 
     const controller = new AbortController();
@@ -742,7 +746,7 @@ function loadMcStatusFromUrl() {
     document.getElementById('mc-status-host').value = host;
     const edition = params.get('bedrock') === 'true' ? 'bedrock' : 'java';
     document.querySelector(`input[name="mc-edition"][value="${edition}"]`).checked = true;
-    document.getElementById('mc-status-query').checked = params.get('query') === 'true';
+    mcQueryPreference = params.get('query') !== 'false';
     syncMcStatusQueryOption();
     checkMcStatus();
 }

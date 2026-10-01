@@ -341,7 +341,7 @@ templ McStatus() {
 			<details class="text-sm">
 				<summary class="cursor-pointer text-gray-500 dark:text-gray-400">Advanced</summary>
 				<label class="mt-2 flex items-center gap-2">
-					<input id="mc-status-query" type="checkbox"/>
+					<input id="mc-status-query" type="checkbox" onchange="mcQueryPreference = this.checked" checked/>
 					Use the query protocol (Java only, if the server has it enabled)
 				</label>
 			</details>
