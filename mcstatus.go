@@ -17,15 +17,16 @@ import (
 )
 
 const (
-	mcStatusTimeout  = 15 * time.Second
-	maxMcStatusBody  = 1 << 20
-	noStore          = "no-store"
-	onlineMaxAge     = "public, max-age=60"
-	offlineMaxAge    = "public, max-age=30"
-	unavailableRetry = "30"
-	rateLimitedRetry = "60"
-	maxMcHostname    = 253
-	problemJSON      = "application/problem+json"
+	mcStatusTimeout    = 15 * time.Second
+	maxMcStatusBody    = 1 << 20
+	noStore            = "no-store"
+	onlineMaxAge       = "public, max-age=60"
+	offlineMaxAge      = "public, max-age=30"
+	unavailableRetry   = "30"
+	unavailableMessage = "status lookup unavailable"
+	rateLimitedRetry   = "60"
+	maxMcHostname      = 253
+	problemJSON        = "application/problem+json"
 )
 
 var (
@@ -43,20 +44,27 @@ type apiMcStatus struct {
 
 // McStatusEmbedHandler serves the link-preview page for a server status.
 func McStatusEmbedHandler(w http.ResponseWriter, r *http.Request) {
-	m := mcHostPattern.FindStringSubmatch(r.PathValue("host"))
-	var hostPort uint64
-	var portErr error
-	if m != nil && m[2] != "" {
-		hostPort, portErr = strconv.ParseUint(m[2], 10, 16)
-	}
-	if m == nil || len(m[1]) > maxMcHostname || (m[2] != "" && (portErr != nil || hostPort < 1)) {
+	fail := func(code int, message, retryAfter string) {
+		if retryAfter != "" {
+			w.Header().Set("Retry-After", retryAfter)
+		}
 		w.Header().Set("Cache-Control", noStore)
-		http.Error(w, "invalid server address", http.StatusBadRequest)
+		http.Error(w, message, code)
+	}
+
+	m := mcHostPattern.FindStringSubmatch(r.PathValue("host"))
+	if m == nil || len(m[1]) > maxMcHostname {
+		fail(http.StatusBadRequest, "invalid server address", "")
 		return
 	}
 	host := strings.ToLower(m[1])
 	if m[2] != "" {
-		host += ":" + strconv.FormatUint(hostPort, 10)
+		port, err := strconv.ParseUint(m[2], 10, 16)
+		if err != nil || port < 1 {
+			fail(http.StatusBadRequest, "invalid server address", "")
+			return
+		}
+		host += ":" + strconv.FormatUint(port, 10)
 	}
 
 	query := r.URL.Query()
@@ -65,7 +73,7 @@ func McStatusEmbedHandler(w http.ResponseWriter, r *http.Request) {
 		Bedrock: query.Get("bedrock") == "true",
 		Query:   query.Get("query") != "false",
 	}
-	if port, err := strconv.ParseUint(query.Get("query_port"), 10, 16); err == nil && port >= 1 {
+	if port, err := strconv.ParseUint(query.Get("query_port"), 10, 16); err == nil {
 		data.QueryPort = int(port)
 	}
 
@@ -73,43 +81,25 @@ func McStatusEmbedHandler(w http.ResponseWriter, r *http.Request) {
 	if q := data.Options().Encode(); q != "" {
 		endpoint += "?" + q
 	}
-	var status apiMcStatus
-	var cache string
-	code, message, retryAfter := http.StatusServiceUnavailable, "status lookup unavailable", unavailableRetry
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, endpoint, nil)
-	var res *http.Response
-	if err == nil {
-		res, err = mcStatusClient.Do(req)
-	}
-	if err == nil {
-		defer res.Body.Close()
-		mediaType, _, _ := mime.ParseMediaType(res.Header.Get("Content-Type"))
-		switch {
-		case res.StatusCode == http.StatusOK:
-			if json.NewDecoder(io.LimitReader(res.Body, maxMcStatusBody)).Decode(&status) == nil && status != (apiMcStatus{}) {
-				code, cache = http.StatusOK, onlineMaxAge
-				data.Online = true
-			}
-		case res.StatusCode == http.StatusNotFound && mediaType == problemJSON:
-			code, cache = http.StatusOK, offlineMaxAge
-		case res.StatusCode == http.StatusTooManyRequests:
-			message, retryAfter = "status lookups are rate limited", rateLimitedRetry
-		case res.StatusCode == http.StatusInternalServerError:
-			message, retryAfter = "status lookup unavailable", unavailableRetry
-		default:
-			code, message, retryAfter = http.StatusBadGateway, "unexpected status response", ""
-		}
-	}
-	if code != http.StatusOK {
-		if retryAfter != "" {
-			w.Header().Set("Retry-After", retryAfter)
-		}
-		w.Header().Set("Cache-Control", noStore)
-		http.Error(w, message, code)
+	if err != nil {
+		fail(http.StatusServiceUnavailable, unavailableMessage, unavailableRetry)
 		return
 	}
+	res, err := mcStatusClient.Do(req)
+	if err != nil {
+		fail(http.StatusServiceUnavailable, unavailableMessage, unavailableRetry)
+		return
+	}
+	defer res.Body.Close()
 
-	if data.Online {
+	switch {
+	case res.StatusCode == http.StatusOK:
+		var status apiMcStatus
+		if json.NewDecoder(io.LimitReader(res.Body, maxMcStatusBody)).Decode(&status) != nil || status == (apiMcStatus{}) {
+			fail(http.StatusServiceUnavailable, unavailableMessage, unavailableRetry)
+			return
+		}
 		motd := strings.ReplaceAll(status.Motd, `\n`, "\n")
 		motd = mcColorCode.ReplaceAllString(motd, "")
 		for _, line := range strings.Split(motd, "\n") {
@@ -117,10 +107,26 @@ func McStatusEmbedHandler(w http.ResponseWriter, r *http.Request) {
 				data.Motd = append(data.Motd, line)
 			}
 		}
+		data.Online = true
 		data.Players = status.NumPlayers
 		data.Max = status.MaxPlayers
 		data.Version = status.Version
+		w.Header().Set("Cache-Control", onlineMaxAge)
+	case res.StatusCode == http.StatusNotFound:
+		if mediaType, _, _ := mime.ParseMediaType(res.Header.Get("Content-Type")); mediaType != problemJSON {
+			fail(http.StatusBadGateway, "unexpected status response", "")
+			return
+		}
+		w.Header().Set("Cache-Control", offlineMaxAge)
+	case res.StatusCode == http.StatusTooManyRequests:
+		fail(http.StatusServiceUnavailable, "status lookups are rate limited", rateLimitedRetry)
+		return
+	case res.StatusCode == http.StatusInternalServerError:
+		fail(http.StatusServiceUnavailable, unavailableMessage, unavailableRetry)
+		return
+	default:
+		fail(http.StatusBadGateway, "unexpected status response", "")
+		return
 	}
-	w.Header().Set("Cache-Control", cache)
 	templ.Handler(components.McStatusEmbedPage(data)).ServeHTTP(w, r)
 }

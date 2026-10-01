@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/config"
 )
@@ -231,6 +233,43 @@ func TestEmbedAPIUnreachable(t *testing.T) {
 	}
 	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
 		t.Errorf("Cache-Control = %q, want %q", got, "no-store")
+	}
+}
+
+func TestEmbedCancelsTheUpstreamLookupWhenTheClientGoesAway(t *testing.T) {
+	arrived := make(chan struct{})
+	released := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(arrived)
+		<-r.Context().Done()
+		close(released)
+	}))
+	t.Cleanup(server.Close)
+	apiURL := config.APIURL
+	config.APIURL = server.URL
+	t.Cleanup(func() { config.APIURL = apiURL })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	req := httptest.NewRequest(http.MethodGet, "/mcstatus/a.com", nil).WithContext(ctx)
+	req.SetPathValue("host", "a.com")
+	done := make(chan struct{})
+	go func() {
+		McStatusEmbedHandler(httptest.NewRecorder(), req)
+		close(done)
+	}()
+
+	select {
+	case <-arrived:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the lookup never reached the API")
+	}
+	cancel()
+	for _, ch := range []chan struct{}{released, done} {
+		select {
+		case <-ch:
+		case <-time.After(5 * time.Second):
+			t.Fatal("cancelling the client request did not cancel the upstream lookup")
+		}
 	}
 }
 

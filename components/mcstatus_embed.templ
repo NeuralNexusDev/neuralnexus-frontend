@@ -8,7 +8,7 @@ import (
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/config"
 )
 
-// McStatusEmbedData holds the server status rendered by the link-preview page.
+// McStatusEmbedData holds the lookup options and server status rendered by the link-preview page.
 type McStatusEmbedData struct {
 	Host      string
 	Bedrock   bool
@@ -84,7 +84,7 @@ func truncateRunes(s string, max int) string {
 	return s
 }
 
-// Description returns the og:description text.
+// Description returns the description shown in the og:description tag and on the card.
 func (d McStatusEmbedData) Description() string {
 	if !d.Online {
 		return "Server offline or unreachable"
@@ -100,9 +100,10 @@ func (d McStatusEmbedData) Description() string {
 	return strings.Join(lines, "\n")
 }
 
+// McStatusEmbedPage renders the link-preview page for data.
 templ McStatusEmbedPage(data McStatusEmbedData) {
 	{{ description := data.Description() }}
-	@WrapContentsWithHead("IP: "+data.Host, mcStatusEmbedHead(data, description), McStatusEmbed(data, description))
+	@WrapContentsWithHead("IP: "+data.Host, mcStatusEmbedHead(data, description), mcStatusEmbed(data, description))
 }
 
 templ mcStatusEmbedHead(data McStatusEmbedData, description string) {
@@ -124,7 +125,7 @@ templ mcStatusEmbedHead(data McStatusEmbedData, description string) {
 	}
 }
 
-templ McStatusEmbed(data McStatusEmbedData, description string) {
+templ mcStatusEmbed(data McStatusEmbedData, description string) {
 	<div class="mx-auto max-w-md space-y-4 text-center">
 		<h1 class="break-words text-2xl font-bold [overflow-wrap:anywhere]">
 			<a class="underline" href={ templ.SafeURL(data.InteractiveURL()) }>{ data.Host }</a>
