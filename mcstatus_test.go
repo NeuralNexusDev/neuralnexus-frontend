@@ -290,7 +290,7 @@ func TestEmbedRejectsInvalidHosts(t *testing.T) {
 	}
 }
 
-func TestNormalizeMcHost(t *testing.T) {
+func TestEmbedNormalizesHosts(t *testing.T) {
 	cases := map[string]string{
 		"Example.COM":       "example.com",
 		"example.com:25565": "example.com:25565",
@@ -300,9 +300,15 @@ func TestNormalizeMcHost(t *testing.T) {
 		"a_b.example.com":   "a_b.example.com",
 	}
 	for raw, want := range cases {
-		if got, ok := normalizeMcHost(raw); !ok || got != want {
-			t.Errorf("normalizeMcHost(%q) = %q, %v; want %q", raw, got, ok, want)
-		}
+		t.Run(raw, func(t *testing.T) {
+			f := newFakeAPI(t, http.StatusOK, onlineBody)
+			if rec := getEmbed(raw, ""); rec.Code != http.StatusOK {
+				t.Fatalf("status = %d", rec.Code)
+			}
+			if f.request == nil || f.request.URL.Path != "/api/v1/mcstatus/"+want {
+				t.Errorf("API path = %v, want /api/v1/mcstatus/%s", f.request, want)
+			}
+		})
 	}
 }
 
@@ -354,19 +360,23 @@ func TestEmbedOmitsEmptyVersion(t *testing.T) {
 	}
 }
 
-func TestMotdLines(t *testing.T) {
-	cases := map[string][]string{
-		`§aHello\n§c§lWorld`:      {"Hello", "World"},
-		`§x§f§f§0§0§0§0Red`:       {"Red"},
-		`  padded  \n\n  lines  `: {"padded", "lines"},
-		`no codes`:                {"no codes"},
-		"already\nsplit":          {"already", "split"},
+func TestEmbedMotdLines(t *testing.T) {
+	cases := []struct{ name, motd, want string }{
+		{"colour codes and a line break", `§aHello\n§c§lWorld`, "Hello\nWorld\n"},
+		{"hex colour", `§x§f§f§0§0§0§0Red`, "Red\n"},
+		{"padding and blank lines", `  padded  \n\n  lines  `, "padded\nlines\n"},
+		{"no codes", `no codes`, "no codes\n"},
+		{"a real newline", "already\nsplit", "already\nsplit\n"},
+		{"nothing but a code", `§a`, ""},
 	}
-	for in, want := range cases {
-		got := motdLines(in)
-		if strings.Join(got, "|") != strings.Join(want, "|") {
-			t.Errorf("motdLines(%q) = %q, want %q", in, got, want)
-		}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			newFakeAPI(t, http.StatusOK, fmt.Sprintf(`{"motd":%q,"num_players":1,"max_players":2,"version":"v"}`, tc.motd))
+			h := head(t, getEmbed("a.com", "").Body.String())
+			if want := tc.want + "Players: 1/2\nVersion: v"; !strings.Contains(h, `content="`+want+`"`) {
+				t.Errorf("description should be %q:\n%s", want, h)
+			}
+		})
 	}
 }
 

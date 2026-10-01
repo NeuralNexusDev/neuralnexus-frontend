@@ -34,16 +34,6 @@ var (
 	mcHostPattern  = regexp.MustCompile(`^(?P<host>[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*)(?::(?P<port>[0-9]{1,5}))?$`)
 )
 
-type lookupResult int
-
-const (
-	lookupOnline lookupResult = iota
-	lookupOffline
-	lookupUnavailable
-	lookupRateLimited
-	lookupUnexpected
-)
-
 type apiMcStatus struct {
 	Motd       string `json:"motd"`
 	NumPlayers int    `json:"num_players"`
@@ -51,123 +41,85 @@ type apiMcStatus struct {
 	Version    string `json:"version"`
 }
 
-// motdLines splits a MOTD into plain lines, decoding the API's literal backslash-n.
-func motdLines(motd string) []string {
-	motd = strings.ReplaceAll(motd, `\n`, "\n")
-	motd = mcColorCode.ReplaceAllString(motd, "")
-	var lines []string
-	for _, line := range strings.Split(motd, "\n") {
-		if line = strings.TrimSpace(line); line != "" {
-			lines = append(lines, line)
-		}
-	}
-	return lines
-}
-
-// fetchMcStatus looks up a server status, treating only a problem+json 404 as offline.
-func fetchMcStatus(r *http.Request, data components.McStatusEmbedData) (apiMcStatus, lookupResult) {
-	var status apiMcStatus
-	endpoint := config.APIURL + "/api/v1/mcstatus/" + url.PathEscape(data.Host)
-	if q := data.Options().Encode(); q != "" {
-		endpoint += "?" + q
-	}
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, endpoint, nil)
-	if err != nil {
-		return status, lookupUnavailable
-	}
-	res, err := mcStatusClient.Do(req)
-	if err != nil {
-		return status, lookupUnavailable
-	}
-	defer res.Body.Close()
-	switch res.StatusCode {
-	case http.StatusOK:
-	case http.StatusNotFound:
-		if mediaType, _, _ := mime.ParseMediaType(res.Header.Get("Content-Type")); mediaType != problemJSON {
-			return status, lookupUnexpected
-		}
-		return status, lookupOffline
-	case http.StatusInternalServerError:
-		return status, lookupUnavailable
-	case http.StatusTooManyRequests:
-		return status, lookupRateLimited
-	default:
-		return status, lookupUnexpected
-	}
-	if err := json.NewDecoder(io.LimitReader(res.Body, maxMcStatusBody)).Decode(&status); err != nil {
-		return status, lookupUnavailable
-	}
-	if status == (apiMcStatus{}) {
-		return status, lookupUnavailable
-	}
-	return status, lookupOnline
-}
-
-func parseMcPort(raw string) (int, bool) {
-	n, err := strconv.ParseUint(raw, 10, 16)
-	return int(n), err == nil && n >= 1
-}
-
-func normalizeMcHost(raw string) (string, bool) {
-	m := mcHostPattern.FindStringSubmatch(raw)
-	if m == nil || len(m[1]) > maxMcHostname {
-		return "", false
-	}
-	if port := m[2]; port != "" {
-		n, ok := parseMcPort(port)
-		if !ok {
-			return "", false
-		}
-		return strings.ToLower(m[1]) + ":" + strconv.Itoa(n), true
-	}
-	return strings.ToLower(m[1]), true
-}
-
-func writeLookupFailure(w http.ResponseWriter, code int, message, retryAfter string) {
-	if retryAfter != "" {
-		w.Header().Set("Retry-After", retryAfter)
-	}
-	w.Header().Set("Cache-Control", noStore)
-	http.Error(w, message, code)
-}
-
 // McStatusEmbedHandler serves the link-preview page for a server status.
 func McStatusEmbedHandler(w http.ResponseWriter, r *http.Request) {
-	host, ok := normalizeMcHost(r.PathValue("host"))
-	if !ok {
+	m := mcHostPattern.FindStringSubmatch(r.PathValue("host"))
+	if m == nil || len(m[1]) > maxMcHostname {
 		w.Header().Set("Cache-Control", noStore)
 		http.Error(w, "invalid server address", http.StatusBadRequest)
 		return
 	}
+	host := strings.ToLower(m[1])
+	if m[2] != "" {
+		port, err := strconv.ParseUint(m[2], 10, 16)
+		if err != nil || port < 1 {
+			w.Header().Set("Cache-Control", noStore)
+			http.Error(w, "invalid server address", http.StatusBadRequest)
+			return
+		}
+		host += ":" + strconv.FormatUint(port, 10)
+	}
+
 	query := r.URL.Query()
 	data := components.McStatusEmbedData{
 		Host:    host,
 		Bedrock: query.Get("bedrock") == "true",
 		Query:   query.Get("query") != "false",
 	}
-	if n, ok := parseMcPort(query.Get("query_port")); ok {
-		data.QueryPort = n
+	if port, err := strconv.ParseUint(query.Get("query_port"), 10, 16); err == nil && port >= 1 {
+		data.QueryPort = int(port)
 	}
-	status, result := fetchMcStatus(r, data)
-	switch result {
-	case lookupUnavailable:
-		writeLookupFailure(w, http.StatusServiceUnavailable, "status lookup unavailable", unavailableRetry)
+
+	endpoint := config.APIURL + "/api/v1/mcstatus/" + url.PathEscape(host)
+	if q := data.Options().Encode(); q != "" {
+		endpoint += "?" + q
+	}
+	var status apiMcStatus
+	var cache string
+	code, message, retryAfter := http.StatusServiceUnavailable, "status lookup unavailable", unavailableRetry
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, endpoint, nil)
+	var res *http.Response
+	if err == nil {
+		res, err = mcStatusClient.Do(req)
+	}
+	if err == nil {
+		defer res.Body.Close()
+		mediaType, _, _ := mime.ParseMediaType(res.Header.Get("Content-Type"))
+		switch {
+		case res.StatusCode == http.StatusOK:
+			if json.NewDecoder(io.LimitReader(res.Body, maxMcStatusBody)).Decode(&status) == nil && status != (apiMcStatus{}) {
+				code, cache = http.StatusOK, onlineMaxAge
+				data.Online = true
+			}
+		case res.StatusCode == http.StatusNotFound && mediaType == problemJSON:
+			code, cache = http.StatusOK, offlineMaxAge
+		case res.StatusCode == http.StatusTooManyRequests:
+			message, retryAfter = "status lookups are rate limited", rateLimitedRetry
+		case res.StatusCode == http.StatusInternalServerError:
+			message, retryAfter = "status lookup unavailable", unavailableRetry
+		default:
+			code, message, retryAfter = http.StatusBadGateway, "unexpected status response", ""
+		}
+	}
+	if code != http.StatusOK {
+		if retryAfter != "" {
+			w.Header().Set("Retry-After", retryAfter)
+		}
+		w.Header().Set("Cache-Control", noStore)
+		http.Error(w, message, code)
 		return
-	case lookupRateLimited:
-		writeLookupFailure(w, http.StatusServiceUnavailable, "status lookups are rate limited", rateLimitedRetry)
-		return
-	case lookupUnexpected:
-		writeLookupFailure(w, http.StatusBadGateway, "unexpected status response", "")
-		return
-	case lookupOnline:
-		data.Online = true
-		data.Motd = motdLines(status.Motd)
+	}
+
+	if data.Online {
+		for _, line := range strings.Split(mcColorCode.ReplaceAllString(strings.ReplaceAll(status.Motd, `\n`, "\n"), ""), "\n") {
+			if line = strings.TrimSpace(line); line != "" {
+				data.Motd = append(data.Motd, line)
+			}
+		}
 		data.Players = status.NumPlayers
 		data.Max = status.MaxPlayers
 		data.Version = status.Version
-		w.Header().Set("Cache-Control", onlineMaxAge)
-	default:
-		w.Header().Set("Cache-Control", offlineMaxAge)
 	}
+	w.Header().Set("Cache-Control", cache)
 	templ.Handler(components.McStatusEmbedPage(data)).ServeHTTP(w, r)
 }
