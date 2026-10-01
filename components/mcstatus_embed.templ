@@ -114,7 +114,7 @@ templ mcStatusEmbedHead(data McStatusEmbedData, description string) {
 templ McStatusEmbed(data McStatusEmbedData, description string) {
 	<div class="mx-auto max-w-md space-y-4 text-center">
 		<h1 class="break-words text-2xl font-bold [overflow-wrap:anywhere]">
-			<a class="hover:underline" href={ templ.SafeURL(data.InteractiveURL()) }>{ data.Host }</a>
+			<a class="underline" href={ templ.SafeURL(data.InteractiveURL()) }>{ data.Host }</a>
 		</h1>
 		<p class="whitespace-pre-line break-words text-sm [overflow-wrap:anywhere]">{ description }</p>
 	</div>

@@ -100,14 +100,19 @@ func fetchMcStatus(r *http.Request, data components.McStatusEmbedData) (apiMcSta
 	return status, lookupOnline
 }
 
+func parseMcPort(raw string) (int, bool) {
+	n, err := strconv.Atoi(raw)
+	return n, err == nil && n >= 1 && n <= maxMcPort
+}
+
 func normalizeMcHost(raw string) (string, bool) {
 	m := mcHostPattern.FindStringSubmatch(raw)
 	if m == nil || len(m[1]) > maxMcHostname {
 		return "", false
 	}
 	if port := m[2]; port != "" {
-		n, err := strconv.Atoi(port)
-		if err != nil || n < 1 || n > maxMcPort {
+		n, ok := parseMcPort(port)
+		if !ok {
 			return "", false
 		}
 		return strings.ToLower(m[1]) + ":" + strconv.Itoa(n), true
@@ -136,7 +141,7 @@ func McStatusEmbedHandler(w http.ResponseWriter, r *http.Request) {
 		Bedrock: query.Get("bedrock") == "true",
 		Query:   query.Get("query") != "false",
 	}
-	if n, err := strconv.Atoi(query.Get("query_port")); err == nil && n >= 1 && n <= maxMcPort {
+	if n, ok := parseMcPort(query.Get("query_port")); ok {
 		data.QueryPort = n
 	}
 	status, result := fetchMcStatus(r, data)

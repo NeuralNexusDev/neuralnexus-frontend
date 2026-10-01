@@ -767,7 +767,10 @@ function loadMcStatusFromUrl() {
     const edition = params.get('bedrock') === 'true' ? 'bedrock' : 'java';
     document.querySelector(`input[name="mc-edition"][value="${edition}"]`).checked = true;
     mcQueryPreference = params.get('query') !== 'false';
-    document.getElementById('mc-status-query-port').value = params.get('query_port') || '';
+    const queryPort = Number(params.get('query_port'));
+    const validPort = Number.isInteger(queryPort) && queryPort >= 1 && queryPort <= 65535;
+    document.getElementById('mc-status-query-port').value = validPort ? queryPort : '';
+    document.getElementById('mc-status-advanced').open = validPort;
     syncMcStatusQueryOption();
     checkMcStatus();
 }

@@ -338,7 +338,7 @@ templ McStatus() {
 					Bedrock
 				</label>
 			</div>
-			<details class="text-sm">
+			<details id="mc-status-advanced" class="text-sm">
 				<summary class="cursor-pointer text-gray-500 dark:text-gray-400">Advanced</summary>
 				<label class="mt-2 flex items-center gap-2">
 					<input id="mc-status-query" type="checkbox" onchange="mcQueryPreference = this.checked; syncMcStatusQueryOption()" checked/>
@@ -352,8 +352,7 @@ templ McStatus() {
 						type="number"
 						min="1"
 						max="65535"
-						step="1"
-						inputmode="numeric"
+						oninvalid="this.closest('details').open = true"
 						placeholder="Same as server"
 					/>
 				</label>
