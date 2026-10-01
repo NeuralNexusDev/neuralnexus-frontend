@@ -716,6 +716,8 @@ function checkMcStatus(event) {
                 }
                 if (res.status === 404) {
                     showMcStatusError("Couldn't reach that server", detail);
+                } else if (res.status === 429) {
+                    showMcStatusError('Too many lookups', 'Please try again in a minute.');
                 } else if (res.status === 500) {
                     showMcStatusError('Something went wrong', detail);
                 } else {

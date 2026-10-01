@@ -21,6 +21,7 @@ const (
 	onlineMaxAge     = "public, max-age=60"
 	offlineMaxAge    = "public, max-age=30"
 	unavailableRetry = "30"
+	rateLimitedRetry = "60"
 	maxMcHostname    = 253
 	maxMcPort        = 65535
 )
@@ -38,6 +39,7 @@ const (
 	lookupOnline lookupResult = iota
 	lookupOffline
 	lookupUnavailable
+	lookupRateLimited
 	lookupUnexpected
 )
 
@@ -61,8 +63,9 @@ func motdLines(motd string) []string {
 	return lines
 }
 
-// 404 means the server gave no status and 500 is an API error, which must
-// not be cached as "offline". Any other status is outside the API's contract.
+// 404 means the server gave no status; 429 and 500 must not be cached as
+// "offline". The status route returns nothing else, and this client sends no
+// Authorization header, so any other status is unexpected.
 func fetchMcStatus(r *http.Request, data components.McStatusEmbedData) (apiMcStatus, lookupResult) {
 	var status apiMcStatus
 	endpoint := config.APIURL + "/api/v1/mcstatus/" + url.PathEscape(data.Host)
@@ -84,6 +87,8 @@ func fetchMcStatus(r *http.Request, data components.McStatusEmbedData) (apiMcSta
 		return status, lookupOffline
 	case http.StatusInternalServerError:
 		return status, lookupUnavailable
+	case http.StatusTooManyRequests:
+		return status, lookupRateLimited
 	default:
 		return status, lookupUnexpected
 	}
@@ -99,12 +104,21 @@ func normalizeMcHost(raw string) (string, bool) {
 		return "", false
 	}
 	if port := m[2]; port != "" {
-		if n, err := strconv.Atoi(port); err != nil || n < 1 || n > maxMcPort {
+		n, err := strconv.Atoi(port)
+		if err != nil || n < 1 || n > maxMcPort {
 			return "", false
 		}
-		return strings.ToLower(m[1]) + ":" + port, true
+		return strings.ToLower(m[1]) + ":" + strconv.Itoa(n), true
 	}
 	return strings.ToLower(m[1]), true
+}
+
+func writeLookupFailure(w http.ResponseWriter, code int, message, retryAfter string) {
+	if retryAfter != "" {
+		w.Header().Set("Retry-After", retryAfter)
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	http.Error(w, message, code)
 }
 
 func McStatusEmbedHandler(w http.ResponseWriter, r *http.Request) {
@@ -123,13 +137,13 @@ func McStatusEmbedHandler(w http.ResponseWriter, r *http.Request) {
 	status, result := fetchMcStatus(r, data)
 	switch result {
 	case lookupUnavailable:
-		w.Header().Set("Retry-After", unavailableRetry)
-		w.Header().Set("Cache-Control", "no-store")
-		http.Error(w, "status lookup unavailable", http.StatusServiceUnavailable)
+		writeLookupFailure(w, http.StatusServiceUnavailable, "status lookup unavailable", unavailableRetry)
+		return
+	case lookupRateLimited:
+		writeLookupFailure(w, http.StatusServiceUnavailable, "status lookups are rate limited", rateLimitedRetry)
 		return
 	case lookupUnexpected:
-		w.Header().Set("Cache-Control", "no-store")
-		http.Error(w, "unexpected status response", http.StatusBadGateway)
+		writeLookupFailure(w, http.StatusBadGateway, "unexpected status response", "")
 		return
 	case lookupOnline:
 		data.Online = true
