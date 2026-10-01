@@ -656,7 +656,8 @@ function parseMcPort(value) {
 
 function mcStatusQueryPort() {
     const input = document.getElementById('mc-status-query-port');
-    return input.disabled ? null : parseMcPort(input.value);
+    const port = input.valueAsNumber;
+    return !input.disabled && Number.isInteger(port) && port >= 1 && port <= 65535 ? port : null;
 }
 
 function abortMcStatus() {
