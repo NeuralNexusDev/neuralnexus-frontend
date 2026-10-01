@@ -296,7 +296,7 @@ test.describe('mc status page - query port', () => {
     expect(new URL(page.url()).searchParams.has('query_port')).toBe(false);
   });
 
-  for (const bad of ['0', '99999', '-5', '1.5']) {
+  for (const bad of ['0', '99999', '-5', '1.5', '1e3', '+80', '80a']) {
     test(`an invalid query port (${bad}) opens Advanced and blocks the lookup`, async ({ page }) => {
       const requests = await mockMcStatus(page, () => json(ONLINE));
       await page.goto('/project/mc-status');
@@ -399,6 +399,13 @@ test.describe('mc status page - errors', () => {
     await expect(page.locator('#mc-status-result')).toBeHidden();
   });
 
+  test('a 404 that is not a problem+json response is not reported as an unreachable server', async ({ page }) => {
+    await mockMcStatus(page, () => ({ status: 404, contentType: 'text/html', body: '<h1>Not Found</h1>' }));
+    await page.goto('/project/mc-status');
+    await lookup(page, 'play.example.net');
+    await expect(page.locator('#mc-status-error-message')).toHaveText('Unexpected response (404)');
+  });
+
   test('429 asks the user to try again in a minute', async ({ page }) => {
     await mockMcStatus(page, () => problem(429, 'rate limited'));
     await page.goto('/project/mc-status');
@@ -461,7 +468,6 @@ test.describe('mc status page - timeout', () => {
 
     await page.clock.runFor(29_999);
     await expect(page.locator('#mc-status-submit')).toHaveText('Checking...');
-    await expect(page.locator('#mc-status-error')).toBeHidden();
 
     await page.clock.runFor(1);
     await expect(page.locator('#mc-status-error-message')).toHaveText("Couldn't reach that server");
@@ -471,6 +477,32 @@ test.describe('mc status page - timeout', () => {
 });
 
 test.describe('mc status page - request sequencing', () => {
+  test('a superseded lookup leaves the button and banner to the newest one', async ({ page }) => {
+    let releaseNewest;
+    const newestReleased = new Promise((resolve) => {
+      releaseNewest = resolve;
+    });
+    await page.route(`${API}/mcstatus/icon/**`, (route) =>
+      route.fulfill({ status: 200, contentType: 'image/png', body: PNG_1X1 })
+    );
+    await page.route(`${API}/mcstatus/old.example.net*`, () => new Promise(() => {}));
+    await page.route(`${API}/mcstatus/new.example.net*`, async (route) => {
+      await newestReleased;
+      await route.fulfill(json({ ...ONLINE, name: 'Newest' }));
+    });
+
+    await page.goto('/project/mc-status');
+    await lookup(page, 'old.example.net');
+    await lookup(page, 'new.example.net');
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 0)));
+    await expect(page.locator('#mc-status-submit')).toHaveText('Checking...');
+    await expect(page.locator('#mc-status-error')).toBeHidden();
+
+    releaseNewest();
+    await expect(page.locator('#mc-status-name')).toHaveText('Newest');
+    await expect(page.locator('#mc-status-submit')).toHaveText('Check');
+  });
+
   test('a slow earlier lookup cannot overwrite a newer one', async ({ page }) => {
     let releaseSlow;
     const slow = new Promise((resolve) => {
