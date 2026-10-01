@@ -296,7 +296,7 @@ test.describe('mc status page - query port', () => {
     expect(new URL(page.url()).searchParams.has('query_port')).toBe(false);
   });
 
-  for (const bad of ['0', '99999', '-5', '1.5', '1e3', '+80', '80a']) {
+  for (const bad of ['0', '99999', '65536', '-5', '1.5', '1e3', '+80', '80a', ' 80', '80 ']) {
     test(`an invalid query port (${bad}) opens Advanced and blocks the lookup`, async ({ page }) => {
       const requests = await mockMcStatus(page, () => json(ONLINE));
       await page.goto('/project/mc-status');
@@ -399,12 +399,23 @@ test.describe('mc status page - errors', () => {
     await expect(page.locator('#mc-status-result')).toBeHidden();
   });
 
-  test('a 404 that is not a problem+json response is not reported as an unreachable server', async ({ page }) => {
-    await mockMcStatus(page, () => ({ status: 404, contentType: 'text/html', body: '<h1>Not Found</h1>' }));
-    await page.goto('/project/mc-status');
-    await lookup(page, 'play.example.net');
-    await expect(page.locator('#mc-status-error-message')).toHaveText('Unexpected response (404)');
-  });
+  for (const contentType of ['text/html', 'application/json', 'application/problem+xml', 'text/x; a=application/problem+json']) {
+    test(`a 404 served as ${contentType} is not reported as an unreachable server`, async ({ page }) => {
+      await mockMcStatus(page, () => ({ status: 404, contentType, body: '<h1>Not Found</h1>' }));
+      await page.goto('/project/mc-status');
+      await lookup(page, 'play.example.net');
+      await expect(page.locator('#mc-status-error-message')).toHaveText('Unexpected response (404)');
+    });
+  }
+
+  for (const contentType of ['application/problem+json; charset=utf-8', 'Application/Problem+JSON']) {
+    test(`a 404 served as ${contentType} is reported as an unreachable server`, async ({ page }) => {
+      await mockMcStatus(page, () => ({ status: 404, contentType, body: JSON.stringify({ detail: 'down' }) }));
+      await page.goto('/project/mc-status');
+      await lookup(page, 'play.example.net');
+      await expect(page.locator('#mc-status-error-message')).toHaveText("Couldn't reach that server");
+    });
+  }
 
   test('429 asks the user to try again in a minute', async ({ page }) => {
     await mockMcStatus(page, () => problem(429, 'rate limited'));
@@ -477,6 +488,39 @@ test.describe('mc status page - timeout', () => {
 });
 
 test.describe('mc status page - request sequencing', () => {
+  test('a superseded lookup whose error body arrives late does not show its error', async ({ page }) => {
+    await page.addInitScript(() => {
+      const realFetch = window.fetch.bind(window);
+      window.fetch = (input, init) => {
+        if (!String(input).includes('/mcstatus/slow404')) {
+          return realFetch(input, init);
+        }
+        const body = new ReadableStream({
+          start(controller) {
+            window.__finishSlow404 = () => {
+              controller.enqueue(new TextEncoder().encode('{"detail":"down"}'));
+              controller.close();
+            };
+          },
+        });
+        return Promise.resolve(
+          new Response(body, { status: 404, headers: { 'content-type': 'application/problem+json' } })
+        );
+      };
+    });
+    await page.route(`${API}/mcstatus/hang.example.net*`, () => new Promise(() => {}));
+
+    await page.goto('/project/mc-status');
+    await lookup(page, 'slow404');
+    await expect.poll(() => page.evaluate(() => typeof window.__finishSlow404)).toBe('function');
+    await lookup(page, 'hang.example.net');
+
+    await page.evaluate(() => window.__finishSlow404());
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 0)));
+    await expect(page.locator('#mc-status-submit')).toHaveText('Checking...');
+    await expect(page.locator('#mc-status-error')).toBeHidden();
+  });
+
   test('a superseded lookup leaves the button and banner to the newest one', async ({ page }) => {
     let releaseNewest;
     const newestReleased = new Promise((resolve) => {

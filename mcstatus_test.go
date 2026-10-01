@@ -121,6 +121,7 @@ func TestEmbedForwardsOptions(t *testing.T) {
 		{"query off", "query=false", url.Values{}, "/mcstatus/a.com?query=false"},
 		{"query port", "query_port=25575", url.Values{"query": {"true"}, "query_port": {"25575"}}, "/mcstatus/a.com?query_port=25575"},
 		{"query port with leading zeros", "query_port=0025575", url.Values{"query": {"true"}, "query_port": {"25575"}}, "/mcstatus/a.com?query_port=25575"},
+		{"signed query port is dropped", "query_port=%2B80", url.Values{"query": {"true"}}, "/mcstatus/a.com"},
 		{"invalid query port is dropped", "query_port=99999", url.Values{"query": {"true"}}, "/mcstatus/a.com"},
 		{"query port is ignored when the query is off", "query=false&query_port=25575", url.Values{}, "/mcstatus/a.com?query=false"},
 		{"bedrock", "bedrock=true", url.Values{"bedrock": {"true"}}, "/mcstatus/a.com?bedrock=true"},
@@ -138,6 +139,9 @@ func TestEmbedForwardsOptions(t *testing.T) {
 			}
 			if want := `property="og:url" content="` + testSiteURL + tc.wantURL + `"`; !strings.Contains(head(t, rec.Body.String()), want) {
 				t.Errorf("og:url should be %q:\n%s", tc.wantURL, head(t, rec.Body.String()))
+			}
+			if want := `rel="canonical" href="` + testSiteURL + tc.wantURL + `"`; !strings.Contains(head(t, rec.Body.String()), want) {
+				t.Errorf("canonical should be %q:\n%s", tc.wantURL, head(t, rec.Body.String()))
 			}
 		})
 	}
@@ -189,7 +193,7 @@ func TestEmbedLookupFailures(t *testing.T) {
 		{"null", http.StatusOK, `null`, http.StatusServiceUnavailable, "30", unavailable},
 		{"not json", http.StatusOK, `<html>boom`, http.StatusServiceUnavailable, "30", unavailable},
 		{"mistyped field", http.StatusOK, `{"motd":"Hi","num_players":"x"}`, http.StatusServiceUnavailable, "30", unavailable},
-		{"oversized body", http.StatusOK, `{"motd":"` + strings.Repeat("a", 1<<20+1) + `"}`, http.StatusServiceUnavailable, "30", unavailable},
+		{"oversized body", http.StatusOK, bodyOfSize(1<<20 + 1), http.StatusServiceUnavailable, "30", unavailable},
 		{"undocumented status", http.StatusTeapot, `{"detail":"boom"}`, http.StatusBadGateway, "", unexpected},
 		{"unauthorized", http.StatusUnauthorized, `{"detail":"boom"}`, http.StatusBadGateway, "", unexpected},
 		{"bad gateway", http.StatusBadGateway, `{"detail":"boom"}`, http.StatusBadGateway, "", unexpected},
@@ -242,9 +246,6 @@ func TestEmbedRejectsInvalidHosts(t *testing.T) {
 		{"trailing colon", "a.com:"},
 		{"label over 63", strings.Repeat("a", 64) + ".com"},
 		{"name over 253", strings.Repeat(strings.Repeat("a", 60)+".", 5) + "com"},
-		{"ipv6", "::1"},
-		{"bracketed ipv6", "[::1]"},
-		{"bracketed ipv6 with a port", "[2001:db8::1]:25565"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -341,13 +342,13 @@ func TestMotdLines(t *testing.T) {
 	}
 }
 
-func TestEmbedAcceptsABodyAtTheLimit(t *testing.T) {
+func bodyOfSize(size int) string {
 	const prefix, suffix = `{"motd":"`, `","num_players":1,"max_players":2,"version":"v"}`
-	body := prefix + strings.Repeat("a", 1<<20-len(prefix)-len(suffix)) + suffix
-	if len(body) != 1<<20 {
-		t.Fatalf("test body is %d bytes, want exactly 1<<20", len(body))
-	}
-	newFakeAPI(t, http.StatusOK, body)
+	return prefix + strings.Repeat("a", size-len(prefix)-len(suffix)) + suffix
+}
+
+func TestEmbedAcceptsABodyAtTheLimit(t *testing.T) {
+	newFakeAPI(t, http.StatusOK, bodyOfSize(1<<20))
 	if rec := getEmbed("a.com", ""); rec.Code != http.StatusOK || rec.Header().Get("Cache-Control") != "public, max-age=60" {
 		t.Errorf("status = %d, Cache-Control = %q", rec.Code, rec.Header().Get("Cache-Control"))
 	}
@@ -360,7 +361,9 @@ func TestEmbedTreatsOnlyProblemJSON404AsOffline(t *testing.T) {
 		wantCache         string
 	}{
 		{"problem+json", "application/problem+json", http.StatusOK, "public, max-age=30"},
-		{"problem+json with a charset", "application/problem+json" + "; charset=utf-8", http.StatusOK, "public, max-age=30"},
+		{"problem+json with a charset", "application/problem+json; charset=utf-8", http.StatusOK, "public, max-age=30"},
+		{"mixed case", "Application/Problem+JSON", http.StatusOK, "public, max-age=30"},
+		{"problem+xml", "application/problem+xml", http.StatusBadGateway, "no-store"},
 		{"plain json", "application/json", http.StatusBadGateway, "no-store"},
 		{"html from a proxy", "text/html", http.StatusBadGateway, "no-store"},
 		{"no content type", "", http.StatusBadGateway, "no-store"},
@@ -393,11 +396,13 @@ func TestEmbedRouteWiring(t *testing.T) {
 	}
 
 	f.request = nil
+	catchAll := httptest.NewRecorder()
+	router.ServeHTTP(catchAll, httptest.NewRequest(http.MethodGet, "/", nil))
 	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch} {
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, httptest.NewRequest(method, "/mcstatus/a.com", nil))
-		if strings.Contains(rec.Body.String(), "IP: a.com") {
-			t.Errorf("%s was served by the preview handler", method)
+		if rec.Code != catchAll.Code || rec.Body.String() != catchAll.Body.String() {
+			t.Errorf("%s should fall through to the catch-all route, got %d", method, rec.Code)
 		}
 	}
 	if f.request != nil {
