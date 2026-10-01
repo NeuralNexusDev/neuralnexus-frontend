@@ -25,14 +25,13 @@ const (
 	unavailableRetry = "30"
 	rateLimitedRetry = "60"
 	maxMcHostname    = 253
-	maxMcPort        = 65535
 	problemJSON      = "application/problem+json"
 )
 
 var (
 	mcStatusClient = &http.Client{Timeout: mcStatusTimeout}
 	mcColorCode    = regexp.MustCompile(`(?s)§.`)
-	mcHostPattern  = regexp.MustCompile(`^(?P<host>(?:[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*))(?::(?P<port>[0-9]{1,5}))?$`)
+	mcHostPattern  = regexp.MustCompile(`^(?P<host>[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*)(?::(?P<port>[0-9]{1,5}))?$`)
 )
 
 type lookupResult int
@@ -108,8 +107,8 @@ func fetchMcStatus(r *http.Request, data components.McStatusEmbedData) (apiMcSta
 }
 
 func parseMcPort(raw string) (int, bool) {
-	n, err := strconv.Atoi(raw)
-	return n, err == nil && n >= 1 && n <= maxMcPort
+	n, err := strconv.ParseUint(raw, 10, 16)
+	return int(n), err == nil && n >= 1
 }
 
 func normalizeMcHost(raw string) (string, bool) {
