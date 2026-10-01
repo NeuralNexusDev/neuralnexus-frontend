@@ -44,20 +44,19 @@ type apiMcStatus struct {
 // McStatusEmbedHandler serves the link-preview page for a server status.
 func McStatusEmbedHandler(w http.ResponseWriter, r *http.Request) {
 	m := mcHostPattern.FindStringSubmatch(r.PathValue("host"))
-	if m == nil || len(m[1]) > maxMcHostname {
+	var hostPort uint64
+	var portErr error
+	if m != nil && m[2] != "" {
+		hostPort, portErr = strconv.ParseUint(m[2], 10, 16)
+	}
+	if m == nil || len(m[1]) > maxMcHostname || (m[2] != "" && (portErr != nil || hostPort < 1)) {
 		w.Header().Set("Cache-Control", noStore)
 		http.Error(w, "invalid server address", http.StatusBadRequest)
 		return
 	}
 	host := strings.ToLower(m[1])
 	if m[2] != "" {
-		port, err := strconv.ParseUint(m[2], 10, 16)
-		if err != nil || port < 1 {
-			w.Header().Set("Cache-Control", noStore)
-			http.Error(w, "invalid server address", http.StatusBadRequest)
-			return
-		}
-		host += ":" + strconv.FormatUint(port, 10)
+		host += ":" + strconv.FormatUint(hostPort, 10)
 	}
 
 	query := r.URL.Query()
@@ -111,7 +110,9 @@ func McStatusEmbedHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if data.Online {
-		for _, line := range strings.Split(mcColorCode.ReplaceAllString(strings.ReplaceAll(status.Motd, `\n`, "\n"), ""), "\n") {
+		motd := strings.ReplaceAll(status.Motd, `\n`, "\n")
+		motd = mcColorCode.ReplaceAllString(motd, "")
+		for _, line := range strings.Split(motd, "\n") {
 			if line = strings.TrimSpace(line); line != "" {
 				data.Motd = append(data.Motd, line)
 			}
