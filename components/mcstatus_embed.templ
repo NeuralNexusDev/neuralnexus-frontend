@@ -12,11 +12,13 @@ type McStatusEmbedData struct {
 	Host    string
 	Bedrock bool
 	Query   bool
-	Online  bool
-	Motd    []string
-	Players int
-	Max     int
-	Version string
+	// QueryPort is 0 when unset.
+	QueryPort int
+	Online    bool
+	Motd      []string
+	Players   int
+	Max       int
+	Version   string
 }
 
 func (d McStatusEmbedData) Options() url.Values {
@@ -25,6 +27,9 @@ func (d McStatusEmbedData) Options() url.Values {
 		v.Set("bedrock", "true")
 	} else if d.Query {
 		v.Set("query", "true")
+		if d.QueryPort != 0 {
+			v.Set("query_port", strconv.Itoa(d.QueryPort))
+		}
 	}
 	return v
 }
@@ -35,6 +40,8 @@ func (d McStatusEmbedData) ShareOptions() url.Values {
 		v.Set("bedrock", "true")
 	} else if !d.Query {
 		v.Set("query", "false")
+	} else if d.QueryPort != 0 {
+		v.Set("query_port", strconv.Itoa(d.QueryPort))
 	}
 	return v
 }
@@ -106,8 +113,9 @@ templ mcStatusEmbedHead(data McStatusEmbedData, description string) {
 
 templ McStatusEmbed(data McStatusEmbedData, description string) {
 	<div class="mx-auto max-w-md space-y-4 text-center">
-		<h1 class="break-words text-2xl font-bold [overflow-wrap:anywhere]">{ data.Host }</h1>
+		<h1 class="break-words text-2xl font-bold [overflow-wrap:anywhere]">
+			<a class="hover:underline" href={ templ.SafeURL(data.InteractiveURL()) }>{ data.Host }</a>
+		</h1>
 		<p class="whitespace-pre-line break-words text-sm [overflow-wrap:anywhere]">{ description }</p>
-		<a class="text-sm underline" href={ templ.SafeURL(data.InteractiveURL()) }>Open in MC Status</a>
 	</div>
 }

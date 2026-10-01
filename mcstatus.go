@@ -136,6 +136,9 @@ func McStatusEmbedHandler(w http.ResponseWriter, r *http.Request) {
 		Bedrock: query.Get("bedrock") == "true",
 		Query:   query.Get("query") != "false",
 	}
+	if n, err := strconv.Atoi(query.Get("query_port")); err == nil && n >= 1 && n <= maxMcPort {
+		data.QueryPort = n
+	}
 	status, result := fetchMcStatus(r, data)
 	switch result {
 	case lookupUnavailable:

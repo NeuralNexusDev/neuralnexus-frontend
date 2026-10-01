@@ -646,6 +646,13 @@ function syncMcStatusQueryOption() {
     const query = document.getElementById('mc-status-query');
     query.disabled = bedrock;
     query.checked = !bedrock && mcQueryPreference;
+    document.getElementById('mc-status-query-port').disabled = !query.checked;
+}
+
+function mcStatusQueryPort() {
+    const input = document.getElementById('mc-status-query-port');
+    const port = Number(input.value);
+    return !input.disabled && Number.isInteger(port) && port >= 1 && port <= 65535 ? port : null;
 }
 
 function abortMcStatus() {
@@ -668,6 +675,7 @@ function checkMcStatus(event) {
     }
     const bedrock = document.querySelector('input[name="mc-edition"]:checked').value === 'bedrock';
     const query = !bedrock && document.getElementById('mc-status-query').checked;
+    const queryPort = query ? mcStatusQueryPort() : null;
 
     const params = new URLSearchParams();
     if (bedrock) {
@@ -675,12 +683,17 @@ function checkMcStatus(event) {
     }
     if (query) {
         params.set('query', 'true');
+        if (queryPort) {
+            params.set('query_port', queryPort);
+        }
     }
     const urlParams = new URLSearchParams({ host });
     if (bedrock) {
         urlParams.set('bedrock', 'true');
     } else if (!query) {
         urlParams.set('query', 'false');
+    } else if (queryPort) {
+        urlParams.set('query_port', queryPort);
     }
     history.replaceState(null, '', `${window.location.pathname}?${urlParams}`);
 
@@ -754,6 +767,7 @@ function loadMcStatusFromUrl() {
     const edition = params.get('bedrock') === 'true' ? 'bedrock' : 'java';
     document.querySelector(`input[name="mc-edition"][value="${edition}"]`).checked = true;
     mcQueryPreference = params.get('query') !== 'false';
+    document.getElementById('mc-status-query-port').value = params.get('query_port') || '';
     syncMcStatusQueryOption();
     checkMcStatus();
 }

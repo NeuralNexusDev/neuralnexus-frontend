@@ -341,8 +341,21 @@ templ McStatus() {
 			<details class="text-sm">
 				<summary class="cursor-pointer text-gray-500 dark:text-gray-400">Advanced</summary>
 				<label class="mt-2 flex items-center gap-2">
-					<input id="mc-status-query" type="checkbox" onchange="mcQueryPreference = this.checked" checked/>
+					<input id="mc-status-query" type="checkbox" onchange="mcQueryPreference = this.checked; syncMcStatusQueryOption()" checked/>
 					Use the query protocol (Java only, if the server has it enabled)
+				</label>
+				<label class="mt-2 flex items-center gap-2">
+					Query port
+					<input
+						id="mc-status-query-port"
+						class="h-9 w-32 rounded-md border border-input bg-transparent px-2 disabled:opacity-50"
+						type="number"
+						min="1"
+						max="65535"
+						step="1"
+						inputmode="numeric"
+						placeholder="Same as server"
+					/>
 				</label>
 			</details>
 			<button
