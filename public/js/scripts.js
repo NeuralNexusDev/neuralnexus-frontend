@@ -580,7 +580,7 @@ function formatMcMotd(motd) {
 }
 
 /** Server-supplied text goes in via textContent only. */
-function renderMcStatus(status, bedrock) {
+function renderMcStatus(status, bedrock, host) {
     const maxPlayers = status.max_players ?? 0;
     const numPlayers = status.num_players ?? 0;
     const players = status.players || [];
@@ -599,8 +599,16 @@ function renderMcStatus(status, bedrock) {
 
     const icon = document.getElementById('mc-status-icon');
     const favicon = status.favicon || '';
-    icon.hidden = !favicon.startsWith('data:image/png;base64,');
-    icon.src = icon.hidden ? '' : favicon;
+    const iconUrl = favicon.startsWith('data:image/png;base64,')
+        ? favicon
+        : (bedrock ? '' : `${apiBaseUrl()}/api/v1/mcstatus/icon/${encodeURIComponent(host)}`);
+    icon.hidden = true;
+    icon.onload = () => { icon.hidden = false; };
+    icon.onerror = () => { icon.hidden = true; };
+    icon.removeAttribute('src');
+    if (iconUrl) {
+        icon.src = iconUrl;
+    }
 
     const pill = document.getElementById('mc-status-pill');
     pill.textContent = 'Online';
@@ -694,7 +702,7 @@ function checkMcStatus(event) {
             if (res.ok) {
                 return res.json().then((status) => {
                     if (controller === mcStatusController) {
-                        renderMcStatus(status, bedrock);
+                        renderMcStatus(status, bedrock, host);
                     }
                 });
             }
