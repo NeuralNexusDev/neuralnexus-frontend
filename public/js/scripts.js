@@ -32,7 +32,13 @@ function steamOpenIdLoginUrl() {
     return document.getElementById('steam-openid-login-url').innerText;
 }
 
-/** Browsers reject a Domain that's a bare TLD or an IP, so those get a host-only cookie. */
+const COMMON_SECOND_LEVEL_LABELS = ['ac', 'co', 'com', 'edu', 'gov', 'net', 'org'];
+
+/**
+ * Without a public suffix list, a two-label shared suffix like "co.uk" is
+ * indistinguishable from a real domain by shape, so common second-level
+ * labels are treated as suffixes and fall back to a host-only cookie.
+ */
 function sharedCookieDomain(siteHost, apiHost) {
     const isIp = (host) => /^[\d.]+$/.test(host) || host.includes(':');
     if (siteHost === apiHost || isIp(siteHost) || isIp(apiHost)) {
@@ -44,7 +50,14 @@ function sharedCookieDomain(siteHost, apiHost) {
     while (shared.length < siteLabels.length && siteLabels[shared.length] === apiLabels[shared.length]) {
         shared.push(siteLabels[shared.length]);
     }
-    return shared.length >= 2 ? `.${shared.reverse().join('.')}` : '';
+    if (shared.length < 2) {
+        return '';
+    }
+    const [tld, secondLevel] = shared;
+    if (shared.length === 2 && tld.length === 2 && COMMON_SECOND_LEVEL_LABELS.includes(secondLevel)) {
+        return '';
+    }
+    return `.${shared.reverse().join('.')}`;
 }
 
 /** SameSite=None requires Secure, so plain http (local dev) falls back to Lax. */
@@ -439,8 +452,19 @@ function setPlatformLoginEnabled(platform, enabled) {
         });
 }
 
+/** "." and ".." are collapsed out of URL paths by fetch, so they can't be sent as a path segment. */
+function isDotSegment(name) {
+    return name === '.' || name === '..';
+}
+
+function problemDetail(res, fallback) {
+    return res.json().catch(() => ({})).then((problem) => problem.detail || fallback);
+}
+
 function loadBeeSuggestions() {
     const error = document.getElementById('bee-admin-error');
+    const list = document.getElementById('bee-suggestions');
+    error.hidden = true;
     fetch(`${apiBaseUrl()}/api/v1/bee-name-generator/suggestion/100`, {
         credentials: 'include'
     })
@@ -450,8 +474,8 @@ function loadBeeSuggestions() {
                 return;
             }
             if (!res.ok) {
-                return res.json().then((problem) => {
-                    throw new Error(problem.detail || 'Failed to load suggestions');
+                return problemDetail(res, 'Failed to load suggestions').then((detail) => {
+                    throw new Error(detail);
                 });
             }
             return res.json();
@@ -460,8 +484,7 @@ function loadBeeSuggestions() {
             if (!data) {
                 return;
             }
-            const list = document.getElementById('bee-suggestions');
-            (data.suggestions || []).forEach((name) => list.appendChild(buildBeeSuggestionRow(name)));
+            list.replaceChildren(...(data.suggestions || []).map(buildBeeSuggestionRow));
             updateBeeSuggestionsEmptyState();
         })
         .catch((err) => {
@@ -499,6 +522,10 @@ function updateBeeSuggestionsEmptyState() {
 }
 
 function reviewBeeSuggestion(name, accept, row) {
+    if (isDotSegment(name)) {
+        alert('Names made only of dots can\'t be reviewed from the browser.');
+        return;
+    }
     const buttons = row.querySelectorAll('button');
     buttons.forEach((b) => { b.disabled = true; });
 
@@ -513,11 +540,13 @@ function reviewBeeSuggestion(name, accept, row) {
             }
             if (res.ok) {
                 row.remove();
-                updateBeeSuggestionsEmptyState();
+                if (document.getElementById('bee-suggestions').children.length === 0) {
+                    loadBeeSuggestions();
+                }
                 return;
             }
-            return res.json().then((problem) => {
-                throw new Error(problem.detail || 'Failed to update suggestion');
+            return problemDetail(res, 'Failed to update suggestion').then((detail) => {
+                throw new Error(detail);
             });
         })
         .catch((err) => {
@@ -542,20 +571,38 @@ function showBeeAdminLink() {
         });
 }
 
-let mcStatusSeq = 0;
+const MC_STATUS_TIMEOUT_MS = 30000;
+let mcStatusController = null;
+
+/**
+ * The API sends line breaks as a literal backslash-n, and 1.16+ hex colours
+ * as "§x" followed by six "§<digit>" pairs.
+ */
+function formatMcMotd(motd) {
+    return motd
+        .replace(/\\n/g, '\n')
+        .replace(/§x(?:§[0-9a-f]){6}/gi, '')
+        .replace(/§[0-9a-fk-or]/gi, '')
+        .trim();
+}
 
 /** Server-supplied text goes in via textContent only. */
-function renderMcStatus(status) {
+function renderMcStatus(status, bedrock) {
     const maxPlayers = status.max_players ?? 0;
     const numPlayers = status.num_players ?? 0;
     const players = status.players || [];
 
     document.getElementById('mc-status-name').textContent = status.name || status.host;
-    document.getElementById('mc-status-motd').textContent = (status.motd || '').replace(/§[0-9a-fk-or]/gi, '').trim();
+    document.getElementById('mc-status-motd').textContent = formatMcMotd(status.motd || '');
     document.getElementById('mc-status-version').textContent = status.version || 'Unknown version';
-    document.getElementById('mc-status-type').textContent = status.server_type === 'bedrock' ? 'Bedrock' : 'Java';
+    document.getElementById('mc-status-type').textContent = bedrock ? 'Bedrock' : 'Java';
     document.getElementById('mc-status-players-count').textContent = `${numPlayers} / ${maxPlayers}`;
-    document.getElementById('mc-status-players-bar').style.width = maxPlayers > 0 ? `${Math.min(100, (numPlayers / maxPlayers) * 100)}%` : '0%';
+
+    const bar = document.getElementById('mc-status-players-bar');
+    bar.style.width = maxPlayers > 0 ? `${Math.min(100, (numPlayers / maxPlayers) * 100)}%` : '0%';
+    const track = bar.parentElement;
+    track.setAttribute('aria-valuemax', maxPlayers);
+    track.setAttribute('aria-valuenow', numPlayers);
 
     const icon = document.getElementById('mc-status-icon');
     const favicon = status.favicon || '';
@@ -566,15 +613,22 @@ function renderMcStatus(status) {
     pill.textContent = 'Online';
     pill.className = 'rounded-full bg-green-500/15 px-2.5 py-0.5 text-xs font-medium text-green-600 dark:text-green-400';
 
+    const chipClass = 'max-w-full truncate rounded-full border border-input px-2.5 py-0.5 text-xs';
     const list = document.getElementById('mc-status-players');
     list.replaceChildren();
     players.forEach((player) => {
         const chip = document.createElement('li');
-        chip.className = 'rounded-full border border-input px-2.5 py-0.5 text-xs';
+        chip.className = chipClass;
         chip.textContent = player.name;
         list.appendChild(chip);
     });
-    document.getElementById('mc-status-players-hidden').hidden = players.length > 0 || numPlayers === 0;
+    if (players.length > 0 && numPlayers > players.length) {
+        const more = document.createElement('li');
+        more.className = chipClass;
+        more.textContent = `and ${numPlayers - players.length} more`;
+        list.appendChild(more);
+    }
+    document.getElementById('mc-status-players-unavailable').hidden = players.length > 0 || numPlayers === 0;
     document.getElementById('mc-status-result').hidden = false;
 }
 
@@ -587,6 +641,16 @@ function showMcStatusError(message, detail) {
     document.getElementById('mc-status-error').hidden = false;
 }
 
+/** The query protocol is Java-only, so the option is unavailable for Bedrock. */
+function syncMcStatusQueryOption() {
+    const bedrock = document.querySelector('input[name="mc-edition"]:checked').value === 'bedrock';
+    const query = document.getElementById('mc-status-query');
+    query.disabled = bedrock;
+    if (bedrock) {
+        query.checked = false;
+    }
+}
+
 function checkMcStatus(event) {
     if (event) {
         event.preventDefault();
@@ -595,61 +659,63 @@ function checkMcStatus(event) {
     if (!host) {
         return;
     }
+    if (isDotSegment(host)) {
+        showMcStatusError('Enter a valid server address');
+        return;
+    }
     const bedrock = document.querySelector('input[name="mc-edition"]:checked').value === 'bedrock';
     const query = !bedrock && document.getElementById('mc-status-query').checked;
 
-    const params = new URLSearchParams({ host });
+    const params = new URLSearchParams();
     if (bedrock) {
         params.set('bedrock', 'true');
     }
     if (query) {
         params.set('query', 'true');
     }
-    history.replaceState(null, '', `${window.location.pathname}?${params}`);
+    const urlParams = new URLSearchParams({ host });
+    params.forEach((value, key) => urlParams.set(key, value));
+    history.replaceState(null, '', `${window.location.pathname}?${urlParams}`);
 
-    const apiParams = new URLSearchParams();
-    if (bedrock) {
-        apiParams.set('bedrock', 'true');
+    if (mcStatusController) {
+        mcStatusController.abort();
     }
-    if (query) {
-        apiParams.set('query', 'true');
-    }
+    const controller = new AbortController();
+    mcStatusController = controller;
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+    }, MC_STATUS_TIMEOUT_MS);
 
-    const seq = ++mcStatusSeq;
     const button = document.getElementById('mc-status-submit');
-    button.disabled = true;
     button.textContent = 'Checking...';
+    document.getElementById('mc-status-result').hidden = true;
     document.getElementById('mc-status-error').hidden = true;
 
-    fetch(`${apiBaseUrl()}/api/v1/mcstatus/${encodeURIComponent(host)}?${apiParams}`)
+    fetch(`${apiBaseUrl()}/api/v1/mcstatus/${encodeURIComponent(host)}?${params}`, { signal: controller.signal })
         .then((res) => {
             if (res.ok) {
-                return res.json().then((status) => {
-                    if (seq === mcStatusSeq) {
-                        renderMcStatus(status);
-                    }
-                });
+                return res.json().then((status) => renderMcStatus(status, bedrock));
             }
-            return res.json().catch(() => ({})).then((problem) => {
-                if (seq !== mcStatusSeq) {
-                    return;
-                }
-                if (res.status === 502) {
-                    showMcStatusError("Couldn't reach that server", problem.detail);
-                } else {
-                    showMcStatusError('Something went wrong', problem.detail);
-                }
+            return problemDetail(res, '').then((detail) => {
+                showMcStatusError(res.status === 502 ? "Couldn't reach that server" : 'Something went wrong', detail);
             });
         })
         .catch((error) => {
-            console.error('Error:', error);
-            if (seq === mcStatusSeq) {
-                showMcStatusError('Something went wrong', 'Check your connection and try again.');
+            if (controller !== mcStatusController) {
+                return;
             }
+            if (timedOut) {
+                showMcStatusError("Couldn't reach that server", 'The lookup timed out.');
+                return;
+            }
+            console.error('Error:', error);
+            showMcStatusError('Something went wrong', 'Check your connection and try again.');
         })
         .finally(() => {
-            if (seq === mcStatusSeq) {
-                button.disabled = false;
+            clearTimeout(timeout);
+            if (controller === mcStatusController) {
                 button.textContent = 'Check';
             }
         });
@@ -665,5 +731,6 @@ function loadMcStatusFromUrl() {
     const edition = params.get('bedrock') === 'true' ? 'bedrock' : 'java';
     document.querySelector(`input[name="mc-edition"][value="${edition}"]`).checked = true;
     document.getElementById('mc-status-query').checked = params.get('query') === 'true';
+    syncMcStatusQueryOption();
     checkMcStatus();
 }

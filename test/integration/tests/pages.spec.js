@@ -61,6 +61,8 @@ test.describe('nonce cookie domain', () => {
     ['localhost', 'api.neuralnexus.dev', ''],
     ['neuralnexus.dev', 'other.dev', ''],
     ['10.0.0.1', '192.168.0.1', ''],
+    ['a.co.uk', 'b.co.uk', ''],
+    ['www.example.co.uk', 'api.example.co.uk', '.example.co.uk'],
   ];
   for (const [site, api, expected] of cases) {
     test(`${site} + ${api} -> "${expected}"`, async ({ page }) => {

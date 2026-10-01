@@ -2,28 +2,9 @@ package components
 
 import (
 	"os"
-	"strings"
+
+	"github.com/p0t4t0sandwich/neuralnexus-frontend/config"
 )
-
-func nnApiURL() string {
-	v := os.Getenv("NN_API_URL")
-	if v == "" {
-		panic("NN_API_URL environment variable must be set")
-	}
-	return v
-}
-
-var NN_API_URL = nnApiURL()
-
-func nnSiteURL() string {
-	v := os.Getenv("NN_SITE_URL")
-	if v == "" {
-		panic("NN_SITE_URL environment variable must be set")
-	}
-	return strings.TrimRight(v, "/")
-}
-
-var NN_SITE_URL = nnSiteURL()
 
 func steamOpenIDLoginURL() string {
 	v := os.Getenv("STEAM_OPENID_LOGIN_URL")
@@ -52,7 +33,7 @@ templ WrapContents(contents templ.Component) {
 		<script src="/public/js/scripts.js"></script>
 		<script src="/public/js/theming.js"></script>
 		<body>
-			<div hidden id="api-base-url">{ NN_API_URL }</div>
+			<div hidden id="api-base-url">{ config.APIURL }</div>
 			<div hidden id="steam-openid-login-url">{ STEAM_OPENID_LOGIN_URL }</div>
 			@Header()
 			<div class="relative isolate px-6 pt-14 lg:px-8">
@@ -83,36 +64,35 @@ templ ErrorBanner() {
 }
 
 templ ThemeToggle() {
-    <button onclick="toggleTheme()" class="p-2 rounded-lg bg-red-600 text-white dark:text-black hover:bg-red-700">
-        <span id="light-mode">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-                <title>material-symbols:light-mode-outline</title>
-            	<path fill="currentColor" d="M12 15q1.25 0 2.125-.875T15 12t-.875-2.125T12 9t-2.125.875T9 12t.875 2.125T12 15m0 2q-2.075 0-3.537-1.463T7 12t1.463-3.537T12 7t3.538 1.463T17 12t-1.463 3.538T12 17m-7-4H1v-2h4zm18 0h-4v-2h4zM11 5V1h2v4zm0 18v-4h2v4zM6.4 7.75L3.875 5.325L5.3 3.85l2.4 2.5zm12.3 12.4l-2.425-2.525L17.6 16.25l2.525 2.425zM16.25 6.4l2.425-2.525L20.15 5.3l-2.5 2.4zM3.85 18.7l2.525-2.425L7.75 17.6l-2.425 2.525zM12 12" />
-            </svg>
-        </span>
-        <span id="dark-mode">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-                <title>material-symbols:dark-mode-outline</title>
-            	<path fill="currentColor" d="M12 21q-3.75 0-6.375-2.625T3 12t2.625-6.375T12 3q.35 0 .688.025t.662.075q-1.025.725-1.638 1.888T11.1 7.5q0 2.25 1.575 3.825T16.5 12.9q1.375 0 2.525-.613T20.9 10.65q.05.325.075.662T21 12q0 3.75-2.625 6.375T12 21m0-2q2.2 0 3.95-1.213t2.55-3.162q-.5.125-1 .2t-1 .075q-3.075 0-5.238-2.163T9.1 7.5q0-.5.075-1t.2-1q-1.95.8-3.163 2.55T5 12q0 2.9 2.05 4.95T12 19m-.25-6.75" />
-            </svg>
-        </span>
-    </button>
+	<button onclick="toggleTheme()" class="p-2 rounded-lg bg-red-600 text-white dark:text-black hover:bg-red-700">
+		<span id="light-mode">
+			<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+				<title>material-symbols:light-mode-outline</title>
+				<path fill="currentColor" d="M12 15q1.25 0 2.125-.875T15 12t-.875-2.125T12 9t-2.125.875T9 12t.875 2.125T12 15m0 2q-2.075 0-3.537-1.463T7 12t1.463-3.537T12 7t3.538 1.463T17 12t-1.463 3.538T12 17m-7-4H1v-2h4zm18 0h-4v-2h4zM11 5V1h2v4zm0 18v-4h2v4zM6.4 7.75L3.875 5.325L5.3 3.85l2.4 2.5zm12.3 12.4l-2.425-2.525L17.6 16.25l2.525 2.425zM16.25 6.4l2.425-2.525L20.15 5.3l-2.5 2.4zM3.85 18.7l2.525-2.425L7.75 17.6l-2.425 2.525zM12 12"></path>
+			</svg>
+		</span>
+		<span id="dark-mode">
+			<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+				<title>material-symbols:dark-mode-outline</title>
+				<path fill="currentColor" d="M12 21q-3.75 0-6.375-2.625T3 12t2.625-6.375T12 3q.35 0 .688.025t.662.075q-1.025.725-1.638 1.888T11.1 7.5q0 2.25 1.575 3.825T16.5 12.9q1.375 0 2.525-.613T20.9 10.65q.05.325.075.662T21 12q0 3.75-2.625 6.375T12 21m0-2q2.2 0 3.95-1.213t2.55-3.162q-.5.125-1 .2t-1 .075q-3.075 0-5.238-2.163T9.1 7.5q0-.5.075-1t.2-1q-1.95.8-3.163 2.55T5 12q0 2.9 2.05 4.95T12 19m-.25-6.75"></path>
+			</svg>
+		</span>
+	</button>
 }
 
 templ Header() {
 	<div class="p-8 flex items-center justify-between mb-8 text-lg text-red-600">
-      <div class="flex items-center gap-4">
-        <a href="/">NeuralNexus</a>
-        <a href="/about">About</a>
-        <a href="/contact">Contact</a>
-        <a href="/projects">Projects</a>
-      </div>
-
-      <div class="flex items-center gap-4">
-        @ThemeToggle()
-        @LoginButton()
-      </div>
-    </div>
+		<div class="flex items-center gap-4">
+			<a href="/">NeuralNexus</a>
+			<a href="/about">About</a>
+			<a href="/contact">Contact</a>
+			<a href="/projects">Projects</a>
+		</div>
+		<div class="flex items-center gap-4">
+			@ThemeToggle()
+			@LoginButton()
+		</div>
+	</div>
 }
 
 templ projectCardBody(icon string, title string, description string) {
@@ -169,11 +149,6 @@ templ Projects() {
 			@projectCard("/project/bee-name-generator", "🐝", "Bee Name Generator", "Generate a random bee name, or suggest one of your own")
 			@projectCard("/project/mc-status", "⛏️", "MC Status", "Check whether a Minecraft server is online and who's playing")
 		}
-		if false {
-			@projectSection("Other Projects", "Everything that isn't an API") {
-				@projectCardSoon("🛠️", "More on the way", "Nothing here yet, but there's plenty in the workshop")
-			}
-		}
 	</div>
 }
 
@@ -184,21 +159,41 @@ templ ProjectsPage() {
 templ BeeNameGenerator() {
 	<script>
 		function getBeeName() {
+			const button = document.getElementById("get-bee-button");
+			const status = document.getElementById("get-bee-status");
+			button.disabled = true;
+			status.hidden = true;
 			fetch(`${apiBaseUrl()}/api/v1/bee-name-generator/name`)
-				.then((response) => response.json())
+				.then((response) => {
+					if (!response.ok) {
+						throw new Error("Request failed");
+					}
+					return response.json();
+				})
 				.then((data) => {
 					document.getElementById("get-bee-name").innerText = data.name;
+				})
+				.catch(() => {
+					status.textContent = "Couldn't get a name, please try again.";
+					status.hidden = false;
+				})
+				.finally(() => {
+					button.disabled = false;
 				});
 		}
 
 		function suggestBeeName(event) {
 			event.preventDefault();
 			const input = document.getElementById("suggest-bee-name");
+			const button = document.getElementById("suggest-bee-button");
 			const status = document.getElementById("suggest-bee-status");
 			const name = input.value.trim();
-			if (!name) {
+			if (!name || isDotSegment(name)) {
+				status.textContent = "Please enter a valid name.";
+				status.hidden = false;
 				return;
 			}
+			button.disabled = true;
 			fetch(`${apiBaseUrl()}/api/v1/bee-name-generator/suggestion/${encodeURIComponent(name)}`, {
 				method: "POST",
 			})
@@ -212,6 +207,9 @@ templ BeeNameGenerator() {
 				.catch(() => {
 					status.textContent = "Couldn't submit that, please try again.";
 					status.hidden = false;
+				})
+				.finally(() => {
+					button.disabled = false;
 				});
 		}
 	</script>
@@ -224,13 +222,15 @@ templ BeeNameGenerator() {
 		</div>
 		<div class="space-y-4 rounded-lg border border-input p-4 text-center">
 			<p class="text-sm text-gray-500 dark:text-gray-400">Your bee name</p>
-			<h2 id="get-bee-name" class="min-h-8 text-2xl font-semibold">&mdash;</h2>
+			<h2 id="get-bee-name" aria-live="polite" class="min-h-8 text-2xl font-semibold">&mdash;</h2>
 			<button
+				id="get-bee-button"
 				class="border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
 				onClick="getBeeName()"
 			>
 				Generate
 			</button>
+			<p id="get-bee-status" role="status" hidden class="text-sm text-gray-500 dark:text-gray-400"></p>
 		</div>
 		<div
 			data-orientation="horizontal"
@@ -249,18 +249,20 @@ templ BeeNameGenerator() {
 					class="text-black flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
 					id="suggest-bee-name"
 					name="name"
+					maxlength="64"
 					placeholder="Suggested Name"
 					required
 					type="text"
 				/>
 			</div>
 			<button
+				id="suggest-bee-button"
 				class="border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
 				type="submit"
 			>
 				Suggest
 			</button>
-			<p id="suggest-bee-status" hidden class="text-center text-sm text-gray-500 dark:text-gray-400"></p>
+			<p id="suggest-bee-status" role="status" hidden class="text-center text-sm text-gray-500 dark:text-gray-400"></p>
 		</form>
 		<a
 			id="bee-admin-link"
@@ -288,7 +290,7 @@ templ BeeNameGeneratorAdmin() {
 				Accept a suggestion to add it to the generator, or reject it to discard it
 			</p>
 		</div>
-		<div id="bee-admin-error" hidden class="rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive"></div>
+		<div id="bee-admin-error" role="alert" hidden class="rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive"></div>
 		<ul id="bee-suggestions" class="space-y-2"></ul>
 		<p id="bee-suggestions-empty" hidden class="text-center text-sm text-gray-500 dark:text-gray-400">
 			No pending suggestions
@@ -318,6 +320,7 @@ templ McStatus() {
 					class="text-black flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
 					id="mc-status-host"
 					name="host"
+					maxlength="260"
 					placeholder="play.example.net:25565"
 					autocomplete="off"
 					autocapitalize="off"
@@ -328,11 +331,11 @@ templ McStatus() {
 			</div>
 			<div class="grid grid-cols-2 gap-1 rounded-md border border-input p-1 text-sm font-medium">
 				<label class="cursor-pointer rounded px-3 py-1.5 text-center has-checked:bg-primary has-checked:text-primary-foreground has-focus-visible:ring-2 has-focus-visible:ring-ring">
-					<input class="sr-only" type="radio" name="mc-edition" value="java" checked/>
+					<input class="sr-only" type="radio" name="mc-edition" value="java" onchange="syncMcStatusQueryOption()" checked/>
 					Java
 				</label>
 				<label class="cursor-pointer rounded px-3 py-1.5 text-center has-checked:bg-primary has-checked:text-primary-foreground has-focus-visible:ring-2 has-focus-visible:ring-ring">
-					<input class="sr-only" type="radio" name="mc-edition" value="bedrock"/>
+					<input class="sr-only" type="radio" name="mc-edition" value="bedrock" onchange="syncMcStatusQueryOption()"/>
 					Bedrock
 				</label>
 			</div>
@@ -351,35 +354,35 @@ templ McStatus() {
 				Check
 			</button>
 		</form>
-		<div id="mc-status-error" hidden class="space-y-1 rounded-md border border-destructive bg-destructive/10 p-3 text-center text-sm text-destructive">
+		<div id="mc-status-error" role="alert" hidden class="space-y-1 rounded-md border border-destructive bg-destructive/10 p-3 text-center text-sm text-destructive">
 			<p id="mc-status-error-message" class="font-medium"></p>
-			<p id="mc-status-error-detail" hidden></p>
+			<p id="mc-status-error-detail" hidden class="break-words [overflow-wrap:anywhere]"></p>
 		</div>
-		<div id="mc-status-result" hidden class="space-y-4 rounded-lg border border-input p-4">
+		<div id="mc-status-result" role="status" hidden class="min-w-0 space-y-4 rounded-lg border border-input p-4">
 			<div class="flex items-center gap-3">
-				<img id="mc-status-icon" hidden alt="Server icon" class="h-16 w-16 rounded" style="image-rendering: pixelated"/>
+				<img id="mc-status-icon" hidden alt="" class="h-16 w-16 rounded" style="image-rendering: pixelated"/>
 				<div class="min-w-0 flex-1 space-y-1">
 					<h2 id="mc-status-name" class="truncate text-lg font-semibold"></h2>
 					<div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
 						<span id="mc-status-pill"></span>
 						<span id="mc-status-type" class="rounded-full border border-input px-2.5 py-0.5"></span>
-						<span id="mc-status-version"></span>
+						<span id="mc-status-version" class="min-w-0 max-w-full break-words [overflow-wrap:anywhere]"></span>
 					</div>
 				</div>
 			</div>
-			<p id="mc-status-motd" class="whitespace-pre-line text-sm"></p>
+			<p id="mc-status-motd" class="whitespace-pre-line break-words text-sm [overflow-wrap:anywhere]"></p>
 			<div class="space-y-1">
 				<div class="flex justify-between text-sm">
 					<span>Players</span>
 					<span id="mc-status-players-count"></span>
 				</div>
-				<div class="h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+				<div role="progressbar" aria-label="Players online" aria-valuemin="0" aria-valuenow="0" aria-valuemax="0" class="h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
 					<div id="mc-status-players-bar" class="h-full bg-primary"></div>
 				</div>
 			</div>
 			<ul id="mc-status-players" class="flex flex-wrap gap-2"></ul>
-			<p id="mc-status-players-hidden" hidden class="text-center text-sm text-gray-500 dark:text-gray-400">
-				Player list hidden by server
+			<p id="mc-status-players-unavailable" hidden class="text-center text-sm text-gray-500 dark:text-gray-400">
+				Player list unavailable
 			</p>
 		</div>
 	</div>
