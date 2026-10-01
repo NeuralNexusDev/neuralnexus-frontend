@@ -68,6 +68,9 @@ func TestEmbedOnline(t *testing.T) {
 	if got := rec.Header().Get("Cache-Control"); got != "public, max-age=60" {
 		t.Errorf("Cache-Control = %q", got)
 	}
+	if f.request == nil {
+		t.Fatal("the API was not called")
+	}
 	if f.request.URL.Path != "/api/v1/mcstatus/play.example.net:80" {
 		t.Errorf("API path = %q", f.request.URL.Path)
 	}
@@ -111,6 +114,9 @@ func TestEmbedForwardsOptions(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFakeAPI(t, http.StatusOK, onlineBody)
 			rec := getEmbed("a.com", tc.query)
+			if f.request == nil {
+				t.Fatal("the API was not called")
+			}
 			if got := f.request.URL.Query(); got.Encode() != tc.wantAPI.Encode() {
 				t.Errorf("API query = %q, want %q", got.Encode(), tc.wantAPI.Encode())
 			}
@@ -148,20 +154,31 @@ func TestEmbedOffline(t *testing.T) {
 }
 
 func TestEmbedLookupFailures(t *testing.T) {
+	const (
+		unavailable = "status lookup unavailable"
+		rateLimited = "status lookups are rate limited"
+		unexpected  = "unexpected status response"
+	)
 	cases := []struct {
 		name       string
 		apiStatus  int
 		body       string
 		wantStatus int
 		wantRetry  string
+		wantBody   string
 	}{
-		{"rate limited", http.StatusTooManyRequests, `{}`, http.StatusServiceUnavailable, "60"},
-		{"api error", http.StatusInternalServerError, `{}`, http.StatusServiceUnavailable, "30"},
-		{"empty object", http.StatusOK, `{}`, http.StatusServiceUnavailable, "30"},
-		{"null", http.StatusOK, `null`, http.StatusServiceUnavailable, "30"},
-		{"not json", http.StatusOK, `<html>`, http.StatusServiceUnavailable, "30"},
-		{"undocumented status", http.StatusTeapot, `{}`, http.StatusBadGateway, ""},
-		{"unauthorized", http.StatusUnauthorized, `{}`, http.StatusBadGateway, ""},
+		{"rate limited", http.StatusTooManyRequests, `{"detail":"boom"}`, http.StatusServiceUnavailable, "60", rateLimited},
+		{"api error", http.StatusInternalServerError, `{"detail":"boom"}`, http.StatusServiceUnavailable, "30", unavailable},
+		{"empty object", http.StatusOK, `{}`, http.StatusServiceUnavailable, "30", unavailable},
+		{"null", http.StatusOK, `null`, http.StatusServiceUnavailable, "30", unavailable},
+		{"not json", http.StatusOK, `<html>boom`, http.StatusServiceUnavailable, "30", unavailable},
+		{"mistyped field", http.StatusOK, `{"motd":"Hi","num_players":"x"}`, http.StatusServiceUnavailable, "30", unavailable},
+		{"oversized body", http.StatusOK, `{"motd":"` + strings.Repeat("a", maxMcStatusBody) + `"}`, http.StatusServiceUnavailable, "30", unavailable},
+		{"undocumented status", http.StatusTeapot, `{"detail":"boom"}`, http.StatusBadGateway, "", unexpected},
+		{"unauthorized", http.StatusUnauthorized, `{"detail":"boom"}`, http.StatusBadGateway, "", unexpected},
+		{"bad gateway", http.StatusBadGateway, `{"detail":"boom"}`, http.StatusBadGateway, "", unexpected},
+		{"service unavailable", http.StatusServiceUnavailable, `{"detail":"boom"}`, http.StatusBadGateway, "", unexpected},
+		{"gateway timeout", http.StatusGatewayTimeout, `{"detail":"boom"}`, http.StatusBadGateway, "", unexpected},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -175,6 +192,9 @@ func TestEmbedLookupFailures(t *testing.T) {
 			}
 			if got := rec.Header().Get("Cache-Control"); got != "no-store" {
 				t.Errorf("Cache-Control = %q, want no-store", got)
+			}
+			if got := rec.Body.String(); got != tc.wantBody+"\n" {
+				t.Errorf("body = %q, want only %q", got, tc.wantBody)
 			}
 		})
 	}
@@ -194,25 +214,24 @@ func TestEmbedAPIUnreachable(t *testing.T) {
 
 func TestEmbedRejectsInvalidHosts(t *testing.T) {
 	f := newFakeAPI(t, http.StatusOK, onlineBody)
-	long := strings.Repeat(strings.Repeat("a", 60)+".", 5) + "com"
-	hosts := map[string]string{
-		"empty label":           "a..b",
-		"leading dot":           ".a.com",
-		"illegal character":     "a_b$c",
-		"space":                 "bad host",
-		"path":                  "a.com/b",
-		"port zero":             "a.com:0",
-		"port too large":        "a.com:65536",
-		"port too long":         "a.com:123456",
-		"label over 63":         strings.Repeat("a", 64) + ".com",
-		"name over 253":         long,
-		"ipv6 without brackets": "::1",
-		"trailing colon":        "a.com:",
+	cases := []struct{ name, host string }{
+		{"empty label", "a..b"},
+		{"leading dot", ".a.com"},
+		{"illegal character", "a_b$c"},
+		{"space", "bad host"},
+		{"path", "a.com/b"},
+		{"port zero", "a.com:0"},
+		{"port too large", "a.com:65536"},
+		{"port too long", "a.com:123456"},
+		{"trailing colon", "a.com:"},
+		{"label over 63", strings.Repeat("a", 64) + ".com"},
+		{"name over 253", strings.Repeat(strings.Repeat("a", 60)+".", 5) + "com"},
+		{"ipv6 without brackets", "::1"},
 	}
-	for name, host := range hosts {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
 			f.request = nil
-			rec := getEmbed(host, "")
+			rec := getEmbed(tc.host, "")
 			if rec.Code != http.StatusBadRequest {
 				t.Errorf("status = %d, want 400", rec.Code)
 			}
@@ -256,9 +275,25 @@ func TestEmbedDescriptionIsTruncatedAndEscaped(t *testing.T) {
 	}
 }
 
+func TestEmbedKeepsTextAtTheLimit(t *testing.T) {
+	motd := strings.Repeat("é", 200)
+	version := strings.Repeat("v", 64)
+	newFakeAPI(t, http.StatusOK, fmt.Sprintf(`{"motd":%q,"num_players":1,"max_players":2,"version":%q}`, motd, version))
+	h := head(t, getEmbed("a.com", "").Body.String())
+	if strings.Contains(h, "…") {
+		t.Errorf("text exactly at the limit must not be truncated:\n%s", h)
+	}
+	if !strings.Contains(h, motd+"\nPlayers: 1/2\nVersion: "+version) {
+		t.Errorf("full MOTD and version expected:\n%s", h)
+	}
+}
+
 func TestEmbedEscapesServerText(t *testing.T) {
 	newFakeAPI(t, http.StatusOK, `{"motd":"<script>alert(1)</script>\"><img src=x>","num_players":1,"max_players":2,"version":"<b>1</b>"}`)
 	body := getEmbed("a.com", "").Body.String()
+	if !strings.Contains(body, "&lt;script&gt;alert(1)&lt;/script&gt;") {
+		t.Error("the MOTD should still appear, escaped")
+	}
 	for _, bad := range []string{"<script>alert", "<img src=x>", "<b>1</b>"} {
 		if strings.Contains(body, bad) {
 			t.Errorf("unescaped server text %q in response", bad)
