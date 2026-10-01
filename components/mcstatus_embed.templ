@@ -80,10 +80,10 @@ func (d McStatusEmbedData) Description() string {
 	if motd := truncateRunes(strings.Join(d.Motd, "\n"), maxEmbedMotdRunes); motd != "" {
 		lines = append(lines, motd)
 	}
-	lines = append(lines,
-		"Players: "+strconv.Itoa(d.Players)+"/"+strconv.Itoa(d.Max),
-		"Version: "+truncateRunes(d.Version, maxEmbedVersionRunes),
-	)
+	lines = append(lines, "Players: "+strconv.Itoa(d.Players)+"/"+strconv.Itoa(d.Max))
+	if d.Version != "" {
+		lines = append(lines, "Version: "+truncateRunes(d.Version, maxEmbedVersionRunes))
+	}
 	return strings.Join(lines, "\n")
 }
 

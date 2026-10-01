@@ -64,8 +64,7 @@ func motdLines(motd string) []string {
 }
 
 // 404 means the server gave no status; 429 and 500 must not be cached as
-// "offline". The status route returns nothing else, and this client sends no
-// Authorization header, so any other status is unexpected.
+// "offline". This client sends no Authorization header, so 401 is unexpected.
 func fetchMcStatus(r *http.Request, data components.McStatusEmbedData) (apiMcStatus, lookupResult) {
 	var status apiMcStatus
 	endpoint := config.APIURL + "/api/v1/mcstatus/" + url.PathEscape(data.Host)
@@ -93,6 +92,9 @@ func fetchMcStatus(r *http.Request, data components.McStatusEmbedData) (apiMcSta
 		return status, lookupUnexpected
 	}
 	if err := json.NewDecoder(io.LimitReader(res.Body, maxMcStatusBody)).Decode(&status); err != nil {
+		return status, lookupUnavailable
+	}
+	if status == (apiMcStatus{}) {
 		return status, lookupUnavailable
 	}
 	return status, lookupOnline
