@@ -48,7 +48,7 @@ export default defineConfig({
           'go run .',
         cwd: repoRoot,
         url: baseURL,
-        env: { ADDRESS: '0.0.0.0:8099', NN_API_URL: nnApiUrl, STEAM_OPENID_LOGIN_URL: steamOpenIdLoginUrl },
+        env: { ADDRESS: '0.0.0.0:8099', NN_API_URL: nnApiUrl, NN_SITE_URL: baseURL, STEAM_OPENID_LOGIN_URL: steamOpenIdLoginUrl },
         reuseExistingServer: !process.env.CI,
         timeout: 60_000,
       },

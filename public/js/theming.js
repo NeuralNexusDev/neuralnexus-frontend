@@ -1,4 +1,3 @@
-// Handle preload theme preference
 const currentTheme = getThemePreference();
 if (currentTheme === "light") {
     document.documentElement.classList.remove('dark');
@@ -6,7 +5,6 @@ if (currentTheme === "light") {
     document.documentElement.classList.add('dark');
 }
 
-// Update theme toggle button visibility based on the current theme
 window.addEventListener('load', () => {
     if (currentTheme === "light") {
         document.getElementById("light-mode").hidden = true;

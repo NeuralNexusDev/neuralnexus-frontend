@@ -1,22 +1,8 @@
-/**
- * @description Reads the backend's base URL from the hidden element
- * WrapContents renders on every page - lets tests point the frontend at a
- * different backend without editing this file.
- * @returns {string}
- */
 function apiBaseUrl() {
     return document.getElementById('api-base-url').innerText;
 }
 
-/**
- * @description Reads the RFC 9457 problem the API embeds in a "problem"
- * query param when an OAuth/OpenID redirect fails (auth.go's
- * redirectWithError) - base64 (URL-safe) encoded, same alphabet as the
- * "state" param but padded, since it's produced by Go's base64.URLEncoding
- * rather than this file's own hand-rolled encodeState(). Shows the
- * problem's detail in the page's #auth-error banner and strips the param
- * from the URL so a refresh or share doesn't repeat it.
- */
+/** The API encodes the problem with Go's base64.URLEncoding. */
 function showAuthErrorFromQuery() {
     const params = new URLSearchParams(window.location.search);
     const problemB64 = params.get('problem');
@@ -42,49 +28,49 @@ function showAuthErrorFromQuery() {
     }
 }
 
-/**
- * @description Reads Steam's OpenID login endpoint from the hidden element
- * WrapContents renders on every page - defaults to the real Steam endpoint,
- * overridable so tests can point it at a local stand-in instead of routing
- * around a hardcoded steamcommunity.com literal.
- * @returns {string}
- */
 function steamOpenIdLoginUrl() {
     return document.getElementById('steam-openid-login-url').innerText;
 }
 
-/**
- * @description Generates a fresh nonce for the OAuth/OpenID flow and sets
- * it as a short-lived cookie the API checks on the callback, returning the
- * nonce. Called at the moment the user clicks a login/link button (not on
- * page load) so its 5-minute TTL covers the provider round-trip rather than
- * however long the user sat on the page first. The hardcoded production
- * domain/Secure/SameSite=None only apply on neuralnexus.dev itself - a
- * browser rejects a Domain attribute that doesn't match the current host,
- * so on localhost (or any other dev/test host) this falls back to a
- * host-only cookie with SameSite=Lax and no Secure flag.
- * @returns {string} - The generated nonce
- */
-function createNonce() {
-    const nonce = Math.random().toString(36).substring(2, 15);
-
-    const host = location.hostname;
-    const isProdDomain = host === 'neuralnexus.dev' || host.endsWith('.neuralnexus.dev');
-    const domainAttr = isProdDomain ? '; domain=.neuralnexus.dev' : '';
-    const secureAttr = location.protocol === 'https:' ? '; Secure' : '';
-    const sameSite = secureAttr ? 'None' : 'Lax';
-    const expires = new Date(Date.now() + 5 * 60 * 1000).toUTCString();
-    document.cookie = `nonce=${nonce}; expires=${expires}; path=/${domainAttr}; SameSite=${sameSite}${secureAttr}`;
-
-    return nonce;
+function sharedHostSuffix(siteHost, apiHost) {
+    const isIp = (host) => /^[\d.]+$/.test(host) || host.includes(':');
+    if (siteHost === apiHost || isIp(siteHost) || isIp(apiHost)) {
+        return '';
+    }
+    const siteLabels = siteHost.split('.').reverse();
+    const apiLabels = apiHost.split('.').reverse();
+    const shared = [];
+    while (shared.length < siteLabels.length && siteLabels[shared.length] === apiLabels[shared.length]) {
+        shared.push(siteLabels[shared.length]);
+    }
+    return shared.length >= 2 ? `.${shared.reverse().join('.')}` : '';
 }
 
 /**
- * @description Toggles the header's account section (username + settings
- * gear) and Login/Logout button based on whether the session cookie is
- * still valid, checked via /users/me. Runs on every page load since the
- * session cookie is HttpOnly and can't be read from JS.
+ * A Domain the browser rejects (a public suffix like co.uk) drops the cookie
+ * silently, so confirm it stuck and fall back to a host-only cookie.
+ * SameSite=None requires Secure, so plain http (local dev) falls back to Lax.
  */
+function setNonceCookie(nonce, domain) {
+    const secureAttr = location.protocol === 'https:' ? '; Secure' : '';
+    const sameSite = secureAttr ? 'None' : 'Lax';
+    const expires = new Date(Date.now() + 5 * 60 * 1000).toUTCString();
+    const attrs = `; expires=${expires}; path=/; SameSite=${sameSite}${secureAttr}`;
+    if (domain) {
+        document.cookie = `nonce=${nonce}; domain=${domain}${attrs}`;
+        if (document.cookie.split('; ').includes(`nonce=${nonce}`)) {
+            return;
+        }
+    }
+    document.cookie = `nonce=${nonce}${attrs}`;
+}
+
+function createNonce() {
+    const nonce = Math.random().toString(36).substring(2, 15);
+    setNonceCookie(nonce, sharedHostSuffix(location.hostname, new URL(apiBaseUrl()).hostname));
+    return nonce;
+}
+
 function checkHeaderAuthState() {
     fetch(`${apiBaseUrl()}/api/v1/users/me`, {
         credentials: 'include'
@@ -162,34 +148,12 @@ function submitLoginForm() {
         });
 }
 
-/**
- * @description an OAuthState object
- * @typedef {Object} OAuthState
- * @property {string} platform - The platform to redirect to
- * @property {string} nonce - The nonce to use for the OAuth flow
- * @property {string} redirect_uri - The redirect URI to use for the OAuth flow
- * @property {string} mode - The mode describing how to handle the OAuth interaction
- */
 
-/**
- * @description This function is used to encode the state object into a string.
- * Uses base64url, not plain base64, since the API decodes it with Go's
- * base64.URLEncoding.
- * @param state {OAuthState} - The state object to encode
- * @returns {string} - The encoded state object
- */
+/** base64url - the API decodes state with Go's base64.URLEncoding. */
 function encodeState(state) {
     return btoa(JSON.stringify(state)).replace(/\+/g, '-').replace(/\//g, '_');
 }
 
-/**
- * @description Builds Steam's OpenID 2.0 login request URL. Steam has no
- * OAuth app/client ID to pre-render a base URL from, so unlike the other
- * providers this is built entirely client-side, and state travels inside
- * openid.return_to instead of as a query param appended after the fact.
- * @param state {OAuthState} - The state object to round-trip through Steam
- * @returns {string}
- */
 function buildSteamOpenIDURL(state) {
     const returnTo = `${apiBaseUrl()}/api/openid?state=${encodeState(state)}`;
     const params = new URLSearchParams({
@@ -203,15 +167,6 @@ function buildSteamOpenIDURL(state) {
     return `${steamOpenIdLoginUrl()}?${params.toString()}`;
 }
 
-/**
- * @description Starts an OAuth/OpenID login for platform: mints a fresh
- * nonce right now via createNonce() rather than on page load, then
- * navigates to the provider with the resulting state appended. baseUrl is
- * the pre-rendered authorize URL for OAuth providers, or null for Steam,
- * which has none and builds its whole URL via buildSteamOpenIDURL.
- * @param platform {string}
- * @param baseUrl {string|null}
- */
 function startOAuthLogin(platform, baseUrl) {
     let redirect = window.location.href;
     if (redirect.endsWith('/login')) {
@@ -224,10 +179,6 @@ function startOAuthLogin(platform, baseUrl) {
     window.location.href = platform === 'steam' ? buildSteamOpenIDURL(state) : baseUrl + '&state=' + encodeState(state);
 }
 
-/**
- * @description Loads the profile into the account page via /me, since the
- * session cookie resolves identity server-side - no user ID needed here.
- */
 function loadAccountProfile() {
     fetch(`${apiBaseUrl()}/api/v1/users/me`, {
         credentials: 'include'
@@ -255,16 +206,8 @@ function loadAccountProfile() {
     loadLinkedAccounts();
 }
 
-/**
- * @description Guards against a stale response repainting the password
- * toggle after a newer request has since been made.
- */
 let passwordAuthSeq = 0;
 
-/**
- * @description Loads the caller's account settings and reflects
- * password_auth onto the toggle.
- */
 function loadAccountSettings() {
     fetch(`${apiBaseUrl()}/api/v1/users/me/settings`, {
         credentials: 'include'
@@ -294,12 +237,6 @@ function loadAccountSettings() {
         });
 }
 
-/**
- * @description Toggles whether the account's password can be used to log
- * in. Reverts the checkbox if the request fails, unless a newer request has
- * since been made.
- * @param enabled {boolean}
- */
 function setPasswordAuthEnabled(enabled) {
     const seq = ++passwordAuthSeq;
 
@@ -331,22 +268,10 @@ function setPasswordAuthEnabled(enabled) {
         });
 }
 
-/**
- * @description The platforms shown as rows on the account settings page.
- */
 const LINK_PLATFORMS = ['discord', 'twitch', 'microsoft', 'xboxlive', 'steam'];
 
-/**
- * @description Guards against an out-of-order response repainting the
- * rows with stale data.
- */
 let loadLinkedAccountsSeq = 0;
 
-/**
- * @description Fetches the caller's linked accounts and updates each
- * platform row's verified/login-enabled/unlink state, redirecting to
- * /login if the session is missing or expired.
- */
 function loadLinkedAccounts() {
     const seq = ++loadLinkedAccountsSeq;
 
@@ -380,11 +305,6 @@ function loadLinkedAccounts() {
         });
 }
 
-/**
- * @description Reflects one platform's linked-account state onto its row.
- * @param platform {string}
- * @param link {?{platform_username: string, verified: boolean, login_enabled: boolean}}
- */
 function updateLinkRow(platform, link) {
     const title = document.getElementById(`link-${platform}-title`);
     const subtitle = document.getElementById(`link-${platform}-subtitle`);
@@ -419,9 +339,6 @@ function updateLinkRow(platform, link) {
     }
 }
 
-/**
- * @description The hidden element holding each platform's base OAuth URL.
- */
 const LINK_OAUTH_BASE_IDS = {
     discord: 'link-discord-oauth-base',
     twitch: 'link-twitch-oauth-base',
@@ -429,11 +346,6 @@ const LINK_OAUTH_BASE_IDS = {
     xboxlive: 'link-xboxlive-oauth-base'
 };
 
-/**
- * @description The single Link/Unlink action for a platform row: starts
- * the OAuth linking flow if it isn't linked yet, or unlinks it if it is.
- * @param platform {string}
- */
 function handleLinkAction(platform) {
     const action = document.getElementById(`link-${platform}-action`);
     if (!action) {
@@ -464,17 +376,8 @@ function handleLinkAction(platform) {
     window.location.href = base.innerText + '&state=' + encodeState(state);
 }
 
-/**
- * @description Guards per-platform against acting on a stale, superseded
- * link/unlink/toggle response.
- */
 const platformActionSeq = {};
 
-/**
- * @description Unlinks a platform from the caller's account after
- * confirmation, then refreshes the linked-accounts rows.
- * @param platform {string}
- */
 function unlinkPlatform(platform) {
     if (!confirm(`Unlink ${platform} from your account?`)) {
         return;
@@ -507,14 +410,6 @@ function unlinkPlatform(platform) {
         });
 }
 
-/**
- * @description Sets whether a linked platform can be used to log in, from
- * its "Allow logins" checkbox. Reverts the checkbox if the request fails,
- * unless a newer link/unlink/toggle request for the same platform has
- * since been made.
- * @param platform {string}
- * @param enabled {boolean}
- */
 function setPlatformLoginEnabled(platform, enabled) {
     const seq = (platformActionSeq[platform] || 0) + 1;
     platformActionSeq[platform] = seq;
@@ -548,4 +443,301 @@ function setPlatformLoginEnabled(platform, enabled) {
                 alert(error.message);
             }
         });
+}
+
+/** "." and ".." are collapsed out of URL paths by fetch, so they can't be sent as a path segment. */
+function isDotSegment(name) {
+    return name === '.' || name === '..';
+}
+
+function problemDetail(res, fallback) {
+    return res.json().catch(() => ({})).then((problem) => problem.detail || fallback);
+}
+
+function loadBeeSuggestions() {
+    const error = document.getElementById('bee-admin-error');
+    const list = document.getElementById('bee-suggestions');
+    error.hidden = true;
+    fetch(`${apiBaseUrl()}/api/v1/bee-name-generator/suggestion/100`, {
+        credentials: 'include'
+    })
+        .then((res) => {
+            if (res.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
+            if (!res.ok) {
+                return problemDetail(res, 'Failed to load suggestions').then((detail) => {
+                    throw new Error(detail);
+                });
+            }
+            return res.json();
+        })
+        .then((data) => {
+            if (!data) {
+                return;
+            }
+            list.replaceChildren(...(data.suggestions || []).map(buildBeeSuggestionRow));
+            updateBeeSuggestionsEmptyState();
+        })
+        .catch((err) => {
+            error.textContent = err.message;
+            error.hidden = false;
+        });
+}
+
+/** Suggestions are user-submitted - set the name via textContent only. */
+function buildBeeSuggestionRow(name) {
+    const row = document.createElement('li');
+    row.className = 'flex items-center justify-between gap-3 rounded-lg border border-input p-3';
+
+    const label = document.createElement('span');
+    label.className = 'min-w-0 flex-1 truncate text-sm font-medium';
+    label.textContent = name;
+
+    const accept = document.createElement('button');
+    accept.className = 'shrink-0 rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground hover:bg-primary-light';
+    accept.textContent = 'Accept';
+    accept.onclick = () => reviewBeeSuggestion(name, true, row);
+
+    const reject = document.createElement('button');
+    reject.className = 'shrink-0 rounded-md border border-input px-3 py-1 text-xs font-medium hover:bg-accent hover:text-accent-foreground';
+    reject.textContent = 'Reject';
+    reject.onclick = () => reviewBeeSuggestion(name, false, row);
+
+    row.append(label, accept, reject);
+    return row;
+}
+
+function updateBeeSuggestionsEmptyState() {
+    const empty = document.getElementById('bee-suggestions-empty');
+    empty.hidden = document.getElementById('bee-suggestions').children.length > 0;
+}
+
+function reviewBeeSuggestion(name, accept, row) {
+    if (isDotSegment(name)) {
+        alert('Names made only of dots can\'t be reviewed from the browser.');
+        return;
+    }
+    const buttons = row.querySelectorAll('button');
+    buttons.forEach((b) => { b.disabled = true; });
+
+    fetch(`${apiBaseUrl()}/api/v1/bee-name-generator/suggestion/${encodeURIComponent(name)}`, {
+        method: accept ? 'PUT' : 'DELETE',
+        credentials: 'include'
+    })
+        .then((res) => {
+            if (res.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
+            if (res.ok) {
+                row.remove();
+                if (document.getElementById('bee-suggestions').children.length === 0) {
+                    loadBeeSuggestions();
+                }
+                return;
+            }
+            return problemDetail(res, 'Failed to update suggestion').then((detail) => {
+                throw new Error(detail);
+            });
+        })
+        .catch((err) => {
+            buttons.forEach((b) => { b.disabled = false; });
+            alert(err.message);
+        });
+}
+
+/** Cosmetic only - the admin endpoints enforce the permission. */
+function showBeeAdminLink() {
+    fetch(`${apiBaseUrl()}/api/v1/users/me/permissions`, {
+        credentials: 'include'
+    })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((permissions) => {
+            if ((permissions || []).includes('beenamegenerator|*')) {
+                document.getElementById('bee-admin-link').hidden = false;
+            }
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+        });
+}
+
+const MC_STATUS_TIMEOUT_MS = 30000;
+let mcStatusController = null;
+
+/**
+ * The API sends line breaks as a literal backslash-n, and 1.16+ hex colours
+ * as "§x" followed by six "§<digit>" pairs.
+ */
+function formatMcMotd(motd) {
+    return motd
+        .replace(/\\n/g, '\n')
+        .replace(/§x(?:§[0-9a-f]){6}/gi, '')
+        .replace(/§[^]/giu, '')
+        .trim();
+}
+
+/** Server-supplied text goes in via textContent only. */
+function renderMcStatus(status, bedrock) {
+    const maxPlayers = status.max_players ?? 0;
+    const numPlayers = status.num_players ?? 0;
+    const players = status.players || [];
+
+    document.getElementById('mc-status-name').textContent = status.name || status.host;
+    document.getElementById('mc-status-motd').textContent = formatMcMotd(status.motd || '');
+    document.getElementById('mc-status-version').textContent = status.version || 'Unknown version';
+    document.getElementById('mc-status-type').textContent = bedrock ? 'Bedrock' : 'Java';
+    document.getElementById('mc-status-players-count').textContent = `${numPlayers} / ${maxPlayers}`;
+
+    const bar = document.getElementById('mc-status-players-bar');
+    bar.style.width = maxPlayers > 0 ? `${Math.min(100, (numPlayers / maxPlayers) * 100)}%` : '0%';
+    const track = bar.parentElement;
+    track.setAttribute('aria-valuemax', maxPlayers);
+    track.setAttribute('aria-valuenow', Math.min(numPlayers, maxPlayers));
+
+    const icon = document.getElementById('mc-status-icon');
+    const favicon = status.favicon || '';
+    icon.hidden = !favicon.startsWith('data:image/png;base64,');
+    icon.src = icon.hidden ? '' : favicon;
+
+    const pill = document.getElementById('mc-status-pill');
+    pill.textContent = 'Online';
+    pill.className = 'rounded-full bg-green-500/15 px-2.5 py-0.5 text-xs font-medium text-green-600 dark:text-green-400';
+
+    const chipClass = 'max-w-full truncate rounded-full border border-input px-2.5 py-0.5 text-xs';
+    const list = document.getElementById('mc-status-players');
+    list.replaceChildren();
+    players.forEach((player) => {
+        const chip = document.createElement('li');
+        chip.className = chipClass;
+        chip.textContent = player.name;
+        list.appendChild(chip);
+    });
+    if (players.length > 0 && numPlayers > players.length) {
+        const more = document.createElement('li');
+        more.className = chipClass;
+        more.textContent = `and ${numPlayers - players.length} more`;
+        list.appendChild(more);
+    }
+    document.getElementById('mc-status-players-unavailable').hidden = players.length > 0 || numPlayers === 0;
+    document.getElementById('mc-status-error').hidden = true;
+    document.getElementById('mc-status-result').hidden = false;
+}
+
+function showMcStatusError(message, detail) {
+    document.getElementById('mc-status-result').hidden = true;
+    document.getElementById('mc-status-error-message').textContent = message;
+    const detailEl = document.getElementById('mc-status-error-detail');
+    detailEl.textContent = detail || '';
+    detailEl.hidden = !detail;
+    document.getElementById('mc-status-error').hidden = false;
+}
+
+function syncMcStatusQueryOption() {
+    const bedrock = document.querySelector('input[name="mc-edition"]:checked').value === 'bedrock';
+    const query = document.getElementById('mc-status-query');
+    query.disabled = bedrock;
+    if (bedrock) {
+        query.checked = false;
+    }
+}
+
+function abortMcStatus() {
+    if (mcStatusController) {
+        mcStatusController.abort();
+        mcStatusController = null;
+    }
+    document.getElementById('mc-status-submit').textContent = 'Check';
+}
+
+function checkMcStatus(event) {
+    if (event) {
+        event.preventDefault();
+    }
+    abortMcStatus();
+    const host = document.getElementById('mc-status-host').value.trim();
+    if (!host || isDotSegment(host)) {
+        showMcStatusError('Enter a valid server address');
+        return;
+    }
+    const bedrock = document.querySelector('input[name="mc-edition"]:checked').value === 'bedrock';
+    const query = !bedrock && document.getElementById('mc-status-query').checked;
+
+    const params = new URLSearchParams();
+    if (bedrock) {
+        params.set('bedrock', 'true');
+    }
+    if (query) {
+        params.set('query', 'true');
+    }
+    const urlParams = new URLSearchParams({ host });
+    params.forEach((value, key) => urlParams.set(key, value));
+    history.replaceState(null, '', `${window.location.pathname}?${urlParams}`);
+
+    const controller = new AbortController();
+    mcStatusController = controller;
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+    }, MC_STATUS_TIMEOUT_MS);
+
+    const button = document.getElementById('mc-status-submit');
+    button.textContent = 'Checking...';
+    document.getElementById('mc-status-result').hidden = true;
+    document.getElementById('mc-status-error').hidden = true;
+
+    fetch(`${apiBaseUrl()}/api/v1/mcstatus/${encodeURIComponent(host)}?${params}`, { signal: controller.signal })
+        .then((res) => {
+            if (res.ok) {
+                return res.json().then((status) => {
+                    if (controller === mcStatusController) {
+                        renderMcStatus(status, bedrock);
+                    }
+                });
+            }
+            return problemDetail(res, '').then((detail) => {
+                if (controller !== mcStatusController) {
+                    return;
+                }
+                if (timedOut) {
+                    showMcStatusError("Couldn't reach that server", 'The lookup timed out.');
+                    return;
+                }
+                showMcStatusError(res.status === 502 ? "Couldn't reach that server" : 'Something went wrong', detail);
+            });
+        })
+        .catch((error) => {
+            if (controller !== mcStatusController) {
+                return;
+            }
+            if (timedOut) {
+                showMcStatusError("Couldn't reach that server", 'The lookup timed out.');
+                return;
+            }
+            console.error('Error:', error);
+            showMcStatusError('Something went wrong', 'Check your connection and try again.');
+        })
+        .finally(() => {
+            clearTimeout(timeout);
+            if (controller === mcStatusController) {
+                button.textContent = 'Check';
+            }
+        });
+}
+
+function loadMcStatusFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const host = params.get('host');
+    if (!host) {
+        return;
+    }
+    document.getElementById('mc-status-host').value = host;
+    const edition = params.get('bedrock') === 'true' ? 'bedrock' : 'java';
+    document.querySelector(`input[name="mc-edition"][value="${edition}"]`).checked = true;
+    document.getElementById('mc-status-query').checked = params.get('query') === 'true';
+    syncMcStatusQueryOption();
+    checkMcStatus();
 }
