@@ -567,20 +567,16 @@ function showBeeAdminLink() {
 const MC_STATUS_TIMEOUT_MS = 30000;
 let mcStatusController = null;
 
-/**
- * The API sends line breaks as a literal backslash-n, and 1.16+ hex colours
- * as "§x" followed by six "§<digit>" pairs.
- */
+/** The API sends line breaks as a literal backslash-n. */
 function formatMcMotd(motd) {
     return motd
         .replace(/\\n/g, '\n')
-        .replace(/§x(?:§[0-9a-f]){6}/gi, '')
         .replace(/§[^]/giu, '')
         .trim();
 }
 
 /** Server-supplied text goes in via textContent only. */
-function renderMcStatus(status, bedrock) {
+function renderMcStatus(status, bedrock, host) {
     const maxPlayers = status.max_players ?? 0;
     const numPlayers = status.num_players ?? 0;
     const players = status.players || [];
@@ -598,9 +594,12 @@ function renderMcStatus(status, bedrock) {
     track.setAttribute('aria-valuenow', Math.min(numPlayers, maxPlayers));
 
     const icon = document.getElementById('mc-status-icon');
-    const favicon = status.favicon || '';
-    icon.hidden = !favicon.startsWith('data:image/png;base64,');
-    icon.src = icon.hidden ? '' : favicon;
+    icon.hidden = true;
+    icon.onload = () => { icon.hidden = false; };
+    icon.removeAttribute('src');
+    if (!bedrock) {
+        icon.src = `${apiBaseUrl()}/api/v1/mcstatus/icon/${encodeURIComponent(host)}`;
+    }
 
     const pill = document.getElementById('mc-status-pill');
     pill.textContent = 'Online';
@@ -635,13 +634,31 @@ function showMcStatusError(message, detail) {
     document.getElementById('mc-status-error').hidden = false;
 }
 
+let mcQueryPreference = true;
+
 function syncMcStatusQueryOption() {
     const bedrock = document.querySelector('input[name="mc-edition"]:checked').value === 'bedrock';
     const query = document.getElementById('mc-status-query');
     query.disabled = bedrock;
-    if (bedrock) {
-        query.checked = false;
-    }
+    query.checked = !bedrock && mcQueryPreference;
+    document.getElementById('mc-status-query-port').disabled = !query.checked;
+}
+
+const MC_MAX_PORT = 65535;
+
+function parseMcPort(value) {
+    const port = /^\d+$/.test(value) ? Number(value) : 0;
+    return port >= 1 && port <= MC_MAX_PORT ? port : null;
+}
+
+function validateMcQueryPort() {
+    const input = document.getElementById('mc-status-query-port');
+    input.setCustomValidity(input.value === '' || parseMcPort(input.value) !== null ? '' : `Enter a port from 1 to ${MC_MAX_PORT}`);
+}
+
+function mcStatusQueryPort() {
+    const input = document.getElementById('mc-status-query-port');
+    return input.disabled ? null : parseMcPort(input.value);
 }
 
 function abortMcStatus() {
@@ -664,6 +681,7 @@ function checkMcStatus(event) {
     }
     const bedrock = document.querySelector('input[name="mc-edition"]:checked').value === 'bedrock';
     const query = !bedrock && document.getElementById('mc-status-query').checked;
+    const queryPort = query ? mcStatusQueryPort() : null;
 
     const params = new URLSearchParams();
     if (bedrock) {
@@ -671,9 +689,18 @@ function checkMcStatus(event) {
     }
     if (query) {
         params.set('query', 'true');
+        if (queryPort) {
+            params.set('query_port', queryPort);
+        }
     }
     const urlParams = new URLSearchParams({ host });
-    params.forEach((value, key) => urlParams.set(key, value));
+    if (bedrock) {
+        urlParams.set('bedrock', 'true');
+    } else if (!query) {
+        urlParams.set('query', 'false');
+    } else if (queryPort) {
+        urlParams.set('query_port', queryPort);
+    }
     history.replaceState(null, '', `${window.location.pathname}?${urlParams}`);
 
     const controller = new AbortController();
@@ -694,7 +721,7 @@ function checkMcStatus(event) {
             if (res.ok) {
                 return res.json().then((status) => {
                     if (controller === mcStatusController) {
-                        renderMcStatus(status, bedrock);
+                        renderMcStatus(status, bedrock, host);
                     }
                 });
             }
@@ -706,7 +733,15 @@ function checkMcStatus(event) {
                     showMcStatusError("Couldn't reach that server", 'The lookup timed out.');
                     return;
                 }
-                showMcStatusError(res.status === 502 ? "Couldn't reach that server" : 'Something went wrong', detail);
+                if (res.status === 404 && (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase() === 'application/problem+json') {
+                    showMcStatusError("Couldn't reach that server", detail);
+                } else if (res.status === 429) {
+                    showMcStatusError('Too many lookups', 'Please try again in a minute.');
+                } else if (res.status === 500) {
+                    showMcStatusError('Something went wrong', detail);
+                } else {
+                    showMcStatusError(`Unexpected response (${res.status})`, detail);
+                }
             });
         })
         .catch((error) => {
@@ -737,7 +772,10 @@ function loadMcStatusFromUrl() {
     document.getElementById('mc-status-host').value = host;
     const edition = params.get('bedrock') === 'true' ? 'bedrock' : 'java';
     document.querySelector(`input[name="mc-edition"][value="${edition}"]`).checked = true;
-    document.getElementById('mc-status-query').checked = params.get('query') === 'true';
+    mcQueryPreference = params.get('query') !== 'false';
+    const queryPort = parseMcPort(params.get('query_port') || '');
+    document.getElementById('mc-status-query-port').value = queryPort || '';
+    document.getElementById('mc-status-advanced').open = queryPort !== null;
     syncMcStatusQueryOption();
     checkMcStatus();
 }

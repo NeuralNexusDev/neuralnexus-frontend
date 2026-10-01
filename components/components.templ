@@ -17,6 +17,10 @@ func steamOpenIDLoginURL() string {
 var STEAM_OPENID_LOGIN_URL = steamOpenIDLoginURL()
 
 templ WrapContents(contents templ.Component) {
+	@WrapContentsWithHead("NeuralNexus", nil, contents)
+}
+
+templ WrapContentsWithHead(title string, head templ.Component, contents templ.Component) {
 	<!DOCTYPE html>
 	<html lang="en">
 		<head>
@@ -28,7 +32,10 @@ templ WrapContents(contents templ.Component) {
 			<link rel="icon" type="image/x-icon" href="/public/favicon.ico"/>
 			<link rel="manifest" href="/public/site.webmanifest"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-			<title>NeuralNexus</title>
+			<title>{ title }</title>
+			if head != nil {
+				@head
+			}
 		</head>
 		<script src="/public/js/scripts.js"></script>
 		<script src="/public/js/theming.js"></script>
@@ -331,11 +338,24 @@ templ McStatus() {
 					Bedrock
 				</label>
 			</div>
-			<details class="text-sm">
+			<details id="mc-status-advanced" class="text-sm">
 				<summary class="cursor-pointer text-gray-500 dark:text-gray-400">Advanced</summary>
 				<label class="mt-2 flex items-center gap-2">
-					<input id="mc-status-query" type="checkbox"/>
+					<input id="mc-status-query" type="checkbox" onchange="mcQueryPreference = this.checked; syncMcStatusQueryOption()" checked/>
 					Use the query protocol (Java only, if the server has it enabled)
+				</label>
+				<label class="mt-2 flex items-center gap-2">
+					Query port
+					<input
+						id="mc-status-query-port"
+						class="h-9 w-32 rounded-md border border-input bg-transparent px-2 disabled:opacity-50"
+						type="text"
+						inputmode="numeric"
+						autocomplete="off"
+						oninput="validateMcQueryPort()"
+						oninvalid="this.closest('details').open = true"
+						placeholder="Same as server"
+					/>
 				</label>
 			</details>
 			<button

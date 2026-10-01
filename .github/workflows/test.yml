@@ -13,5 +13,13 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run Go tests
+        run: make test-go
+
       - name: Run integration test suite
         run: make test
