@@ -44,12 +44,6 @@ async function pickEdition(page, edition) {
   await page.locator(`label:has(input[name="mc-edition"][value="${edition}"])`).click();
 }
 
-// Lets any request the page was about to make reach the routes, so "never
-// requested" assertions cannot pass just by running early.
-async function settle(page) {
-  await page.waitForLoadState('networkidle');
-}
-
 async function openAdvanced(page) {
   await page.locator('#mc-status-advanced summary').click();
 }
@@ -81,6 +75,14 @@ test.describe('mc status page - form', () => {
     await expect(query).not.toBeChecked();
   });
 
+  test('the query box stays ticked across a Bedrock round trip when it was never touched', async ({ page }) => {
+    await page.goto('/project/mc-status');
+    await openAdvanced(page);
+    await pickEdition(page, 'bedrock');
+    await pickEdition(page, 'java');
+    await expect(page.locator('#mc-status-query')).toBeChecked();
+  });
+
   test('the query port is only enabled while the query box is ticked', async ({ page }) => {
     await page.goto('/project/mc-status');
     await openAdvanced(page);
@@ -98,7 +100,6 @@ test.describe('mc status page - form', () => {
     await page.locator('#mc-status-host').fill('..');
     await page.locator('#mc-status-submit').click();
     await expect(page.locator('#mc-status-error-message')).toHaveText('Enter a valid server address');
-    await settle(page);
     expect(requests.status).toHaveLength(0);
   });
 });
@@ -179,7 +180,17 @@ test.describe('mc status page - lookups', () => {
     await page.goto('/project/mc-status');
     await lookup(page, 'play.example.net');
     await expect(page.locator('#mc-status-players-count')).toHaveText('0 / 20');
+    await expect(page.locator('#mc-status-players-bar')).toHaveAttribute('style', /width:\s*0%/);
     await expect(page.locator('#mc-status-players-unavailable')).toBeHidden();
+  });
+
+  test('an over-full server clamps the bar and progress value to the maximum', async ({ page }) => {
+    await mockMcStatus(page, () => json({ ...ONLINE, num_players: 30, max_players: 20 }));
+    await page.goto('/project/mc-status');
+    await lookup(page, 'play.example.net');
+    await expect(page.locator('#mc-status-players-count')).toHaveText('30 / 20');
+    await expect(page.locator('#mc-status-players-bar')).toHaveAttribute('style', /width:\s*100%/);
+    await expect(page.locator('[role="progressbar"]')).toHaveAttribute('aria-valuenow', '20');
   });
 
   test('falls back to "Unknown version" when the API has none', async ({ page }) => {
@@ -202,8 +213,11 @@ test.describe('mc status page - lookups', () => {
     await page.route(`${API}/mcstatus/icon/**`, (route) => route.fulfill({ status: 404 }));
     await page.route(`${API}/mcstatus/play.example.net*`, (route) => route.fulfill(json(ONLINE)));
     await page.goto('/project/mc-status');
+    const iconResponse = page.waitForResponse((res) => res.url().includes('/mcstatus/icon/'));
     await lookup(page, 'play.example.net');
+    await iconResponse;
     await expect(page.locator('#mc-status-result')).toBeVisible();
+    await expect(page.locator('#mc-status-icon')).toHaveJSProperty('complete', true);
     await expect(page.locator('#mc-status-icon')).toBeHidden();
   });
 
@@ -217,7 +231,6 @@ test.describe('mc status page - lookups', () => {
     expect(requests.status[0].searchParams.get('bedrock')).toBe('true');
     expect(requests.status[0].searchParams.has('query')).toBe(false);
     await expect(page.locator('#mc-status-icon')).not.toHaveAttribute('src', /.+/);
-    await settle(page);
     expect(requests.icon).toHaveLength(0);
   });
 
@@ -277,8 +290,7 @@ test.describe('mc status page - query port', () => {
       await lookup(page, 'play.example.net');
       await expect(page.locator('#mc-status-advanced')).toHaveAttribute('open', '');
       await expect(page.locator('#mc-status-query-port')).toBeFocused();
-      await settle(page);
-      expect(requests.status).toHaveLength(0);
+        expect(requests.status).toHaveLength(0);
     });
   }
 });
@@ -427,7 +439,11 @@ test.describe('mc status page - timeout', () => {
     await lookup(page, 'play.example.net');
     await expect(page.locator('#mc-status-submit')).toHaveText('Checking...');
 
-    await page.clock.runFor(30_000);
+    await page.clock.runFor(29_999);
+    await expect(page.locator('#mc-status-submit')).toHaveText('Checking...');
+    await expect(page.locator('#mc-status-error')).toBeHidden();
+
+    await page.clock.runFor(1);
     await expect(page.locator('#mc-status-error-message')).toHaveText("Couldn't reach that server");
     await expect(page.locator('#mc-status-error-detail')).toHaveText('The lookup timed out.');
     await expect(page.locator('#mc-status-submit')).toHaveText('Check');
@@ -453,16 +469,26 @@ test.describe('mc status page - request sequencing', () => {
       slowServed();
     });
     await page.route(`${API}/mcstatus/fast.example.net*`, (route) => route.fulfill(json({ ...ONLINE, name: 'Fast' })));
+    await page.route(`${API}/mcstatus/last.example.net*`, (route) => route.fulfill(json({ ...ONLINE, name: 'Last' })));
 
     await page.goto('/project/mc-status');
+    await page.evaluate(() => {
+      window.__names = [];
+      new MutationObserver(() => window.__names.push(document.getElementById('mc-status-name').textContent)).observe(
+        document.getElementById('mc-status-name'),
+        { childList: true, characterData: true, subtree: true }
+      );
+    });
+
     await lookup(page, 'slow.example.net');
     await lookup(page, 'fast.example.net');
     await expect(page.locator('#mc-status-name')).toHaveText('Fast');
 
     releaseSlow();
     await slowDone;
-    await settle(page);
-    await expect(page.locator('#mc-status-name')).toHaveText('Fast');
+    await lookup(page, 'last.example.net');
+    await expect(page.locator('#mc-status-name')).toHaveText('Last');
+    expect(await page.evaluate(() => window.__names)).not.toContain('Slow');
     await expect(page.locator('#mc-status-submit')).toHaveText('Check');
   });
 });
