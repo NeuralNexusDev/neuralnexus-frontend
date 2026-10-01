@@ -51,7 +51,7 @@ type apiMcStatus struct {
 	Version    string `json:"version"`
 }
 
-// The API sends line breaks as a literal backslash-n.
+// motdLines splits a MOTD into plain lines, decoding the API's literal backslash-n.
 func motdLines(motd string) []string {
 	motd = strings.ReplaceAll(motd, `\n`, "\n")
 	motd = mcColorCode.ReplaceAllString(motd, "")
@@ -64,10 +64,7 @@ func motdLines(motd string) []string {
 	return lines
 }
 
-// 404 means the server gave no status, but only as a problem+json response: a
-// bare 404 comes from a proxy or a wrong API URL and must not be cached as
-// "offline". 429 and 500 must not be cached as "offline" either. This client
-// sends no Authorization header, so 401 is unexpected.
+// fetchMcStatus looks up a server status, treating only a problem+json 404 as offline.
 func fetchMcStatus(r *http.Request, data components.McStatusEmbedData) (apiMcStatus, lookupResult) {
 	var status apiMcStatus
 	endpoint := config.APIURL + "/api/v1/mcstatus/" + url.PathEscape(data.Host)
@@ -134,6 +131,7 @@ func writeLookupFailure(w http.ResponseWriter, code int, message, retryAfter str
 	http.Error(w, message, code)
 }
 
+// McStatusEmbedHandler serves the link-preview page for a server status.
 func McStatusEmbedHandler(w http.ResponseWriter, r *http.Request) {
 	host, ok := normalizeMcHost(r.PathValue("host"))
 	if !ok {

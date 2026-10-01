@@ -409,7 +409,7 @@ test.describe('mc status page - errors', () => {
     await expect(page.locator('#mc-status-result')).toBeHidden();
   });
 
-  for (const contentType of ['text/html', 'application/json', 'application/problem+xml', 'text/x; a=application/problem+json']) {
+  for (const contentType of ['text/html', 'application/json', 'application/problem+xml', 'application/vnd.api+json', 'application/problem+json2', 'text/x; a=application/problem+json']) {
     test(`a 404 served as ${contentType} is not reported as an unreachable server`, async ({ page }) => {
       await mockMcStatus(page, () => ({ status: 404, contentType, body: '<h1>Not Found</h1>' }));
       await page.goto('/project/mc-status');

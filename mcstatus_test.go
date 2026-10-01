@@ -295,6 +295,8 @@ func TestNormalizeMcHost(t *testing.T) {
 		"Example.COM":       "example.com",
 		"example.com:25565": "example.com:25565",
 		"example.com:00080": "example.com:80",
+		"example.com:40000": "example.com:40000",
+		"example.com:65535": "example.com:65535",
 		"a_b.example.com":   "a_b.example.com",
 	}
 	for raw, want := range cases {
