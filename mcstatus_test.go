@@ -226,16 +226,23 @@ func TestEmbedLookupFailures(t *testing.T) {
 	}
 }
 
-func TestEmbedAPIUnreachable(t *testing.T) {
-	f := newFakeAPI(t, http.StatusOK, onlineBody)
-	f.server.Close()
-	rec := getEmbed("a.com", "")
+func assertUnavailable(t *testing.T, rec *httptest.ResponseRecorder) {
+	t.Helper()
 	if rec.Code != http.StatusServiceUnavailable || rec.Header().Get("Retry-After") != "30" {
 		t.Errorf("status = %d, Retry-After = %q", rec.Code, rec.Header().Get("Retry-After"))
 	}
 	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
 		t.Errorf("Cache-Control = %q, want %q", got, "no-store")
 	}
+	if got := rec.Body.String(); got != "status lookup unavailable\n" {
+		t.Errorf("body = %q, want only %q", got, "status lookup unavailable")
+	}
+}
+
+func TestEmbedAPIUnreachable(t *testing.T) {
+	f := newFakeAPI(t, http.StatusOK, onlineBody)
+	f.server.Close()
+	assertUnavailable(t, getEmbed("a.com", ""))
 }
 
 func TestEmbedCancelsTheUpstreamLookupWhenTheClientGoesAway(t *testing.T) {
@@ -276,34 +283,55 @@ func TestEmbedCancelsTheUpstreamLookupWhenTheClientGoesAway(t *testing.T) {
 	}
 }
 
-func TestEmbedClosesTheUpstreamConnection(t *testing.T) {
-	var open atomic.Int32
-	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/problem+json")
-		w.WriteHeader(http.StatusNotFound)
-		fmt.Fprint(w, `{"status":404}`)
-	}))
-	server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
-		switch state {
-		case http.StateNew:
-			open.Add(1)
-		case http.StateClosed, http.StateHijacked:
-			open.Add(-1)
-		}
+func TestEmbedClosesTheUpstreamBody(t *testing.T) {
+	cases := []struct {
+		name        string
+		status      int
+		contentType string
+		body        string
+	}{
+		{"online", http.StatusOK, "application/json", onlineBody + strings.Repeat(" ", 1<<16)},
+		{"offline", http.StatusNotFound, "application/problem+json", `{"status":404}`},
 	}
-	server.Start()
-	t.Cleanup(server.Close)
-	apiURL := config.APIURL
-	config.APIURL = server.URL
-	t.Cleanup(func() { config.APIURL = apiURL })
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var opened, open atomic.Int32
+			server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", tc.contentType)
+				w.WriteHeader(tc.status)
+				fmt.Fprint(w, tc.body)
+			}))
+			server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+				switch state {
+				case http.StateNew:
+					opened.Add(1)
+					open.Add(1)
+				case http.StateClosed:
+					open.Add(-1)
+				}
+			}
+			server.Start()
+			t.Cleanup(server.Close)
+			apiURL := config.APIURL
+			config.APIURL = server.URL
+			t.Cleanup(func() { config.APIURL = apiURL })
 
-	getEmbed("a.com", "")
-	deadline := time.Now().Add(2 * time.Second)
-	for open.Load() != 0 && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
-	if n := open.Load(); n != 0 {
-		t.Errorf("upstream connection still open after handler returned: %d", n)
+			rec := getEmbed("a.com", "")
+			http.DefaultTransport.(*http.Transport).CloseIdleConnections()
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+			}
+			if n := opened.Load(); n != 1 {
+				t.Fatalf("upstream connections opened = %d, want 1", n)
+			}
+			deadline := time.Now().Add(2 * time.Second)
+			for open.Load() != 0 && time.Now().Before(deadline) {
+				time.Sleep(10 * time.Millisecond)
+			}
+			if n := open.Load(); n != 0 {
+				t.Errorf("upstream connection still open after handler returned: %d", n)
+			}
+		})
 	}
 }
 
@@ -311,13 +339,7 @@ func TestEmbedRejectsAnInvalidAPIURL(t *testing.T) {
 	apiURL := config.APIURL
 	config.APIURL = "http://a b"
 	t.Cleanup(func() { config.APIURL = apiURL })
-	rec := getEmbed("a.com", "")
-	if rec.Code != http.StatusServiceUnavailable || rec.Header().Get("Retry-After") != "30" {
-		t.Errorf("status = %d, Retry-After = %q", rec.Code, rec.Header().Get("Retry-After"))
-	}
-	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
-		t.Errorf("Cache-Control = %q, want %q", got, "no-store")
-	}
+	assertUnavailable(t, getEmbed("a.com", ""))
 }
 
 func hostOfLength(n int) string {
