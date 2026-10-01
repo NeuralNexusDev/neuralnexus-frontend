@@ -1,0 +1,83 @@
+package components
+
+import (
+	"net/url"
+	"strconv"
+	"strings"
+
+	"github.com/p0t4t0sandwich/neuralnexus-frontend/config"
+)
+
+type McStatusEmbedData struct {
+	Host    string
+	Bedrock bool
+	Query   bool
+	Online  bool
+	Motd    []string
+	Players int
+	Max     int
+	Version string
+}
+
+func (d McStatusEmbedData) Options() url.Values {
+	v := url.Values{}
+	if d.Bedrock {
+		v.Set("bedrock", "true")
+	} else if d.Query {
+		v.Set("query", "true")
+	}
+	return v
+}
+
+func (d McStatusEmbedData) PageURL() string {
+	u := config.SiteURL + "/mcstatus/" + url.PathEscape(d.Host)
+	if q := d.Options().Encode(); q != "" {
+		u += "?" + q
+	}
+	return u
+}
+
+func (d McStatusEmbedData) InteractiveURL() string {
+	v := d.Options()
+	v.Set("host", d.Host)
+	return "/project/mc-status?" + v.Encode()
+}
+
+func (d McStatusEmbedData) IconURL() string {
+	if !d.Online || d.Bedrock {
+		return ""
+	}
+	return config.APIURL + "/api/v1/mcstatus/icon/" + url.PathEscape(d.Host)
+}
+
+func (d McStatusEmbedData) Description() string {
+	if !d.Online {
+		return "Server offline or unreachable"
+	}
+	lines := append([]string{}, d.Motd...)
+	lines = append(lines,
+		"Players: "+strconv.Itoa(d.Players)+"/"+strconv.Itoa(d.Max),
+		"Version: "+d.Version,
+	)
+	return strings.Join(lines, "\n")
+}
+
+templ McStatusEmbedPage(data McStatusEmbedData) {
+	@WrapContents(McStatusEmbed(data))
+}
+
+templ McStatusEmbed(data McStatusEmbedData) {
+	<meta property="og:site_name" content="Powered by NeuralNexus.dev"/>
+	<meta name="theme-color" content="#7C0014"/>
+	<meta property="og:title" content={ "IP: " + data.Host }/>
+	<meta property="og:description" content={ data.Description() }/>
+	<meta property="og:url" content={ data.PageURL() }/>
+	if data.IconURL() != "" {
+		<meta property="og:image" content={ data.IconURL() }/>
+	}
+	<div class="mx-auto max-w-md space-y-4 text-center">
+		<h1 class="break-words text-2xl font-bold [overflow-wrap:anywhere]">{ data.Host }</h1>
+		<p class="whitespace-pre-line break-words text-sm [overflow-wrap:anywhere]">{ data.Description() }</p>
+		<a class="text-sm underline" href={ templ.SafeURL(data.InteractiveURL()) }>Open in MC Status</a>
+	</div>
+}
