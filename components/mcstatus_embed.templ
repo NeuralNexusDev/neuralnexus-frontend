@@ -50,6 +50,8 @@ func (d McStatusEmbedData) IconURL() string {
 	return config.APIURL + "/api/v1/mcstatus/icon/" + url.PathEscape(d.Host)
 }
 
+const maxEmbedDescriptionRunes = 300
+
 func (d McStatusEmbedData) Description() string {
 	if !d.Online {
 		return "Server offline or unreachable"
@@ -59,22 +61,30 @@ func (d McStatusEmbedData) Description() string {
 		"Players: "+strconv.Itoa(d.Players)+"/"+strconv.Itoa(d.Max),
 		"Version: "+d.Version,
 	)
-	return strings.Join(lines, "\n")
+	description := strings.Join(lines, "\n")
+	if runes := []rune(description); len(runes) > maxEmbedDescriptionRunes {
+		description = string(runes[:maxEmbedDescriptionRunes]) + "…"
+	}
+	return description
 }
 
 templ McStatusEmbedPage(data McStatusEmbedData) {
-	@WrapContents(McStatusEmbed(data))
+	@WrapContentsWithHead("IP: "+data.Host, mcStatusEmbedHead(data), McStatusEmbed(data))
 }
 
-templ McStatusEmbed(data McStatusEmbedData) {
+templ mcStatusEmbedHead(data McStatusEmbedData) {
+	{{ iconURL := data.IconURL() }}
 	<meta property="og:site_name" content="Powered by NeuralNexus.dev"/>
 	<meta name="theme-color" content="#7C0014"/>
 	<meta property="og:title" content={ "IP: " + data.Host }/>
 	<meta property="og:description" content={ data.Description() }/>
 	<meta property="og:url" content={ data.PageURL() }/>
-	if data.IconURL() != "" {
-		<meta property="og:image" content={ data.IconURL() }/>
+	if iconURL != "" {
+		<meta property="og:image" content={ iconURL }/>
 	}
+}
+
+templ McStatusEmbed(data McStatusEmbedData) {
 	<div class="mx-auto max-w-md space-y-4 text-center">
 		<h1 class="break-words text-2xl font-bold [overflow-wrap:anywhere]">{ data.Host }</h1>
 		<p class="whitespace-pre-line break-words text-sm [overflow-wrap:anywhere]">{ data.Description() }</p>

@@ -17,6 +17,10 @@ func steamOpenIDLoginURL() string {
 var STEAM_OPENID_LOGIN_URL = steamOpenIDLoginURL()
 
 templ WrapContents(contents templ.Component) {
+	@WrapContentsWithHead("NeuralNexus", nil, contents)
+}
+
+templ WrapContentsWithHead(title string, head templ.Component, contents templ.Component) {
 	<!DOCTYPE html>
 	<html lang="en">
 		<head>
@@ -28,7 +32,10 @@ templ WrapContents(contents templ.Component) {
 			<link rel="icon" type="image/x-icon" href="/public/favicon.ico"/>
 			<link rel="manifest" href="/public/site.webmanifest"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-			<title>NeuralNexus</title>
+			<title>{ title }</title>
+			if head != nil {
+				@head
+			}
 		</head>
 		<script src="/public/js/scripts.js"></script>
 		<script src="/public/js/theming.js"></script>
