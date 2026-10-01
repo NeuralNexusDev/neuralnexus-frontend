@@ -598,16 +598,12 @@ function renderMcStatus(status, bedrock, host) {
     track.setAttribute('aria-valuenow', Math.min(numPlayers, maxPlayers));
 
     const icon = document.getElementById('mc-status-icon');
-    const favicon = status.favicon || '';
-    const iconUrl = favicon.startsWith('data:image/png;base64,')
-        ? favicon
-        : (bedrock ? '' : `${apiBaseUrl()}/api/v1/mcstatus/icon/${encodeURIComponent(host)}`);
     icon.hidden = true;
     icon.onload = () => { icon.hidden = false; };
     icon.onerror = () => { icon.hidden = true; };
     icon.removeAttribute('src');
-    if (iconUrl) {
-        icon.src = iconUrl;
+    if (!bedrock) {
+        icon.src = `${apiBaseUrl()}/api/v1/mcstatus/icon/${encodeURIComponent(host)}`;
     }
 
     const pill = document.getElementById('mc-status-pill');
