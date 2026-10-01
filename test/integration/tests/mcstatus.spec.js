@@ -436,6 +436,7 @@ test.describe('mc status page - timeout', () => {
     await page.clock.install();
     await page.route(`${API}/mcstatus/**`, () => new Promise(() => {}));
     await page.goto('/project/mc-status');
+    await page.clock.pauseAt(new Date(Date.now() + 1000));
     await lookup(page, 'play.example.net');
     await expect(page.locator('#mc-status-submit')).toHaveText('Checking...');
 
