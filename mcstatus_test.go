@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -250,6 +252,7 @@ func TestEmbedCancelsTheUpstreamLookupWhenTheClientGoesAway(t *testing.T) {
 	t.Cleanup(func() { config.APIURL = apiURL })
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	req := httptest.NewRequest(http.MethodGet, "/mcstatus/a.com", nil).WithContext(ctx)
 	req.SetPathValue("host", "a.com")
 	done := make(chan struct{})
@@ -270,6 +273,50 @@ func TestEmbedCancelsTheUpstreamLookupWhenTheClientGoesAway(t *testing.T) {
 		case <-time.After(5 * time.Second):
 			t.Fatal("cancelling the client request did not cancel the upstream lookup")
 		}
+	}
+}
+
+func TestEmbedClosesTheUpstreamConnection(t *testing.T) {
+	var open atomic.Int32
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/problem+json")
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, `{"status":404}`)
+	}))
+	server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		switch state {
+		case http.StateNew:
+			open.Add(1)
+		case http.StateClosed, http.StateHijacked:
+			open.Add(-1)
+		}
+	}
+	server.Start()
+	t.Cleanup(server.Close)
+	apiURL := config.APIURL
+	config.APIURL = server.URL
+	t.Cleanup(func() { config.APIURL = apiURL })
+
+	getEmbed("a.com", "")
+	deadline := time.Now().Add(2 * time.Second)
+	for open.Load() != 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if n := open.Load(); n != 0 {
+		t.Errorf("upstream connection still open after handler returned: %d", n)
+	}
+}
+
+func TestEmbedRejectsAnInvalidAPIURL(t *testing.T) {
+	apiURL := config.APIURL
+	config.APIURL = "http://a b"
+	t.Cleanup(func() { config.APIURL = apiURL })
+	rec := getEmbed("a.com", "")
+	if rec.Code != http.StatusServiceUnavailable || rec.Header().Get("Retry-After") != "30" {
+		t.Errorf("status = %d, Retry-After = %q", rec.Code, rec.Header().Get("Retry-After"))
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Errorf("Cache-Control = %q, want %q", got, "no-store")
 	}
 }
 

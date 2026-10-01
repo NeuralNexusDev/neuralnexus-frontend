@@ -24,6 +24,8 @@ const (
 	offlineMaxAge      = "public, max-age=30"
 	unavailableRetry   = "30"
 	unavailableMessage = "status lookup unavailable"
+	invalidMessage     = "invalid server address"
+	unexpectedMessage  = "unexpected status response"
 	rateLimitedRetry   = "60"
 	maxMcHostname      = 253
 	problemJSON        = "application/problem+json"
@@ -54,14 +56,14 @@ func McStatusEmbedHandler(w http.ResponseWriter, r *http.Request) {
 
 	m := mcHostPattern.FindStringSubmatch(r.PathValue("host"))
 	if m == nil || len(m[1]) > maxMcHostname {
-		fail(http.StatusBadRequest, "invalid server address", "")
+		fail(http.StatusBadRequest, invalidMessage, "")
 		return
 	}
 	host := strings.ToLower(m[1])
 	if m[2] != "" {
 		port, err := strconv.ParseUint(m[2], 10, 16)
 		if err != nil || port < 1 {
-			fail(http.StatusBadRequest, "invalid server address", "")
+			fail(http.StatusBadRequest, invalidMessage, "")
 			return
 		}
 		host += ":" + strconv.FormatUint(port, 10)
@@ -114,7 +116,7 @@ func McStatusEmbedHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", onlineMaxAge)
 	case res.StatusCode == http.StatusNotFound:
 		if mediaType, _, _ := mime.ParseMediaType(res.Header.Get("Content-Type")); mediaType != problemJSON {
-			fail(http.StatusBadGateway, "unexpected status response", "")
+			fail(http.StatusBadGateway, unexpectedMessage, "")
 			return
 		}
 		w.Header().Set("Cache-Control", offlineMaxAge)
@@ -125,7 +127,7 @@ func McStatusEmbedHandler(w http.ResponseWriter, r *http.Request) {
 		fail(http.StatusServiceUnavailable, unavailableMessage, unavailableRetry)
 		return
 	default:
-		fail(http.StatusBadGateway, "unexpected status response", "")
+		fail(http.StatusBadGateway, unexpectedMessage, "")
 		return
 	}
 	templ.Handler(components.McStatusEmbedPage(data)).ServeHTTP(w, r)
