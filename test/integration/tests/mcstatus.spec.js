@@ -21,8 +21,6 @@ function json(body, status = 200) {
   return { status, contentType: 'application/json', body: JSON.stringify(body) };
 }
 
-// Routes both the status and icon endpoints; `status` handles status calls and
-// every request is recorded so tests can assert on what was sent.
 async function mockMcStatus(page, status) {
   const requests = { status: [], icon: [] };
   await page.route(`${API}/mcstatus/**`, async (route) => {
@@ -40,6 +38,16 @@ async function mockMcStatus(page, status) {
 async function lookup(page, host) {
   await page.locator('#mc-status-host').fill(host);
   await page.locator('#mc-status-submit').click();
+}
+
+async function pickEdition(page, edition) {
+  await page.locator(`label:has(input[name="mc-edition"][value="${edition}"])`).click();
+}
+
+// Lets any request the page was about to make reach the routes, so "never
+// requested" assertions cannot pass just by running early.
+async function settle(page) {
+  await page.waitForLoadState('networkidle');
 }
 
 async function openAdvanced(page) {
@@ -63,12 +71,12 @@ test.describe('mc status page - form', () => {
     await expect(query).toBeChecked();
 
     await query.uncheck();
-    await page.getByText('Bedrock', { exact: true }).click();
+    await pickEdition(page, 'bedrock');
     await expect(query).toBeDisabled();
     await expect(query).not.toBeChecked();
     await expect(page.locator('#mc-status-query-port')).toBeDisabled();
 
-    await page.getByText('Java', { exact: true }).click();
+    await pickEdition(page, 'java');
     await expect(query).toBeEnabled();
     await expect(query).not.toBeChecked();
   });
@@ -84,12 +92,13 @@ test.describe('mc status page - form', () => {
     await expect(port).toBeEnabled();
   });
 
-  test('a blank or dot-segment address shows an error without calling the API', async ({ page }) => {
+  test('a dot-segment address shows an error without calling the API', async ({ page }) => {
     const requests = await mockMcStatus(page, () => json(ONLINE));
     await page.goto('/project/mc-status');
     await page.locator('#mc-status-host').fill('..');
     await page.locator('#mc-status-submit').click();
     await expect(page.locator('#mc-status-error-message')).toHaveText('Enter a valid server address');
+    await settle(page);
     expect(requests.status).toHaveLength(0);
   });
 });
@@ -106,7 +115,7 @@ test.describe('mc status page - lookups', () => {
     await expect(page.locator('#mc-status-type')).toHaveText('Java');
     await expect(page.locator('#mc-status-version')).toHaveText('Paper 1.21');
     await expect(page.locator('#mc-status-players-count')).toHaveText('3 / 20');
-    await expect(page.locator('#mc-status-players-bar')).toHaveCSS('width', /.+/);
+    await expect(page.locator('#mc-status-players-bar')).toHaveAttribute('style', /width:\s*15%/);
     await expect(page.locator('[role="progressbar"]')).toHaveAttribute('aria-valuenow', '3');
     await expect(page.locator('[role="progressbar"]')).toHaveAttribute('aria-valuemax', '20');
 
@@ -143,6 +152,8 @@ test.describe('mc status page - lookups', () => {
     await page.goto('/project/mc-status');
     await lookup(page, 'play.example.net');
     await expect(page.locator('#mc-status-name')).toHaveText('<img src=x onerror=window.__xss=1>');
+    await expect(page.locator('#mc-status-motd')).toHaveText('<script>window.__xss=1</script>');
+    await expect(page.locator('#mc-status-version')).toHaveText('<b>1.21</b>');
     await expect(page.locator('#mc-status-players li').first()).toHaveText('<i>mallory</i>');
     await expect(page.locator('#mc-status-result img:not(#mc-status-icon)')).toHaveCount(0);
     expect(await page.evaluate(() => window.__xss)).toBeUndefined();
@@ -199,14 +210,15 @@ test.describe('mc status page - lookups', () => {
   test('a Bedrock lookup sends bedrock=true, no query, and no icon request', async ({ page }) => {
     const requests = await mockMcStatus(page, () => json(ONLINE));
     await page.goto('/project/mc-status');
-    await page.getByText('Bedrock', { exact: true }).click();
+    await pickEdition(page, 'bedrock');
     await lookup(page, 'bedrock.example.net');
 
     await expect(page.locator('#mc-status-type')).toHaveText('Bedrock');
     expect(requests.status[0].searchParams.get('bedrock')).toBe('true');
     expect(requests.status[0].searchParams.has('query')).toBe(false);
+    await expect(page.locator('#mc-status-icon')).not.toHaveAttribute('src', /.+/);
+    await settle(page);
     expect(requests.icon).toHaveLength(0);
-    await expect(page.locator('#mc-status-icon')).toBeHidden();
   });
 
   test('turning the query off sends no query parameter', async ({ page }) => {
@@ -265,6 +277,7 @@ test.describe('mc status page - query port', () => {
       await lookup(page, 'play.example.net');
       await expect(page.locator('#mc-status-advanced')).toHaveAttribute('open', '');
       await expect(page.locator('#mc-status-query-port')).toBeFocused();
+      await settle(page);
       expect(requests.status).toHaveLength(0);
     });
   }
@@ -290,12 +303,12 @@ test.describe('mc status page - share links', () => {
   test('Bedrock and query=false are kept in the shared URL', async ({ page }) => {
     await mockMcStatus(page, () => json(ONLINE));
     await page.goto('/project/mc-status');
-    await page.getByText('Bedrock', { exact: true }).click();
+    await pickEdition(page, 'bedrock');
     await lookup(page, 'bedrock.example.net');
     await expect(page.locator('#mc-status-result')).toBeVisible();
     expect(new URL(page.url()).search).toBe('?host=bedrock.example.net&bedrock=true');
 
-    await page.getByText('Java', { exact: true }).click();
+    await pickEdition(page, 'java');
     await openAdvanced(page);
     await page.locator('#mc-status-query').uncheck();
     await page.locator('#mc-status-submit').click();
@@ -406,11 +419,30 @@ test.describe('mc status page - errors', () => {
   });
 });
 
+test.describe('mc status page - timeout', () => {
+  test('a lookup that never answers times out with a message and frees the button', async ({ page }) => {
+    await page.clock.install();
+    await page.route(`${API}/mcstatus/**`, () => new Promise(() => {}));
+    await page.goto('/project/mc-status');
+    await lookup(page, 'play.example.net');
+    await expect(page.locator('#mc-status-submit')).toHaveText('Checking...');
+
+    await page.clock.runFor(30_000);
+    await expect(page.locator('#mc-status-error-message')).toHaveText("Couldn't reach that server");
+    await expect(page.locator('#mc-status-error-detail')).toHaveText('The lookup timed out.');
+    await expect(page.locator('#mc-status-submit')).toHaveText('Check');
+  });
+});
+
 test.describe('mc status page - request sequencing', () => {
   test('a slow earlier lookup cannot overwrite a newer one', async ({ page }) => {
     let releaseSlow;
     const slow = new Promise((resolve) => {
       releaseSlow = resolve;
+    });
+    let slowServed;
+    const slowDone = new Promise((resolve) => {
+      slowServed = resolve;
     });
     await page.route(`${API}/mcstatus/icon/**`, (route) =>
       route.fulfill({ status: 200, contentType: 'image/png', body: PNG_1X1 })
@@ -418,6 +450,7 @@ test.describe('mc status page - request sequencing', () => {
     await page.route(`${API}/mcstatus/slow.example.net*`, async (route) => {
       await slow;
       await route.fulfill(json({ ...ONLINE, name: 'Slow' })).catch(() => {});
+      slowServed();
     });
     await page.route(`${API}/mcstatus/fast.example.net*`, (route) => route.fulfill(json({ ...ONLINE, name: 'Fast' })));
 
@@ -427,17 +460,26 @@ test.describe('mc status page - request sequencing', () => {
     await expect(page.locator('#mc-status-name')).toHaveText('Fast');
 
     releaseSlow();
-    await page.waitForTimeout(200);
+    await slowDone;
+    await settle(page);
     await expect(page.locator('#mc-status-name')).toHaveText('Fast');
     await expect(page.locator('#mc-status-submit')).toHaveText('Check');
   });
 });
 
 test.describe('mc status embed route', () => {
-  const invalid = ['a_b$c', 'bad host', 'a.com:0', 'a.com:65536', 'a.com:123456', `${'a'.repeat(254)}.com`];
+  const invalid = {
+    'an illegal character': 'a_b$c',
+    'a space': 'bad host',
+    'port 0': 'a.com:0',
+    'port 65536': 'a.com:65536',
+    'a six digit port': 'a.com:123456',
+    'a label over 63 characters': `${'a'.repeat(64)}.com`,
+    'a name over 253 characters': `${`${'a'.repeat(60)}.`.repeat(5)}com`,
+  };
 
-  for (const host of invalid) {
-    test(`rejects an invalid address (${host.slice(0, 24)}) with a 400 that is not cached`, async ({ request }) => {
+  for (const [name, host] of Object.entries(invalid)) {
+    test(`rejects ${name} with a 400 that is not cached`, async ({ request }) => {
       const res = await request.get(`/mcstatus/${encodeURIComponent(host)}`);
       expect(res.status()).toBe(400);
       expect(res.headers()['cache-control']).toBe('no-store');
