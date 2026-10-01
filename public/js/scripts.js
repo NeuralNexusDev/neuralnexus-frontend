@@ -786,7 +786,7 @@ function loadMcStatusFromUrl() {
     let host = '';
     if (window.location.pathname.startsWith(`${MC_STATUS_PATH}/`)) {
         try {
-            host = decodeURIComponent(window.location.pathname.slice(MC_STATUS_PATH.length + 1).replace(/\/$/, ''));
+            host = decodeURIComponent(window.location.pathname.slice(MC_STATUS_PATH.length + 1));
         } catch {
             return;
         }

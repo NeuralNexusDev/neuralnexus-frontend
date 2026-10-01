@@ -347,13 +347,6 @@ test.describe('mc status page - share links', () => {
     expect(new URL(page.url()).pathname).toBe('/project/mc-status/play.example.net:25570');
   });
 
-  test('a trailing slash after the host still runs the lookup', async ({ page }) => {
-    await mockMcStatus(page, () => json(ONLINE));
-    await page.goto('/project/mc-status/play.example.net/');
-    await expect(page.locator('#mc-status-result')).toBeVisible();
-    await expect(page.locator('#mc-status-host')).toHaveValue('play.example.net');
-  });
-
   test('an old ?host= link is ignored', async ({ page }) => {
     const requests = await mockMcStatus(page, () => json(ONLINE));
     await page.goto('/project/mc-status?host=play.example.net');
@@ -369,8 +362,19 @@ test.describe('mc status page - share links', () => {
     await expect(page).toHaveURL(/\/project\/mc-status\/play\.example\.net:80$/);
   });
 
-  for (const host of ['a b', 'bücher.de', 'example.com.', 'a.com:0', 'a.com:99999', 'a.com/b', 'http://a.com']) {
-    test(`a lookup for "${host}" leaves the URL on the bare checker`, async ({ page }) => {
+  const rejectedByTheServer = {
+    'a space': 'a b',
+    'a non-ASCII name': 'bücher.de',
+    'a trailing dot': 'example.com.',
+    'port 0': 'a.com:0',
+    'port 99999': 'a.com:99999',
+    'a path': 'a.com/b',
+    'a scheme': 'http://a.com',
+    'a name over 253 characters': `${`${'a'.repeat(60)}.`.repeat(5)}com`,
+  };
+
+  for (const [name, host] of Object.entries(rejectedByTheServer)) {
+    test(`a lookup for ${name} leaves the URL on the bare checker`, async ({ page }) => {
       await mockMcStatus(page, () => json(ONLINE));
       await page.goto('/project/mc-status/play.example.net');
       await expect(page.locator('#mc-status-result')).toBeVisible();
@@ -687,12 +691,6 @@ test.describe('mc status page - server-rendered route', () => {
   test('a Bedrock preview asks for the Bedrock icon', async ({ request }) => {
     const { body } = await html(request, '/project/mc-status/online.example.net?bedrock=true');
     expect(body).toContain(`property="og:image" content="${process.env.NN_API_URL}/api/v1/mcstatus/icon/online.example.net?bedrock=true"`);
-  });
-
-  test('a trailing slash after the host serves the same page', async ({ request }) => {
-    const { body } = await html(request, '/project/mc-status/online.example.net/');
-    expect(body).toContain('<title>online.example.net</title>');
-    expect(body).toContain('id="mc-status-host"');
   });
 
   for (const [name, host] of Object.entries(invalid)) {
