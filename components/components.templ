@@ -25,8 +25,6 @@ func nnSiteURL() string {
 
 var NN_SITE_URL = nnSiteURL()
 
-// steamOpenIDLoginURL defaults to the real endpoint - unlike NN_API_URL,
-// tests are the only reason to ever override it, so unset shouldn't panic.
 func steamOpenIDLoginURL() string {
 	v := os.Getenv("STEAM_OPENID_LOGIN_URL")
 	if v == "" {
@@ -78,11 +76,8 @@ templ Home() {
 	</script>
 }
 
-// ErrorBanner is a hidden, page-level error banner that
-// showAuthErrorFromQuery() (scripts.js) reveals when the page was reached
-// via an OAuth/OpenID redirect carrying a problem+json error - a nonce
-// mismatch or a disallowed redirect_uri lands here (on Home) rather than
-// wherever the flow started, since the API can't trust that URI yet.
+// ErrorBanner is revealed by showAuthErrorFromQuery(). OAuth errors land on Home
+// rather than where the flow started, since the API can't trust that redirect_uri yet.
 templ ErrorBanner() {
 	<div id="auth-error" hidden class="mx-auto max-w-sm rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive mb-4"></div>
 }

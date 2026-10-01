@@ -8,11 +8,9 @@ update:
 	go get -tool github.com/air-verse/air@latest
 	go get -tool github.com/axzilla/templui/cmd/templui@latest
 
-# Run templ generation in watch mode
 templ:
 	go tool templ generate --watch --proxy="http://localhost:8090" --open-browser=false
 
-# Run air for Go hot reload
 server:
 	go tool air \
 	--build.cmd "go build -o tmp/bin/main ./*.go" \
@@ -29,12 +27,17 @@ tailwind-clean:
 tailwind-watch:
 	go tool gotailwind -i ./assets/css/input.css -o ./public/css/styles.css --watch
 
+dev: export NN_API_URL ?= https://api.neuralnexus.dev
+dev: export NN_SITE_URL ?= http://localhost:8090
+dev: export DISCORD_CLIENT_ID ?= 1107039927230791680
+dev: export DISCORD_REDIRECT_URI ?= https://api.neuralnexus.dev/api/oauth
+dev: export TWITCH_CLIENT_ID ?= cx0nr5h65pexo8huupaywy08ry79pw
+dev: export TWITCH_REDIRECT_URI ?= https://api.neuralnexus.dev/api/oauth
 dev:
-	export DISCORD_CLIENT_ID=1107039927230791680 DISCORD_REDIRECT_URI=https://api.neuralnexus.dev/api/oauth TWITCH_CLIENT_ID=cx0nr5h65pexo8huupaywy08ry79pw TWITCH_REDIRECT_URI=https://api.neuralnexus.dev/api/oauth
 	make tailwind-clean
 	make -j3 tailwind-watch templ server
 
-# --- Top-to-bottom test environment (containerized app + Playwright) ---
+# Containerized test environment
 
 test-env-up:
 	docker compose -f test/docker-compose.test.yml up -d --build --wait frontend
@@ -45,9 +48,6 @@ test-env-down:
 test-env-logs:
 	docker compose -f test/docker-compose.test.yml logs -f
 
-# Runs the Playwright suite against the real, containerized app - drives
-# it in a real browser and mocks only the sibling API. Needs nothing but
-# Docker: no local Node or browser install. Brings up the environment,
-# runs the suite, then tears it down regardless of outcome.
+# Runs the Playwright suite in Docker, tearing the environment down afterwards
 test: test-env-up
 	docker compose -f test/docker-compose.test.yml run --rm playwright; status=$$?; $(MAKE) test-env-down; exit $$status

@@ -1,22 +1,8 @@
-/**
- * @description Reads the backend's base URL from the hidden element
- * WrapContents renders on every page - lets tests point the frontend at a
- * different backend without editing this file.
- * @returns {string}
- */
 function apiBaseUrl() {
     return document.getElementById('api-base-url').innerText;
 }
 
-/**
- * @description Reads the RFC 9457 problem the API embeds in a "problem"
- * query param when an OAuth/OpenID redirect fails (auth.go's
- * redirectWithError) - base64 (URL-safe) encoded, same alphabet as the
- * "state" param but padded, since it's produced by Go's base64.URLEncoding
- * rather than this file's own hand-rolled encodeState(). Shows the
- * problem's detail in the page's #auth-error banner and strips the param
- * from the URL so a refresh or share doesn't repeat it.
- */
+/** The API encodes the problem with Go's base64.URLEncoding. */
 function showAuthErrorFromQuery() {
     const params = new URLSearchParams(window.location.search);
     const problemB64 = params.get('problem');
@@ -42,28 +28,11 @@ function showAuthErrorFromQuery() {
     }
 }
 
-/**
- * @description Reads Steam's OpenID login endpoint from the hidden element
- * WrapContents renders on every page - defaults to the real Steam endpoint,
- * overridable so tests can point it at a local stand-in instead of routing
- * around a hardcoded steamcommunity.com literal.
- * @returns {string}
- */
 function steamOpenIdLoginUrl() {
     return document.getElementById('steam-openid-login-url').innerText;
 }
 
-/**
- * @description Works out the cookie Domain that lets the site and the API
- * share a cookie: the labels their hostnames have in common, when that's
- * at least two (a bare TLD can't be a cookie domain). Returns '' when the
- * hosts are identical, either is an IP address, or they share too little -
- * a host-only cookie is already enough (or the browser would reject the
- * attribute outright).
- * @param {string} siteHost - Hostname the page is served from
- * @param {string} apiHost - Hostname of the API
- * @returns {string} - Domain attribute value such as ".example.com", or ''
- */
+/** Browsers reject a Domain that's a bare TLD or an IP, so those get a host-only cookie. */
 function sharedCookieDomain(siteHost, apiHost) {
     const isIp = (host) => /^[\d.]+$/.test(host) || host.includes(':');
     if (siteHost === apiHost || isIp(siteHost) || isIp(apiHost)) {
@@ -78,17 +47,7 @@ function sharedCookieDomain(siteHost, apiHost) {
     return shared.length >= 2 ? `.${shared.reverse().join('.')}` : '';
 }
 
-/**
- * @description Generates a fresh nonce for the OAuth/OpenID flow and sets
- * it as a short-lived cookie the API checks on the callback, returning the
- * nonce. Called at the moment the user clicks a login/link button (not on
- * page load) so its 5-minute TTL covers the provider round-trip rather than
- * however long the user sat on the page first. When the site and API are on
- * different subdomains the cookie is scoped to their shared parent domain so
- * the API receives it; otherwise (e.g. localhost) it stays host-only.
- * SameSite=None/Secure only apply over https.
- * @returns {string} - The generated nonce
- */
+/** SameSite=None requires Secure, so plain http (local dev) falls back to Lax. */
 function createNonce() {
     const nonce = Math.random().toString(36).substring(2, 15);
 
@@ -102,12 +61,6 @@ function createNonce() {
     return nonce;
 }
 
-/**
- * @description Toggles the header's account section (username + settings
- * gear) and Login/Logout button based on whether the session cookie is
- * still valid, checked via /users/me. Runs on every page load since the
- * session cookie is HttpOnly and can't be read from JS.
- */
 function checkHeaderAuthState() {
     fetch(`${apiBaseUrl()}/api/v1/users/me`, {
         credentials: 'include'
@@ -185,34 +138,13 @@ function submitLoginForm() {
         });
 }
 
-/**
- * @description an OAuthState object
- * @typedef {Object} OAuthState
- * @property {string} platform - The platform to redirect to
- * @property {string} nonce - The nonce to use for the OAuth flow
- * @property {string} redirect_uri - The redirect URI to use for the OAuth flow
- * @property {string} mode - The mode describing how to handle the OAuth interaction
- */
 
-/**
- * @description This function is used to encode the state object into a string.
- * Uses base64url, not plain base64, since the API decodes it with Go's
- * base64.URLEncoding.
- * @param state {OAuthState} - The state object to encode
- * @returns {string} - The encoded state object
- */
+/** base64url - the API decodes state with Go's base64.URLEncoding. */
 function encodeState(state) {
     return btoa(JSON.stringify(state)).replace(/\+/g, '-').replace(/\//g, '_');
 }
 
-/**
- * @description Builds Steam's OpenID 2.0 login request URL. Steam has no
- * OAuth app/client ID to pre-render a base URL from, so unlike the other
- * providers this is built entirely client-side, and state travels inside
- * openid.return_to instead of as a query param appended after the fact.
- * @param state {OAuthState} - The state object to round-trip through Steam
- * @returns {string}
- */
+/** State travels inside openid.return_to rather than as an appended query param. */
 function buildSteamOpenIDURL(state) {
     const returnTo = `${apiBaseUrl()}/api/openid?state=${encodeState(state)}`;
     const params = new URLSearchParams({
@@ -226,15 +158,6 @@ function buildSteamOpenIDURL(state) {
     return `${steamOpenIdLoginUrl()}?${params.toString()}`;
 }
 
-/**
- * @description Starts an OAuth/OpenID login for platform: mints a fresh
- * nonce right now via createNonce() rather than on page load, then
- * navigates to the provider with the resulting state appended. baseUrl is
- * the pre-rendered authorize URL for OAuth providers, or null for Steam,
- * which has none and builds its whole URL via buildSteamOpenIDURL.
- * @param platform {string}
- * @param baseUrl {string|null}
- */
 function startOAuthLogin(platform, baseUrl) {
     let redirect = window.location.href;
     if (redirect.endsWith('/login')) {
@@ -247,10 +170,6 @@ function startOAuthLogin(platform, baseUrl) {
     window.location.href = platform === 'steam' ? buildSteamOpenIDURL(state) : baseUrl + '&state=' + encodeState(state);
 }
 
-/**
- * @description Loads the profile into the account page via /me, since the
- * session cookie resolves identity server-side - no user ID needed here.
- */
 function loadAccountProfile() {
     fetch(`${apiBaseUrl()}/api/v1/users/me`, {
         credentials: 'include'
@@ -278,16 +197,9 @@ function loadAccountProfile() {
     loadLinkedAccounts();
 }
 
-/**
- * @description Guards against a stale response repainting the password
- * toggle after a newer request has since been made.
- */
+/** Guards against a stale response repainting the toggle. */
 let passwordAuthSeq = 0;
 
-/**
- * @description Loads the caller's account settings and reflects
- * password_auth onto the toggle.
- */
 function loadAccountSettings() {
     fetch(`${apiBaseUrl()}/api/v1/users/me/settings`, {
         credentials: 'include'
@@ -317,12 +229,6 @@ function loadAccountSettings() {
         });
 }
 
-/**
- * @description Toggles whether the account's password can be used to log
- * in. Reverts the checkbox if the request fails, unless a newer request has
- * since been made.
- * @param enabled {boolean}
- */
 function setPasswordAuthEnabled(enabled) {
     const seq = ++passwordAuthSeq;
 
@@ -354,22 +260,11 @@ function setPasswordAuthEnabled(enabled) {
         });
 }
 
-/**
- * @description The platforms shown as rows on the account settings page.
- */
 const LINK_PLATFORMS = ['discord', 'twitch', 'microsoft', 'xboxlive', 'steam'];
 
-/**
- * @description Guards against an out-of-order response repainting the
- * rows with stale data.
- */
+/** Guards against an out-of-order response repainting the rows. */
 let loadLinkedAccountsSeq = 0;
 
-/**
- * @description Fetches the caller's linked accounts and updates each
- * platform row's verified/login-enabled/unlink state, redirecting to
- * /login if the session is missing or expired.
- */
 function loadLinkedAccounts() {
     const seq = ++loadLinkedAccountsSeq;
 
@@ -403,11 +298,6 @@ function loadLinkedAccounts() {
         });
 }
 
-/**
- * @description Reflects one platform's linked-account state onto its row.
- * @param platform {string}
- * @param link {?{platform_username: string, verified: boolean, login_enabled: boolean}}
- */
 function updateLinkRow(platform, link) {
     const title = document.getElementById(`link-${platform}-title`);
     const subtitle = document.getElementById(`link-${platform}-subtitle`);
@@ -442,9 +332,6 @@ function updateLinkRow(platform, link) {
     }
 }
 
-/**
- * @description The hidden element holding each platform's base OAuth URL.
- */
 const LINK_OAUTH_BASE_IDS = {
     discord: 'link-discord-oauth-base',
     twitch: 'link-twitch-oauth-base',
@@ -452,11 +339,6 @@ const LINK_OAUTH_BASE_IDS = {
     xboxlive: 'link-xboxlive-oauth-base'
 };
 
-/**
- * @description The single Link/Unlink action for a platform row: starts
- * the OAuth linking flow if it isn't linked yet, or unlinks it if it is.
- * @param platform {string}
- */
 function handleLinkAction(platform) {
     const action = document.getElementById(`link-${platform}-action`);
     if (!action) {
@@ -487,17 +369,9 @@ function handleLinkAction(platform) {
     window.location.href = base.innerText + '&state=' + encodeState(state);
 }
 
-/**
- * @description Guards per-platform against acting on a stale, superseded
- * link/unlink/toggle response.
- */
+/** Per-platform guard against a superseded link/unlink/toggle response. */
 const platformActionSeq = {};
 
-/**
- * @description Unlinks a platform from the caller's account after
- * confirmation, then refreshes the linked-accounts rows.
- * @param platform {string}
- */
 function unlinkPlatform(platform) {
     if (!confirm(`Unlink ${platform} from your account?`)) {
         return;
@@ -530,14 +404,6 @@ function unlinkPlatform(platform) {
         });
 }
 
-/**
- * @description Sets whether a linked platform can be used to log in, from
- * its "Allow logins" checkbox. Reverts the checkbox if the request fails,
- * unless a newer link/unlink/toggle request for the same platform has
- * since been made.
- * @param platform {string}
- * @param enabled {boolean}
- */
 function setPlatformLoginEnabled(platform, enabled) {
     const seq = (platformActionSeq[platform] || 0) + 1;
     platformActionSeq[platform] = seq;
@@ -573,10 +439,6 @@ function setPlatformLoginEnabled(platform, enabled) {
         });
 }
 
-/**
- * @description Loads pending bee name suggestions into the admin page,
- * redirecting to /login if the session is missing or expired.
- */
 function loadBeeSuggestions() {
     const error = document.getElementById('bee-admin-error');
     fetch(`${apiBaseUrl()}/api/v1/bee-name-generator/suggestion/100`, {
@@ -608,12 +470,7 @@ function loadBeeSuggestions() {
         });
 }
 
-/**
- * @description Builds one suggestion row. Suggestions are user-submitted, so
- * the name is only ever set via textContent.
- * @param name {string}
- * @returns {HTMLLIElement}
- */
+/** Suggestions are user-submitted - set the name via textContent only. */
 function buildBeeSuggestionRow(name) {
     const row = document.createElement('li');
     row.className = 'flex items-center justify-between gap-3 rounded-lg border border-input p-3';
@@ -641,13 +498,6 @@ function updateBeeSuggestionsEmptyState() {
     empty.hidden = document.getElementById('bee-suggestions').children.length > 0;
 }
 
-/**
- * @description Accepts (PUT) or rejects (DELETE) a suggestion and removes
- * its row on success; alerts with the API's problem detail on failure.
- * @param name {string}
- * @param accept {boolean}
- * @param row {HTMLLIElement}
- */
 function reviewBeeSuggestion(name, accept, row) {
     const buttons = row.querySelectorAll('button');
     buttons.forEach((b) => { b.disabled = true; });
@@ -676,11 +526,7 @@ function reviewBeeSuggestion(name, accept, row) {
         });
 }
 
-/**
- * @description Reveals the bee name suggestion review link for accounts
- * holding the bee name admin permission. Cosmetic only - the admin
- * endpoints enforce the permission server-side.
- */
+/** Cosmetic only - the admin endpoints enforce the permission. */
 function showBeeAdminLink() {
     fetch(`${apiBaseUrl()}/api/v1/users/me/permissions`, {
         credentials: 'include'
@@ -698,11 +544,7 @@ function showBeeAdminLink() {
 
 let mcStatusSeq = 0;
 
-/**
- * @description Renders a server status response into the MC Status result
- * card. All server-supplied text goes in via textContent.
- * @param {Object} status - Server status from the mcstatus API
- */
+/** Server-supplied text goes in via textContent only. */
 function renderMcStatus(status) {
     const maxPlayers = status.max_players ?? 0;
     const numPlayers = status.num_players ?? 0;
@@ -736,12 +578,6 @@ function renderMcStatus(status) {
     document.getElementById('mc-status-result').hidden = false;
 }
 
-/**
- * @description Shows an error in the MC Status result area in place of the
- * result card.
- * @param {string} message - Headline to show
- * @param {string} [detail] - Optional extra detail from the API
- */
 function showMcStatusError(message, detail) {
     document.getElementById('mc-status-result').hidden = true;
     document.getElementById('mc-status-error-message').textContent = message;
@@ -751,11 +587,6 @@ function showMcStatusError(message, detail) {
     document.getElementById('mc-status-error').hidden = false;
 }
 
-/**
- * @description Looks up a server's status from the form values, keeps the
- * address bar in sync so the lookup can be shared, and renders the result.
- * @param {Event} [event] - Form submit event
- */
 function checkMcStatus(event) {
     if (event) {
         event.preventDefault();
@@ -824,10 +655,6 @@ function checkMcStatus(event) {
         });
 }
 
-/**
- * @description Fills the MC Status form from the address bar and runs the
- * lookup when a host is present, so shared links open on their result.
- */
 function loadMcStatusFromUrl() {
     const params = new URLSearchParams(window.location.search);
     const host = params.get('host');
