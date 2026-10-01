@@ -39,6 +39,7 @@ func (s *WebServer) Setup() http.Handler {
 	router.Handle("/account", templ.Handler(components.AccountPage()))
 	router.Handle("/projects", templ.Handler(components.ProjectsPage()))
 	router.Handle("/project/bee-name-generator", templ.Handler(components.BeeNameGeneratorPage()))
+	router.Handle("/project/bee-name-generator/admin", templ.Handler(components.BeeNameGeneratorAdminPage()))
 	router.Handle("/teapot", templ.Handler(components.TeapotPage()))
 
 	middlewareStack := mw.CreateStack(

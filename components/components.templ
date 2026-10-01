@@ -135,12 +135,8 @@ templ BeeNameGenerator() {
 			if (!name) {
 				return;
 			}
-			fetch("https://api.neuralnexus.dev/api/v1/bee-name-generator/suggestion", {
+			fetch(`https://api.neuralnexus.dev/api/v1/bee-name-generator/suggestion/${encodeURIComponent(name)}`, {
 				method: "POST",
-				body: JSON.stringify({ name }),
-				headers: {
-					"Content-Type": "application/json",
-				},
 			})
 				.then((response) => {
 					status.textContent = response.ok ? "Thanks for the suggestion!" : "Couldn't submit that, please try again.";
@@ -202,11 +198,45 @@ templ BeeNameGenerator() {
 			</button>
 			<p id="suggest-bee-status" hidden class="text-center text-sm text-gray-500 dark:text-gray-400"></p>
 		</form>
+		<a
+			id="bee-admin-link"
+			hidden
+			href="/project/bee-name-generator/admin"
+			class="border border-input hover:bg-accent hover:text-accent-foreground inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 h-10 px-4 py-2 w-full"
+		>
+			Review suggestions
+		</a>
 	</div>
+	<script>
+		showBeeAdminLink();
+	</script>
 }
 
 templ BeeNameGeneratorPage() {
 	@WrapContents(BeeNameGenerator())
+}
+
+templ BeeNameGeneratorAdmin() {
+	<div class="mx-auto max-w-md space-y-6">
+		<div class="space-y-2 text-center">
+			<h1 class="text-3xl font-bold">Bee Name Suggestions</h1>
+			<p class="text-balance text-gray-500 dark:text-gray-400">
+				Accept a suggestion to add it to the generator, or reject it to discard it
+			</p>
+		</div>
+		<div id="bee-admin-error" hidden class="rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive"></div>
+		<ul id="bee-suggestions" class="space-y-2"></ul>
+		<p id="bee-suggestions-empty" hidden class="text-center text-sm text-gray-500 dark:text-gray-400">
+			No pending suggestions
+		</p>
+	</div>
+	<script>
+		loadBeeSuggestions();
+	</script>
+}
+
+templ BeeNameGeneratorAdminPage() {
+	@WrapContents(BeeNameGeneratorAdmin())
 }
 
 // templ McStatus() {

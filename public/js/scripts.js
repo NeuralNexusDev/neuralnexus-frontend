@@ -549,3 +549,126 @@ function setPlatformLoginEnabled(platform, enabled) {
             }
         });
 }
+
+/**
+ * @description Loads pending bee name suggestions into the admin page,
+ * redirecting to /login if the session is missing or expired.
+ */
+function loadBeeSuggestions() {
+    const error = document.getElementById('bee-admin-error');
+    fetch(`${apiBaseUrl()}/api/v1/bee-name-generator/suggestion/100`, {
+        credentials: 'include'
+    })
+        .then((res) => {
+            if (res.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
+            if (!res.ok) {
+                return res.json().then((problem) => {
+                    throw new Error(problem.detail || 'Failed to load suggestions');
+                });
+            }
+            return res.json();
+        })
+        .then((data) => {
+            if (!data) {
+                return;
+            }
+            const list = document.getElementById('bee-suggestions');
+            (data.suggestions || []).forEach((name) => list.appendChild(buildBeeSuggestionRow(name)));
+            updateBeeSuggestionsEmptyState();
+        })
+        .catch((err) => {
+            error.textContent = err.message;
+            error.hidden = false;
+        });
+}
+
+/**
+ * @description Builds one suggestion row. Suggestions are user-submitted, so
+ * the name is only ever set via textContent.
+ * @param name {string}
+ * @returns {HTMLLIElement}
+ */
+function buildBeeSuggestionRow(name) {
+    const row = document.createElement('li');
+    row.className = 'flex items-center justify-between gap-3 rounded-lg border border-input p-3';
+
+    const label = document.createElement('span');
+    label.className = 'min-w-0 flex-1 truncate text-sm font-medium';
+    label.textContent = name;
+
+    const accept = document.createElement('button');
+    accept.className = 'shrink-0 rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground hover:bg-primary-light';
+    accept.textContent = 'Accept';
+    accept.onclick = () => reviewBeeSuggestion(name, true, row);
+
+    const reject = document.createElement('button');
+    reject.className = 'shrink-0 rounded-md border border-input px-3 py-1 text-xs font-medium hover:bg-accent hover:text-accent-foreground';
+    reject.textContent = 'Reject';
+    reject.onclick = () => reviewBeeSuggestion(name, false, row);
+
+    row.append(label, accept, reject);
+    return row;
+}
+
+function updateBeeSuggestionsEmptyState() {
+    const empty = document.getElementById('bee-suggestions-empty');
+    empty.hidden = document.getElementById('bee-suggestions').children.length > 0;
+}
+
+/**
+ * @description Accepts (PUT) or rejects (DELETE) a suggestion and removes
+ * its row on success; alerts with the API's problem detail on failure.
+ * @param name {string}
+ * @param accept {boolean}
+ * @param row {HTMLLIElement}
+ */
+function reviewBeeSuggestion(name, accept, row) {
+    const buttons = row.querySelectorAll('button');
+    buttons.forEach((b) => { b.disabled = true; });
+
+    fetch(`${apiBaseUrl()}/api/v1/bee-name-generator/suggestion/${encodeURIComponent(name)}`, {
+        method: accept ? 'PUT' : 'DELETE',
+        credentials: 'include'
+    })
+        .then((res) => {
+            if (res.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
+            if (res.ok) {
+                row.remove();
+                updateBeeSuggestionsEmptyState();
+                return;
+            }
+            return res.json().then((problem) => {
+                throw new Error(problem.detail || 'Failed to update suggestion');
+            });
+        })
+        .catch((err) => {
+            buttons.forEach((b) => { b.disabled = false; });
+            alert(err.message);
+        });
+}
+
+/**
+ * @description Reveals the bee name suggestion review link for accounts
+ * holding the bee name admin permission. Cosmetic only - the admin
+ * endpoints enforce the permission server-side.
+ */
+function showBeeAdminLink() {
+    fetch(`${apiBaseUrl()}/api/v1/users/me/permissions`, {
+        credentials: 'include'
+    })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((permissions) => {
+            if ((permissions || []).includes('beenamegenerator|*')) {
+                document.getElementById('bee-admin-link').hidden = false;
+            }
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+        });
+}
