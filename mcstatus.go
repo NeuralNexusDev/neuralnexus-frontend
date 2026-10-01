@@ -9,7 +9,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/a-h/templ"
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/components"
@@ -17,7 +16,6 @@ import (
 )
 
 const (
-	mcStatusTimeout = 5 * time.Second
 	maxMcStatusBody = 1 << 20
 	noStore         = "no-store"
 	onlineMaxAge    = "public, max-age=60"
@@ -27,9 +25,8 @@ const (
 )
 
 var (
-	mcStatusClient = &http.Client{Timeout: mcStatusTimeout}
-	mcColorCode    = regexp.MustCompile(`(?s)§.`)
-	mcHostPattern  = regexp.MustCompile(`^(?P<host>[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*)(?::(?P<port>[0-9]{1,5}))?$`)
+	mcColorCode   = regexp.MustCompile(`(?s)§.`)
+	mcHostPattern = regexp.MustCompile(`^(?P<host>[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*)(?::(?P<port>[0-9]{1,5}))?$`)
 )
 
 type apiMcStatus struct {
@@ -85,7 +82,7 @@ func McStatusPageHandler(w http.ResponseWriter, r *http.Request) {
 		bare(http.StatusOK)
 		return
 	}
-	res, err := mcStatusClient.Do(req)
+	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		bare(http.StatusOK)
 		return
