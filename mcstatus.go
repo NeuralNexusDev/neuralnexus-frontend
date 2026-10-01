@@ -57,7 +57,7 @@ func motdLines(motd string) []string {
 	return lines
 }
 
-// A failed lookup (500/502) means the server is offline; anything else is
+// 404 (or the legacy 502) means the server gave no status; anything else is
 // the API or the network failing, which must not be cached as "offline".
 func fetchMcStatus(r *http.Request, data components.McStatusEmbedData) (apiMcStatus, lookupResult) {
 	var status apiMcStatus
@@ -76,7 +76,7 @@ func fetchMcStatus(r *http.Request, data components.McStatusEmbedData) (apiMcSta
 	defer res.Body.Close()
 	switch res.StatusCode {
 	case http.StatusOK:
-	case http.StatusInternalServerError, http.StatusBadGateway:
+	case http.StatusNotFound, http.StatusBadGateway:
 		return status, lookupOffline
 	default:
 		return status, lookupUnavailable
