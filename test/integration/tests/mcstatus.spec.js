@@ -276,6 +276,16 @@ test.describe('mc status page - query port', () => {
     expect(new URL(page.url()).searchParams.get('query_port')).toBe('25575');
   });
 
+  test('the highest valid query port is sent', async ({ page }) => {
+    const requests = await mockMcStatus(page, () => json(ONLINE));
+    await page.goto('/project/mc-status');
+    await openAdvanced(page);
+    await page.locator('#mc-status-query-port').fill('65535');
+    await lookup(page, 'play.example.net');
+    await expect(page.locator('#mc-status-result')).toBeVisible();
+    expect(requests.status[0].searchParams.get('query_port')).toBe('65535');
+  });
+
   test('a blank query port sends no query_port', async ({ page }) => {
     const requests = await mockMcStatus(page, () => json(ONLINE));
     await page.goto('/project/mc-status');
@@ -408,7 +418,7 @@ test.describe('mc status page - errors', () => {
     });
   }
 
-  for (const contentType of ['application/problem+json; charset=utf-8', 'Application/Problem+JSON']) {
+  for (const contentType of ['application/problem+json; charset=utf-8', 'application/problem+json ; charset=utf-8', 'Application/Problem+JSON']) {
     test(`a 404 served as ${contentType} is reported as an unreachable server`, async ({ page }) => {
       await mockMcStatus(page, () => ({ status: 404, contentType, body: JSON.stringify({ detail: 'down' }) }));
       await page.goto('/project/mc-status');

@@ -120,6 +120,8 @@ func TestEmbedForwardsOptions(t *testing.T) {
 	}{
 		{"query off", "query=false", url.Values{}, "/mcstatus/a.com?query=false"},
 		{"query port", "query_port=25575", url.Values{"query": {"true"}, "query_port": {"25575"}}, "/mcstatus/a.com?query_port=25575"},
+		{"highest query port", "query_port=65535", url.Values{"query": {"true"}, "query_port": {"65535"}}, "/mcstatus/a.com?query_port=65535"},
+		{"query port above the highest", "query_port=65536", url.Values{"query": {"true"}}, "/mcstatus/a.com"},
 		{"query port with leading zeros", "query_port=0025575", url.Values{"query": {"true"}, "query_port": {"25575"}}, "/mcstatus/a.com?query_port=25575"},
 		{"signed query port is dropped", "query_port=%2B80", url.Values{"query": {"true"}}, "/mcstatus/a.com"},
 		{"invalid query port is dropped", "query_port=99999", url.Values{"query": {"true"}}, "/mcstatus/a.com"},
@@ -232,6 +234,30 @@ func TestEmbedAPIUnreachable(t *testing.T) {
 	}
 }
 
+func hostOfLength(n int) string {
+	var labels []string
+	for n > 0 {
+		label := min(n, 63)
+		if n-label == 1 {
+			label--
+		}
+		labels = append(labels, strings.Repeat("a", label))
+		n -= label + 1
+	}
+	return strings.Join(labels, ".")
+}
+
+func TestEmbedAcceptsAHostAtTheLimit(t *testing.T) {
+	f := newFakeAPI(t, http.StatusOK, onlineBody)
+	host := hostOfLength(253)
+	if len(host) != 253 {
+		t.Fatalf("test host is %d characters, want 253", len(host))
+	}
+	if rec := getEmbed(host, ""); rec.Code != http.StatusOK || f.request == nil {
+		t.Errorf("status = %d, API called = %v", rec.Code, f.request != nil)
+	}
+}
+
 func TestEmbedRejectsInvalidHosts(t *testing.T) {
 	f := newFakeAPI(t, http.StatusOK, onlineBody)
 	cases := []struct{ name, host string }{
@@ -245,7 +271,7 @@ func TestEmbedRejectsInvalidHosts(t *testing.T) {
 		{"port too long", "a.com:123456"},
 		{"trailing colon", "a.com:"},
 		{"label over 63", strings.Repeat("a", 64) + ".com"},
-		{"name over 253", strings.Repeat(strings.Repeat("a", 60)+".", 5) + "com"},
+		{"name over 253", hostOfLength(254)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -362,8 +388,12 @@ func TestEmbedTreatsOnlyProblemJSON404AsOffline(t *testing.T) {
 	}{
 		{"problem+json", "application/problem+json", http.StatusOK, "public, max-age=30"},
 		{"problem+json with a charset", "application/problem+json; charset=utf-8", http.StatusOK, "public, max-age=30"},
+		{"whitespace before the parameters", "application/problem+json ; charset=utf-8", http.StatusOK, "public, max-age=30"},
 		{"mixed case", "Application/Problem+JSON", http.StatusOK, "public, max-age=30"},
 		{"problem+xml", "application/problem+xml", http.StatusBadGateway, "no-store"},
+		{"problem+json as a parameter", "text/x; a=application/problem+json", http.StatusBadGateway, "no-store"},
+		{"other +json type", "application/vnd.api+json", http.StatusBadGateway, "no-store"},
+		{"problem+json with a suffix", "application/problem+json2", http.StatusBadGateway, "no-store"},
 		{"plain json", "application/json", http.StatusBadGateway, "no-store"},
 		{"html from a proxy", "text/html", http.StatusBadGateway, "no-store"},
 		{"no content type", "", http.StatusBadGateway, "no-store"},
