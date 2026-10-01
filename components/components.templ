@@ -107,10 +107,66 @@ templ Header() {
     </div>
 }
 
+templ projectCardBody(icon string, title string, description string) {
+	<div class="flex items-center justify-between">
+		<span class="text-3xl" aria-hidden="true">{ icon }</span>
+		{ children... }
+	</div>
+	<div class="space-y-1">
+		<h2 class="text-lg font-semibold">{ title }</h2>
+		<p class="text-sm text-gray-500 dark:text-gray-400">{ description }</p>
+	</div>
+}
+
+templ projectCard(href string, icon string, title string, description string) {
+	<a
+		href={ templ.SafeURL(href) }
+		class="flex flex-col gap-4 rounded-lg border border-input p-5 transition-colors hover:bg-accent hover:text-accent-foreground"
+	>
+		@projectCardBody(icon, title, description) {
+			<span class="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/40 dark:text-green-300">Live</span>
+		}
+	</a>
+}
+
+templ projectCardSoon(icon string, title string, description string) {
+	<div class="flex flex-col gap-4 rounded-lg border border-dashed border-input p-5 opacity-60">
+		@projectCardBody(icon, title, description) {
+			<span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300">Coming soon</span>
+		}
+	</div>
+}
+
+templ projectSection(title string, description string) {
+	<section class="space-y-4">
+		<div class="space-y-1">
+			<h2 class="text-2xl font-semibold">{ title }</h2>
+			<p class="text-sm text-gray-500 dark:text-gray-400">{ description }</p>
+		</div>
+		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+			{ children... }
+		</div>
+	</section>
+}
+
 templ Projects() {
-	<a href="/project/mcstatus">MC Status</a>
-	<br/>
-	<a href="/project/bee-name-generator">Bee Name Generator</a>
+	<div class="mx-auto max-w-4xl space-y-10">
+		<div class="space-y-2 text-center">
+			<h1 class="text-3xl font-bold">Projects</h1>
+			<p class="text-balance text-gray-500 dark:text-gray-400">
+				Things I've built and am still tinkering on
+			</p>
+		</div>
+		@projectSection("The APIary", "REST APIs, each with a live demo to poke at") {
+			@projectCard("/project/bee-name-generator", "🐝", "Bee Name Generator", "Generate a random bee name, or suggest one of your own")
+			@projectCardSoon("⛏️", "MC Status", "Check whether a Minecraft server is online and who's playing")
+		}
+		if false {
+			@projectSection("Other Projects", "Everything that isn't an API") {
+				@projectCardSoon("🛠️", "More on the way", "Nothing here yet, but there's plenty in the workshop")
+			}
+		}
+	</div>
 }
 
 templ ProjectsPage() {
