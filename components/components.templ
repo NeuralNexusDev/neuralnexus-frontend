@@ -15,12 +15,10 @@ func nnApiURL() string {
 
 var NN_API_URL = nnApiURL()
 
-// nnSiteURL defaults to production - it only feeds link-preview meta tags,
-// so unset shouldn't panic.
 func nnSiteURL() string {
 	v := os.Getenv("NN_SITE_URL")
 	if v == "" {
-		v = "https://neuralnexus.dev"
+		panic("NN_SITE_URL environment variable must be set")
 	}
 	return strings.TrimRight(v, "/")
 }

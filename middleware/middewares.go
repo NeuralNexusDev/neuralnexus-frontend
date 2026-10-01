@@ -13,10 +13,19 @@ import (
 	"time"
 )
 
+// requireEnv - Read an environment variable, panicking if it is unset
+func requireEnv(name string) string {
+	v := os.Getenv(name)
+	if v == "" {
+		panic(name + " environment variable must be set")
+	}
+	return v
+}
+
 //goland:noinspection GoSnakeCaseUsage
 var (
 	NN_API_URL     = os.Getenv("NN_API_URL")
-	NN_SITE_URL    = os.Getenv("NN_SITE_URL")
+	NN_SITE_URL    = requireEnv("NN_SITE_URL")
 	JWT_SECRET     = []byte(os.Getenv("JWT_SECRET"))
 	validAudiences = []string{NN_SITE_URL, NN_API_URL}
 )

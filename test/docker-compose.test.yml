@@ -7,6 +7,7 @@ services:
       dockerfile: Dockerfile
     environment:
       NN_API_URL: https://api.neuralnexus.dev
+      NN_SITE_URL: http://frontend:8090
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8090/"]
       interval: 2s
