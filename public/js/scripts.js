@@ -650,14 +650,13 @@ function syncMcStatusQueryOption() {
 }
 
 function parseMcPort(value) {
-    const port = /^\d+$/.test(value) ? Number(value) : 0;
-    return port >= 1 && port <= 65535 ? port : null;
+    const port = typeof value === 'number' ? value : /^\d+$/.test(value) ? Number(value) : 0;
+    return Number.isInteger(port) && port >= 1 && port <= 65535 ? port : null;
 }
 
 function mcStatusQueryPort() {
     const input = document.getElementById('mc-status-query-port');
-    const port = input.valueAsNumber;
-    return !input.disabled && Number.isInteger(port) && port >= 1 && port <= 65535 ? port : null;
+    return input.disabled ? null : parseMcPort(input.valueAsNumber);
 }
 
 function abortMcStatus() {
