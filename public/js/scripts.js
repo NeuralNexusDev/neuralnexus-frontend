@@ -644,10 +644,27 @@ function syncMcStatusQueryOption() {
 }
 
 const MC_MAX_PORT = 65535;
+const MC_MAX_HOSTNAME = 253;
+const MC_HOST_PATTERN = /^[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*(?::([0-9]{1,5}))?$/;
 
 function parseMcPort(value) {
     const port = /^\d+$/.test(value) ? Number(value) : 0;
     return port >= 1 && port <= MC_MAX_PORT ? port : null;
+}
+
+/** The shareable path for a host, normalised the way the server does; the bare path when the server would reject it. */
+function mcStatusPath(host) {
+    const match = MC_HOST_PATTERN.exec(host);
+    if (!match) {
+        return MC_STATUS_PATH;
+    }
+    const portText = match[1];
+    const name = portText === undefined ? host : host.slice(0, -portText.length - 1);
+    const port = portText === undefined ? null : parseMcPort(portText);
+    if (name.length > MC_MAX_HOSTNAME || (portText !== undefined && port === null)) {
+        return MC_STATUS_PATH;
+    }
+    return `${MC_STATUS_PATH}/${name.toLowerCase()}${port === null ? '' : `:${port}`}`;
 }
 
 function validateMcQueryPort() {
@@ -700,8 +717,9 @@ function checkMcStatus(event) {
     } else if (queryPort) {
         urlParams.set('query_port', queryPort);
     }
-    const search = urlParams.toString();
-    history.replaceState(null, '', `${MC_STATUS_PATH}/${encodeURIComponent(host).replace(/%3A/gi, ':')}${search ? `?${search}` : ''}`);
+    const path = mcStatusPath(host);
+    const search = path === MC_STATUS_PATH ? '' : urlParams.toString();
+    history.replaceState(null, '', search ? `${path}?${search}` : path);
 
     const controller = new AbortController();
     mcStatusController = controller;
@@ -768,7 +786,7 @@ function loadMcStatusFromUrl() {
     let host = '';
     if (window.location.pathname.startsWith(`${MC_STATUS_PATH}/`)) {
         try {
-            host = decodeURIComponent(window.location.pathname.slice(MC_STATUS_PATH.length + 1));
+            host = decodeURIComponent(window.location.pathname.slice(MC_STATUS_PATH.length + 1).replace(/\/$/, ''));
         } catch {
             return;
         }

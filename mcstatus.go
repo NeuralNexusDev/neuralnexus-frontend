@@ -36,7 +36,7 @@ type apiMcStatus struct {
 	Version    string `json:"version"`
 }
 
-// McStatusPageHandler serves the status checker, with link-preview tags when a server is given.
+// McStatusPageHandler serves the status checker, with link-preview tags when the server lookup succeeds or reports offline.
 func McStatusPageHandler(w http.ResponseWriter, r *http.Request) {
 	rawHost := r.PathValue("host")
 	if rawHost == "" {

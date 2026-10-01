@@ -93,6 +93,7 @@ func TestEmbedOnline(t *testing.T) {
 
 	h := head(t, rec.Body.String())
 	for _, want := range []string{
+		"<title>play.example.net:80</title>",
 		`property="og:title" content="play.example.net:80"`,
 		"Hello\nWorld\nPlayers: 3/20\nVersion: Paper 1.21",
 		`property="og:url" content="` + testSiteURL + `/project/mc-status/play.example.net:80"`,
@@ -174,6 +175,9 @@ func TestEmbedOffline(t *testing.T) {
 	h := head(t, rec.Body.String())
 	if !strings.Contains(h, "Server offline or unreachable") {
 		t.Errorf("missing offline description:\n%s", h)
+	}
+	if !strings.Contains(h, "<title>a.com</title>") {
+		t.Errorf("missing the host as the title:\n%s", h)
 	}
 	want := `property="og:image" content="` + f.server.URL + `/api/v1/mcstatus/icon/a.com"`
 	if !strings.Contains(h, want) {
@@ -556,5 +560,33 @@ func TestEmbedRouteWiring(t *testing.T) {
 	}
 	if f.request != nil {
 		t.Error("the bare checker must not call the API")
+	}
+
+	for _, path := range []string{"/project/mc-status", "/project/mc-status/", "/project/mc-status/a.com", "/project/mc-status/a.com/"} {
+		for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch} {
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, httptest.NewRequest(method, path, nil))
+			if rec.Code != catchAll.Code || rec.Body.String() != catchAll.Body.String() {
+				t.Errorf("%s %s should fall through to the catch-all route, got %d", method, path, rec.Code)
+			}
+		}
+	}
+
+	for _, path := range []string{"/project/mc-status/", "/project/mc-status/play.example.com:25570/"} {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `id="mc-status-host"`) {
+			t.Errorf("GET %s should serve the checker: %d", path, rec.Code)
+		}
+	}
+
+	f.request = nil
+	gone := httptest.NewRecorder()
+	router.ServeHTTP(gone, httptest.NewRequest(http.MethodGet, "/mcstatus/a.com", nil))
+	if gone.Code != catchAll.Code || gone.Body.String() != catchAll.Body.String() {
+		t.Errorf("GET /mcstatus/{host} should no longer be a route, got %d", gone.Code)
+	}
+	if f.request != nil {
+		t.Error("the removed route must not reach the API")
 	}
 }

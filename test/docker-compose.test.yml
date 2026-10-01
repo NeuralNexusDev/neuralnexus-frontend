@@ -1,13 +1,27 @@
 name: neuralnexus-frontend-test
 
 services:
+  stub-api:
+    image: node:22-alpine
+    volumes:
+      - ./integration/stub-api.mjs:/stub-api.mjs:ro
+    command: node /stub-api.mjs
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8098/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
   frontend:
     build:
       context: ..
       dockerfile: Dockerfile
     environment:
-      NN_API_URL: https://api.neuralnexus.dev
+      NN_API_URL: http://stub-api:8098
       NN_SITE_URL: http://frontend:8090
+    depends_on:
+      stub-api:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8090/"]
       interval: 2s
@@ -21,7 +35,7 @@ services:
       - ./integration:/work
     environment:
       BASE_URL: http://frontend:8090
-      NN_API_URL: https://api.neuralnexus.dev
+      NN_API_URL: http://stub-api:8098
     depends_on:
       frontend:
         condition: service_healthy

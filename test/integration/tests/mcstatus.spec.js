@@ -347,6 +347,38 @@ test.describe('mc status page - share links', () => {
     expect(new URL(page.url()).pathname).toBe('/project/mc-status/play.example.net:25570');
   });
 
+  test('a trailing slash after the host still runs the lookup', async ({ page }) => {
+    await mockMcStatus(page, () => json(ONLINE));
+    await page.goto('/project/mc-status/play.example.net/');
+    await expect(page.locator('#mc-status-result')).toBeVisible();
+    await expect(page.locator('#mc-status-host')).toHaveValue('play.example.net');
+  });
+
+  test('an old ?host= link is ignored', async ({ page }) => {
+    const requests = await mockMcStatus(page, () => json(ONLINE));
+    await page.goto('/project/mc-status?host=play.example.net');
+    await expect(page.locator('#mc-status-host')).toHaveValue('');
+    await expect(page.locator('#mc-status-result')).toBeHidden();
+    expect(requests.status).toHaveLength(0);
+  });
+
+  test('the shared URL uses the host the way the server normalises it', async ({ page }) => {
+    await mockMcStatus(page, () => json(ONLINE));
+    await page.goto('/project/mc-status');
+    await lookup(page, 'Play.Example.NET:00080');
+    await expect(page).toHaveURL(/\/project\/mc-status\/play\.example\.net:80$/);
+  });
+
+  for (const host of ['a b', 'bücher.de', 'example.com.', 'a.com:0', 'a.com:99999', 'a.com/b', 'http://a.com']) {
+    test(`a lookup for "${host}" leaves the URL on the bare checker`, async ({ page }) => {
+      await mockMcStatus(page, () => json(ONLINE));
+      await page.goto('/project/mc-status/play.example.net');
+      await expect(page.locator('#mc-status-result')).toBeVisible();
+      await lookup(page, host);
+      await expect(page).toHaveURL(/\/project\/mc-status$/);
+    });
+  }
+
   test('a lookup rewrites the URL so the result can be shared', async ({ page }) => {
     await mockMcStatus(page, () => json(ONLINE));
     await page.goto('/project/mc-status');
@@ -627,6 +659,41 @@ test.describe('mc status page - server-rendered route', () => {
     'a label over 63 characters': `${'a'.repeat(64)}.com`,
     'a name over 253 characters': `${`${'a'.repeat(60)}.`.repeat(5)}com`,
   };
+
+  const html = async (request, path) => {
+    const res = await request.get(path);
+    expect(res.status()).toBe(200);
+    return { res, body: await res.text() };
+  };
+
+  test('an online server gets the preview tags and the checker form', async ({ request }) => {
+    const { res, body } = await html(request, '/project/mc-status/Online.Example.NET');
+    expect(res.headers()['cache-control']).toBe('public, max-age=60');
+    expect(body).toContain('<title>online.example.net</title>');
+    expect(body).toContain('property="og:title" content="online.example.net"');
+    expect(body).toContain(`property="og:image" content="${process.env.NN_API_URL}/api/v1/mcstatus/icon/online.example.net"`);
+    expect(body).toContain('Players: 3/20');
+    expect(body).toContain('id="mc-status-host"');
+  });
+
+  test('an offline server gets the offline preview and the checker form', async ({ request }) => {
+    const { res, body } = await html(request, '/project/mc-status/offline.example.net');
+    expect(res.headers()['cache-control']).toBe('public, max-age=30');
+    expect(body).toContain('<title>offline.example.net</title>');
+    expect(body).toContain('Server offline or unreachable');
+    expect(body).toContain('id="mc-status-host"');
+  });
+
+  test('a Bedrock preview asks for the Bedrock icon', async ({ request }) => {
+    const { body } = await html(request, '/project/mc-status/online.example.net?bedrock=true');
+    expect(body).toContain(`property="og:image" content="${process.env.NN_API_URL}/api/v1/mcstatus/icon/online.example.net?bedrock=true"`);
+  });
+
+  test('a trailing slash after the host serves the same page', async ({ request }) => {
+    const { body } = await html(request, '/project/mc-status/online.example.net/');
+    expect(body).toContain('<title>online.example.net</title>');
+    expect(body).toContain('id="mc-status-host"');
+  });
 
   for (const [name, host] of Object.entries(invalid)) {
     test(`rejects ${name} with a 400 that is not cached and still serves the form`, async ({ request }) => {

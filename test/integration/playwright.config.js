@@ -14,7 +14,8 @@ const baseURL = process.env.BASE_URL || 'http://localhost:8099';
 // The single source of truth for the backend origin the app (and every
 // spec file, via process.env.NN_API_URL) mocks against - resolved once
 // here so both sides can never drift apart.
-const nnApiUrl = process.env.NN_API_URL || 'https://api.neuralnexus.dev';
+const stubApiPort = 8098;
+const nnApiUrl = process.env.NN_API_URL || `http://localhost:${stubApiPort}`;
 process.env.NN_API_URL = nnApiUrl;
 
 // Same pattern for Steam's OpenID endpoint - defaults to the real one, but
@@ -41,15 +42,23 @@ export default defineConfig({
   ],
   webServer: process.env.BASE_URL
     ? undefined
-    : {
-        command:
-          'go tool templ generate && ' +
-          'go tool gotailwind -i ./assets/css/input.css -o ./public/css/styles.css --minify && ' +
-          'go run .',
-        cwd: repoRoot,
-        url: baseURL,
-        env: { ADDRESS: '0.0.0.0:8099', NN_API_URL: nnApiUrl, NN_SITE_URL: baseURL, STEAM_OPENID_LOGIN_URL: steamOpenIdLoginUrl },
-        reuseExistingServer: !process.env.CI,
-        timeout: 60_000,
-      },
+    : [
+        {
+          command: 'node stub-api.mjs',
+          url: `http://localhost:${stubApiPort}/health`,
+          env: { PORT: String(stubApiPort) },
+          reuseExistingServer: !process.env.CI,
+        },
+        {
+          command:
+            'go tool templ generate && ' +
+            'go tool gotailwind -i ./assets/css/input.css -o ./public/css/styles.css --minify && ' +
+            'go run .',
+          cwd: repoRoot,
+          url: baseURL,
+          env: { ADDRESS: '0.0.0.0:8099', NN_API_URL: nnApiUrl, NN_SITE_URL: baseURL, STEAM_OPENID_LOGIN_URL: steamOpenIdLoginUrl },
+          reuseExistingServer: !process.env.CI,
+          timeout: 60_000,
+        },
+      ],
 });
