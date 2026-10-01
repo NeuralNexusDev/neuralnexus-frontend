@@ -535,7 +535,6 @@ func TestEmbedRouteWiring(t *testing.T) {
 		t.Errorf("the host path value did not reach the API: %v", f.request)
 	}
 
-	f.request = nil
 	catchAll := httptest.NewRecorder()
 	router.ServeHTTP(catchAll, httptest.NewRequest(http.MethodGet, "/", nil))
 	f.request = nil
