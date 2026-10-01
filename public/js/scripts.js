@@ -649,10 +649,14 @@ function syncMcStatusQueryOption() {
     document.getElementById('mc-status-query-port').disabled = !query.checked;
 }
 
+function parseMcPort(value) {
+    const port = /^\d+$/.test(value) ? Number(value) : 0;
+    return port >= 1 && port <= 65535 ? port : null;
+}
+
 function mcStatusQueryPort() {
     const input = document.getElementById('mc-status-query-port');
-    const port = Number(input.value);
-    return !input.disabled && Number.isInteger(port) && port >= 1 && port <= 65535 ? port : null;
+    return input.disabled ? null : parseMcPort(input.value);
 }
 
 function abortMcStatus() {
@@ -767,10 +771,9 @@ function loadMcStatusFromUrl() {
     const edition = params.get('bedrock') === 'true' ? 'bedrock' : 'java';
     document.querySelector(`input[name="mc-edition"][value="${edition}"]`).checked = true;
     mcQueryPreference = params.get('query') !== 'false';
-    const queryPort = Number(params.get('query_port'));
-    const validPort = Number.isInteger(queryPort) && queryPort >= 1 && queryPort <= 65535;
-    document.getElementById('mc-status-query-port').value = validPort ? queryPort : '';
-    document.getElementById('mc-status-advanced').open = validPort;
+    const queryPort = parseMcPort(params.get('query_port') || '');
+    document.getElementById('mc-status-query-port').value = queryPort || '';
+    document.getElementById('mc-status-advanced').open = queryPort !== null;
     syncMcStatusQueryOption();
     checkMcStatus();
 }
