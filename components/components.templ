@@ -1,6 +1,9 @@
 package components
 
-import "os"
+import (
+	"os"
+	"strings"
+)
 
 func nnApiURL() string {
 	v := os.Getenv("NN_API_URL")
@@ -11,6 +14,18 @@ func nnApiURL() string {
 }
 
 var NN_API_URL = nnApiURL()
+
+// nnSiteURL defaults to production - it only feeds link-preview meta tags,
+// so unset shouldn't panic.
+func nnSiteURL() string {
+	v := os.Getenv("NN_SITE_URL")
+	if v == "" {
+		v = "https://neuralnexus.dev"
+	}
+	return strings.TrimRight(v, "/")
+}
+
+var NN_SITE_URL = nnSiteURL()
 
 // steamOpenIDLoginURL defaults to the real endpoint - unlike NN_API_URL,
 // tests are the only reason to ever override it, so unset shouldn't panic.
@@ -176,7 +191,7 @@ templ ProjectsPage() {
 templ BeeNameGenerator() {
 	<script>
 		function getBeeName() {
-			fetch("https://api.neuralnexus.dev/api/v1/bee-name-generator/name")
+			fetch(`${apiBaseUrl()}/api/v1/bee-name-generator/name`)
 				.then((response) => response.json())
 				.then((data) => {
 					document.getElementById("get-bee-name").innerText = data.name;
@@ -191,7 +206,7 @@ templ BeeNameGenerator() {
 			if (!name) {
 				return;
 			}
-			fetch(`https://api.neuralnexus.dev/api/v1/bee-name-generator/suggestion/${encodeURIComponent(name)}`, {
+			fetch(`${apiBaseUrl()}/api/v1/bee-name-generator/suggestion/${encodeURIComponent(name)}`, {
 				method: "POST",
 			})
 				.then((response) => {

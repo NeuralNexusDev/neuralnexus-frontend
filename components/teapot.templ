@@ -5,7 +5,7 @@ templ TeapotPage() {
 }
 
 script logTeapotRequest() {
-	fetch('https://api.neuralnexus.dev/api/v1/teapot')
+	fetch(apiBaseUrl() + '/api/v1/teapot')
 		.then((response) => {
 			if (response.status !== 418) {
 				console.error('Failed to log teapot request:', response.statusText);
@@ -22,8 +22,8 @@ templ Teapot() {
 	<meta name="theme-color" data-react-helmet="true" content="#7C0014"/>
 	<meta property="og:title" content="418 I'm a teapot"/>
 	<meta property="og:description" content="You requested a cup of coffee, but I'm a teapot."/>
-	<meta property="og:url" content="https://neuralnexus.dev/teapot"/>
-	<meta property="og:image" content="https://neuralnexus.dev/public/teapot.jpg"/>
+	<meta property="og:url" content={ NN_SITE_URL + "/teapot" }/>
+	<meta property="og:image" content={ NN_SITE_URL + "/public/teapot.jpg" }/>
 	<div class="flex flex-col items-center justify-center gap-4 text-center">
 		<img
 			src="/public/teapot.jpg"
