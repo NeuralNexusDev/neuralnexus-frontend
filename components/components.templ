@@ -123,32 +123,86 @@ templ BeeNameGenerator() {
 			fetch("https://api.neuralnexus.dev/api/v1/bee-name-generator/name")
 				.then((response) => response.json())
 				.then((data) => {
-					document.getElementById("get-bee-name").innerText = `Bee Name: ${data.name}`;
+					document.getElementById("get-bee-name").innerText = data.name;
 				});
 		}
 
-		function suggestBeeName() {
-			const name = document.getElementById("suggest-bee-name").value;
+		function suggestBeeName(event) {
+			event.preventDefault();
+			const input = document.getElementById("suggest-bee-name");
+			const status = document.getElementById("suggest-bee-status");
+			const name = input.value.trim();
+			if (!name) {
+				return;
+			}
 			fetch("https://api.neuralnexus.dev/api/v1/bee-name-generator/suggestion", {
 				method: "POST",
 				body: JSON.stringify({ name }),
 				headers: {
 					"Content-Type": "application/json",
 				},
-			});
+			})
+				.then((response) => {
+					status.textContent = response.ok ? "Thanks for the suggestion!" : "Couldn't submit that, please try again.";
+					status.hidden = false;
+					if (response.ok) {
+						input.value = "";
+					}
+				})
+				.catch(() => {
+					status.textContent = "Couldn't submit that, please try again.";
+					status.hidden = false;
+				});
 		}
 	</script>
-	<div class="beenamegenerator">
-		<h1>BeeNameGenerator</h1>
+	<div class="mx-auto max-w-sm space-y-6">
+		<div class="space-y-2 text-center">
+			<h1 class="text-3xl font-bold">Bee Name Generator</h1>
+			<p class="text-balance text-gray-500 dark:text-gray-400">
+				Generate a random bee name, or suggest one of your own
+			</p>
+		</div>
+		<div class="space-y-4 rounded-lg border border-input p-4 text-center">
+			<p class="text-sm text-gray-500 dark:text-gray-400">Your bee name</p>
+			<h2 id="get-bee-name" class="min-h-8 text-2xl font-semibold">&mdash;</h2>
+			<button
+				class="border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
+				onClick="getBeeName()"
+			>
+				Generate
+			</button>
+		</div>
+		<div
+			data-orientation="horizontal"
+			role="none"
+			class="shrink-0 bg-gray-100 h-[1px] w-full my-8"
+		></div>
+		<form class="space-y-4" onsubmit="suggestBeeName(event)">
+			<div class="space-y-2">
+				<label
+					class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+					for="suggest-bee-name"
+				>
+					Suggest a name
+				</label>
+				<input
+					class="text-black flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+					id="suggest-bee-name"
+					name="name"
+					placeholder="Suggested Name"
+					required
+					type="text"
+				/>
+			</div>
+			<button
+				class="border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
+				type="submit"
+			>
+				Suggest
+			</button>
+			<p id="suggest-bee-status" hidden class="text-center text-sm text-gray-500 dark:text-gray-400"></p>
+		</form>
 	</div>
-	<br/>
-	<div>
-		<h2 id="get-bee-name">Bee Name:</h2>
-		<button onClick="getBeeName()">Generate</button>
-	</div>
-	<br/>
-	<input type="text" id="suggest-bee-name" placeholder="Suggested Name" class="text-gray-500 dark:text-gray-600"/>
-	<button onClick="suggestBeeName()">Suggest</button>
 }
 
 templ BeeNameGeneratorPage() {
