@@ -714,8 +714,13 @@ function checkMcStatus(event) {
                     showMcStatusError("Couldn't reach that server", 'The lookup timed out.');
                     return;
                 }
-                const noStatus = res.status === 404 || res.status === 502;
-                showMcStatusError(noStatus ? "Couldn't reach that server" : 'Something went wrong', detail);
+                if (res.status === 404) {
+                    showMcStatusError("Couldn't reach that server", detail);
+                } else if (res.status === 500) {
+                    showMcStatusError('Something went wrong', detail);
+                } else {
+                    showMcStatusError(`Unexpected response (${res.status})`, detail);
+                }
             });
         })
         .catch((error) => {

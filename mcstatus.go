@@ -38,6 +38,7 @@ const (
 	lookupOnline lookupResult = iota
 	lookupOffline
 	lookupUnavailable
+	lookupUnexpected
 )
 
 type apiMcStatus struct {
@@ -60,8 +61,8 @@ func motdLines(motd string) []string {
 	return lines
 }
 
-// 404 (or the legacy 502) means the server gave no status; anything else is
-// the API or the network failing, which must not be cached as "offline".
+// 404 means the server gave no status and 500 is an API error, which must
+// not be cached as "offline". Any other status is outside the API's contract.
 func fetchMcStatus(r *http.Request, data components.McStatusEmbedData) (apiMcStatus, lookupResult) {
 	var status apiMcStatus
 	endpoint := config.APIURL + "/api/v1/mcstatus/" + url.PathEscape(data.Host)
@@ -79,10 +80,12 @@ func fetchMcStatus(r *http.Request, data components.McStatusEmbedData) (apiMcSta
 	defer res.Body.Close()
 	switch res.StatusCode {
 	case http.StatusOK:
-	case http.StatusNotFound, http.StatusBadGateway:
+	case http.StatusNotFound:
 		return status, lookupOffline
-	default:
+	case http.StatusInternalServerError:
 		return status, lookupUnavailable
+	default:
+		return status, lookupUnexpected
 	}
 	if err := json.NewDecoder(io.LimitReader(res.Body, maxMcStatusBody)).Decode(&status); err != nil {
 		return status, lookupUnavailable
@@ -123,6 +126,10 @@ func McStatusEmbedHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Retry-After", unavailableRetry)
 		w.Header().Set("Cache-Control", "no-store")
 		http.Error(w, "status lookup unavailable", http.StatusServiceUnavailable)
+		return
+	case lookupUnexpected:
+		w.Header().Set("Cache-Control", "no-store")
+		http.Error(w, "unexpected status response", http.StatusBadGateway)
 		return
 	case lookupOnline:
 		data.Online = true
