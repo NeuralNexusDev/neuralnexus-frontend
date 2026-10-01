@@ -23,8 +23,7 @@ var (
 	OAUTH2_XBOX_LIVE = templ.SafeURL("https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?client_id=" + MICROSOFT_CLIENT_ID + "&redirect_uri=" + MICROSOFT_REDIRECT_URI + "&response_type=code&scope=XboxLive.signin%20offline_access")
 )
 
-// LoginButton renders the header's auth area, hidden until checkHeaderAuthState()
-// shows the right parts - the session cookie is HttpOnly, so the markup can't know.
+// Hidden until checkHeaderAuthState() runs - the session cookie is HttpOnly, so the markup can't know.
 templ LoginButton() {
 	<span id="header-account" hidden class="flex items-center gap-2">
 		<span id="header-account-username" class="text-sm font-medium"></span>
@@ -56,7 +55,6 @@ templ LoginButton() {
 	</script>
 }
 
-// OAuthButtons is shared by the login and registration pages.
 templ OAuthButtons(labelPrefix string) {
 	<div hidden id="discord-oauth-base">{ OAUTH2_DISCORD }</div>
 	<div hidden id="twitch-oauth-base">{ OAUTH2_TWITCH }</div>
@@ -135,7 +133,6 @@ templ OAuthButtons(labelPrefix string) {
 	</div>
 }
 
-// linkAccountRow renders one platform's connection card, with the brand icon as children.
 templ linkAccountRow(platform string, name string) {
 	<div class="rounded-lg border border-input p-3 space-y-2">
 		<div class="flex items-center gap-2">
@@ -189,7 +186,6 @@ templ linkAccountRow(platform string, name string) {
 	</div>
 }
 
-// LinkAccountButtons lists every linkable provider as a connection row.
 templ LinkAccountButtons() {
 	<script>
     const linkRedirect = window.location.href;

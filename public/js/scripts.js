@@ -154,7 +154,6 @@ function encodeState(state) {
     return btoa(JSON.stringify(state)).replace(/\+/g, '-').replace(/\//g, '_');
 }
 
-/** State travels inside openid.return_to rather than as an appended query param. */
 function buildSteamOpenIDURL(state) {
     const returnTo = `${apiBaseUrl()}/api/openid?state=${encodeState(state)}`;
     const params = new URLSearchParams({
@@ -207,7 +206,6 @@ function loadAccountProfile() {
     loadLinkedAccounts();
 }
 
-/** Guards against a stale response repainting the toggle. */
 let passwordAuthSeq = 0;
 
 function loadAccountSettings() {
@@ -272,7 +270,6 @@ function setPasswordAuthEnabled(enabled) {
 
 const LINK_PLATFORMS = ['discord', 'twitch', 'microsoft', 'xboxlive', 'steam'];
 
-/** Guards against an out-of-order response repainting the rows. */
 let loadLinkedAccountsSeq = 0;
 
 function loadLinkedAccounts() {
@@ -379,7 +376,6 @@ function handleLinkAction(platform) {
     window.location.href = base.innerText + '&state=' + encodeState(state);
 }
 
-/** Per-platform guard against a superseded link/unlink/toggle response. */
 const platformActionSeq = {};
 
 function unlinkPlatform(platform) {
@@ -579,7 +575,7 @@ function formatMcMotd(motd) {
     return motd
         .replace(/\\n/g, '\n')
         .replace(/§x(?:§[0-9a-f]){6}/gi, '')
-        .replace(/§./gi, '')
+        .replace(/§[^]/giu, '')
         .trim();
 }
 
@@ -703,9 +699,14 @@ function checkMcStatus(event) {
                 });
             }
             return problemDetail(res, '').then((detail) => {
-                if (controller === mcStatusController) {
-                    showMcStatusError(res.status === 502 ? "Couldn't reach that server" : 'Something went wrong', detail);
+                if (controller !== mcStatusController) {
+                    return;
                 }
+                if (timedOut) {
+                    showMcStatusError("Couldn't reach that server", 'The lookup timed out.');
+                    return;
+                }
+                showMcStatusError(res.status === 502 ? "Couldn't reach that server" : 'Something went wrong', detail);
             });
         })
         .catch((error) => {
