@@ -68,8 +68,8 @@ func (d McStatusEmbedData) IconURL() string {
 }
 
 const (
-	MaxEmbedMotdRunes    = 200
-	MaxEmbedVersionRunes = 64
+	maxEmbedMotdRunes    = 200
+	maxEmbedVersionRunes = 64
 )
 
 func truncateRunes(s string, max int) string {
@@ -84,12 +84,12 @@ func (d McStatusEmbedData) Description() string {
 		return "Server offline or unreachable"
 	}
 	lines := []string{}
-	if motd := truncateRunes(strings.Join(d.Motd, "\n"), MaxEmbedMotdRunes); motd != "" {
+	if motd := truncateRunes(strings.Join(d.Motd, "\n"), maxEmbedMotdRunes); motd != "" {
 		lines = append(lines, motd)
 	}
 	lines = append(lines, "Players: "+strconv.Itoa(d.Players)+"/"+strconv.Itoa(d.Max))
 	if d.Version != "" {
-		lines = append(lines, "Version: "+truncateRunes(d.Version, MaxEmbedVersionRunes))
+		lines = append(lines, "Version: "+truncateRunes(d.Version, maxEmbedVersionRunes))
 	}
 	return strings.Join(lines, "\n")
 }

@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/p0t4t0sandwich/neuralnexus-frontend/components"
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/config"
 )
 
@@ -23,7 +22,7 @@ func newFakeAPI(t *testing.T, status int, body string) *fakeAPI {
 	t.Helper()
 	contentType := "application/json"
 	if status >= http.StatusBadRequest {
-		contentType = problemJSON
+		contentType = "application/problem+json"
 	}
 	return newFakeAPIWithType(t, status, contentType, body)
 }
@@ -75,7 +74,7 @@ func TestEmbedOnline(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d", rec.Code)
 	}
-	if got := rec.Header().Get("Cache-Control"); got != onlineMaxAge {
+	if got := rec.Header().Get("Cache-Control"); got != "public, max-age=60" {
 		t.Errorf("Cache-Control = %q", got)
 	}
 	if f.request == nil {
@@ -158,7 +157,7 @@ func TestEmbedOffline(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d", rec.Code)
 	}
-	if got := rec.Header().Get("Cache-Control"); got != offlineMaxAge {
+	if got := rec.Header().Get("Cache-Control"); got != "public, max-age=30" {
 		t.Errorf("Cache-Control = %q", got)
 	}
 	h := head(t, rec.Body.String())
@@ -184,13 +183,13 @@ func TestEmbedLookupFailures(t *testing.T) {
 		wantRetry  string
 		wantBody   string
 	}{
-		{"rate limited", http.StatusTooManyRequests, `{"detail":"boom"}`, http.StatusServiceUnavailable, rateLimitedRetry, rateLimited},
-		{"api error", http.StatusInternalServerError, `{"detail":"boom"}`, http.StatusServiceUnavailable, unavailableRetry, unavailable},
-		{"empty object", http.StatusOK, `{}`, http.StatusServiceUnavailable, unavailableRetry, unavailable},
-		{"null", http.StatusOK, `null`, http.StatusServiceUnavailable, unavailableRetry, unavailable},
-		{"not json", http.StatusOK, `<html>boom`, http.StatusServiceUnavailable, unavailableRetry, unavailable},
-		{"mistyped field", http.StatusOK, `{"motd":"Hi","num_players":"x"}`, http.StatusServiceUnavailable, unavailableRetry, unavailable},
-		{"oversized body", http.StatusOK, `{"motd":"` + strings.Repeat("a", 1<<20+1) + `"}`, http.StatusServiceUnavailable, unavailableRetry, unavailable},
+		{"rate limited", http.StatusTooManyRequests, `{"detail":"boom"}`, http.StatusServiceUnavailable, "60", rateLimited},
+		{"api error", http.StatusInternalServerError, `{"detail":"boom"}`, http.StatusServiceUnavailable, "30", unavailable},
+		{"empty object", http.StatusOK, `{}`, http.StatusServiceUnavailable, "30", unavailable},
+		{"null", http.StatusOK, `null`, http.StatusServiceUnavailable, "30", unavailable},
+		{"not json", http.StatusOK, `<html>boom`, http.StatusServiceUnavailable, "30", unavailable},
+		{"mistyped field", http.StatusOK, `{"motd":"Hi","num_players":"x"}`, http.StatusServiceUnavailable, "30", unavailable},
+		{"oversized body", http.StatusOK, `{"motd":"` + strings.Repeat("a", 1<<20+1) + `"}`, http.StatusServiceUnavailable, "30", unavailable},
 		{"undocumented status", http.StatusTeapot, `{"detail":"boom"}`, http.StatusBadGateway, "", unexpected},
 		{"unauthorized", http.StatusUnauthorized, `{"detail":"boom"}`, http.StatusBadGateway, "", unexpected},
 		{"bad gateway", http.StatusBadGateway, `{"detail":"boom"}`, http.StatusBadGateway, "", unexpected},
@@ -207,8 +206,8 @@ func TestEmbedLookupFailures(t *testing.T) {
 			if got := rec.Header().Get("Retry-After"); got != tc.wantRetry {
 				t.Errorf("Retry-After = %q, want %q", got, tc.wantRetry)
 			}
-			if got := rec.Header().Get("Cache-Control"); got != noStore {
-				t.Errorf("Cache-Control = %q, want %q", got, noStore)
+			if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+				t.Errorf("Cache-Control = %q, want %q", got, "no-store")
 			}
 			if got := rec.Body.String(); got != tc.wantBody+"\n" {
 				t.Errorf("body = %q, want only %q", got, tc.wantBody)
@@ -221,11 +220,11 @@ func TestEmbedAPIUnreachable(t *testing.T) {
 	f := newFakeAPI(t, http.StatusOK, onlineBody)
 	f.server.Close()
 	rec := getEmbed("a.com", "")
-	if rec.Code != http.StatusServiceUnavailable || rec.Header().Get("Retry-After") != unavailableRetry {
+	if rec.Code != http.StatusServiceUnavailable || rec.Header().Get("Retry-After") != "30" {
 		t.Errorf("status = %d, Retry-After = %q", rec.Code, rec.Header().Get("Retry-After"))
 	}
-	if got := rec.Header().Get("Cache-Control"); got != noStore {
-		t.Errorf("Cache-Control = %q, want %q", got, noStore)
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Errorf("Cache-Control = %q, want %q", got, "no-store")
 	}
 }
 
@@ -252,8 +251,8 @@ func TestEmbedRejectsInvalidHosts(t *testing.T) {
 			if rec.Code != http.StatusBadRequest {
 				t.Errorf("status = %d, want 400", rec.Code)
 			}
-			if got := rec.Header().Get("Cache-Control"); got != noStore {
-				t.Errorf("Cache-Control = %q, want %q", got, noStore)
+			if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+				t.Errorf("Cache-Control = %q, want %q", got, "no-store")
 			}
 			if f.request != nil {
 				t.Error("an invalid host must not reach the API")
@@ -279,22 +278,22 @@ func TestNormalizeMcHost(t *testing.T) {
 }
 
 func TestEmbedDescriptionIsTruncatedAndEscaped(t *testing.T) {
-	motd := strings.Repeat("é", components.MaxEmbedMotdRunes+100)
-	version := strings.Repeat("v", components.MaxEmbedVersionRunes+36)
+	motd := strings.Repeat("é", 300)
+	version := strings.Repeat("v", 100)
 	newFakeAPI(t, http.StatusOK, fmt.Sprintf(`{"motd":%q,"num_players":1,"max_players":2,"version":%q}`, motd, version))
 	h := head(t, getEmbed("a.com", "").Body.String())
 
-	if !strings.Contains(h, strings.Repeat("é", components.MaxEmbedMotdRunes)+"…\nPlayers: 1/2\nVersion: "+strings.Repeat("v", components.MaxEmbedVersionRunes)+"…") {
+	if !strings.Contains(h, strings.Repeat("é", 200)+"…\nPlayers: 1/2\nVersion: "+strings.Repeat("v", 64)+"…") {
 		t.Errorf("MOTD and version should be truncated:\n%s", h)
 	}
-	if strings.Contains(h, strings.Repeat("é", components.MaxEmbedMotdRunes+1)) {
+	if strings.Contains(h, strings.Repeat("é", 201)) {
 		t.Error("MOTD was not truncated at the limit")
 	}
 }
 
 func TestEmbedKeepsTextAtTheLimit(t *testing.T) {
-	motd := strings.Repeat("é", components.MaxEmbedMotdRunes)
-	version := strings.Repeat("v", components.MaxEmbedVersionRunes)
+	motd := strings.Repeat("é", 200)
+	version := strings.Repeat("v", 64)
 	newFakeAPI(t, http.StatusOK, fmt.Sprintf(`{"motd":%q,"num_players":1,"max_players":2,"version":%q}`, motd, version))
 	h := head(t, getEmbed("a.com", "").Body.String())
 	if strings.Contains(h, "…") {
@@ -349,7 +348,7 @@ func TestEmbedAcceptsABodyAtTheLimit(t *testing.T) {
 		t.Fatalf("test body is %d bytes, want exactly 1<<20", len(body))
 	}
 	newFakeAPI(t, http.StatusOK, body)
-	if rec := getEmbed("a.com", ""); rec.Code != http.StatusOK || rec.Header().Get("Cache-Control") != onlineMaxAge {
+	if rec := getEmbed("a.com", ""); rec.Code != http.StatusOK || rec.Header().Get("Cache-Control") != "public, max-age=60" {
 		t.Errorf("status = %d, Cache-Control = %q", rec.Code, rec.Header().Get("Cache-Control"))
 	}
 }
@@ -360,11 +359,11 @@ func TestEmbedTreatsOnlyProblemJSON404AsOffline(t *testing.T) {
 		wantStatus        int
 		wantCache         string
 	}{
-		{"problem+json", problemJSON, http.StatusOK, offlineMaxAge},
-		{"problem+json with a charset", problemJSON + "; charset=utf-8", http.StatusOK, offlineMaxAge},
-		{"plain json", "application/json", http.StatusBadGateway, noStore},
-		{"html from a proxy", "text/html", http.StatusBadGateway, noStore},
-		{"no content type", "", http.StatusBadGateway, noStore},
+		{"problem+json", "application/problem+json", http.StatusOK, "public, max-age=30"},
+		{"problem+json with a charset", "application/problem+json" + "; charset=utf-8", http.StatusOK, "public, max-age=30"},
+		{"plain json", "application/json", http.StatusBadGateway, "no-store"},
+		{"html from a proxy", "text/html", http.StatusBadGateway, "no-store"},
+		{"no content type", "", http.StatusBadGateway, "no-store"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
