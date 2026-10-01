@@ -28,7 +28,6 @@ const (
 
 var (
 	mcStatusClient = &http.Client{Timeout: mcStatusTimeout}
-	mcHexColor     = regexp.MustCompile(`§x(?:§[0-9a-fA-F]){6}`)
 	mcColorCode    = regexp.MustCompile(`(?s)§.`)
 	mcHostPattern  = regexp.MustCompile(`^(?P<host>(?:[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*)|\[[0-9A-Fa-f:.]+\])(?::(?P<port>[0-9]{1,5}))?$`)
 )
@@ -53,7 +52,7 @@ type apiMcStatus struct {
 // The API sends line breaks as a literal backslash-n.
 func motdLines(motd string) []string {
 	motd = strings.ReplaceAll(motd, `\n`, "\n")
-	motd = mcColorCode.ReplaceAllString(mcHexColor.ReplaceAllString(motd, ""), "")
+	motd = mcColorCode.ReplaceAllString(motd, "")
 	var lines []string
 	for _, line := range strings.Split(motd, "\n") {
 		if line = strings.TrimSpace(line); line != "" {

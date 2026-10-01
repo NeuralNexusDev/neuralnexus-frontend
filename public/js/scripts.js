@@ -567,14 +567,10 @@ function showBeeAdminLink() {
 const MC_STATUS_TIMEOUT_MS = 30000;
 let mcStatusController = null;
 
-/**
- * The API sends line breaks as a literal backslash-n, and 1.16+ hex colours
- * as "§x" followed by six "§<digit>" pairs.
- */
+/** The API sends line breaks as a literal backslash-n. */
 function formatMcMotd(motd) {
     return motd
         .replace(/\\n/g, '\n')
-        .replace(/§x(?:§[0-9a-f]){6}/gi, '')
         .replace(/§[^]/giu, '')
         .trim();
 }
@@ -600,7 +596,6 @@ function renderMcStatus(status, bedrock, host) {
     const icon = document.getElementById('mc-status-icon');
     icon.hidden = true;
     icon.onload = () => { icon.hidden = false; };
-    icon.onerror = () => { icon.hidden = true; };
     icon.removeAttribute('src');
     if (!bedrock) {
         icon.src = `${apiBaseUrl()}/api/v1/mcstatus/icon/${encodeURIComponent(host)}`;
