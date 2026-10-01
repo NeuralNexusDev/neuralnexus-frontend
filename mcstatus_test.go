@@ -49,14 +49,14 @@ func newFakeAPIWithType(t *testing.T, status int, contentType, body string) *fak
 }
 
 func getEmbed(host, rawQuery string) *httptest.ResponseRecorder {
-	target := "/mcstatus/" + url.PathEscape(host)
+	target := "/project/mc-status/" + url.PathEscape(host)
 	if rawQuery != "" {
 		target += "?" + rawQuery
 	}
 	req := httptest.NewRequest(http.MethodGet, target, nil)
 	req.SetPathValue("host", host)
 	rec := httptest.NewRecorder()
-	McStatusEmbedHandler(rec, req)
+	McStatusPageHandler(rec, req)
 	return rec
 }
 
@@ -95,7 +95,7 @@ func TestEmbedOnline(t *testing.T) {
 	for _, want := range []string{
 		`property="og:title" content="play.example.net:80"`,
 		"Hello\nWorld\nPlayers: 3/20\nVersion: Paper 1.21",
-		`property="og:url" content="` + testSiteURL + `/mcstatus/play.example.net:80"`,
+		`property="og:url" content="` + testSiteURL + `/project/mc-status/play.example.net:80"`,
 		`property="og:image" content="` + f.server.URL + `/api/v1/mcstatus/icon/play.example.net:80"`,
 		`property="og:image:alt" content="play.example.net:80 server icon"`,
 		`property="og:image:width" content="64"`,
@@ -103,7 +103,7 @@ func TestEmbedOnline(t *testing.T) {
 		`property="og:type" content="website"`,
 		`name="twitter:card" content="summary"`,
 		`name="robots" content="noindex"`,
-		`rel="canonical" href="` + testSiteURL + `/mcstatus/play.example.net:80"`,
+		`rel="canonical" href="` + testSiteURL + `/project/mc-status/play.example.net:80"`,
 		`property="og:site_name"`,
 		`name="theme-color"`,
 	} {
@@ -122,16 +122,16 @@ func TestEmbedForwardsOptions(t *testing.T) {
 		wantAPI     url.Values
 		wantURL     string
 	}{
-		{"query off", "query=false", url.Values{}, "/mcstatus/a.com?query=false"},
-		{"query port", "query_port=25575", url.Values{"query": {"true"}, "query_port": {"25575"}}, "/mcstatus/a.com?query_port=25575"},
-		{"highest query port", "query_port=65535", url.Values{"query": {"true"}, "query_port": {"65535"}}, "/mcstatus/a.com?query_port=65535"},
-		{"query port above the highest", "query_port=65536", url.Values{"query": {"true"}}, "/mcstatus/a.com"},
-		{"query port with leading zeros", "query_port=0025575", url.Values{"query": {"true"}, "query_port": {"25575"}}, "/mcstatus/a.com?query_port=25575"},
-		{"signed query port is dropped", "query_port=%2B80", url.Values{"query": {"true"}}, "/mcstatus/a.com"},
-		{"invalid query port is dropped", "query_port=99999", url.Values{"query": {"true"}}, "/mcstatus/a.com"},
-		{"query port is ignored when the query is off", "query=false&query_port=25575", url.Values{}, "/mcstatus/a.com?query=false"},
-		{"bedrock", "bedrock=true", url.Values{"bedrock": {"true"}}, "/mcstatus/a.com?bedrock=true"},
-		{"bedrock ignores the query and its port", "bedrock=true&query_port=25575", url.Values{"bedrock": {"true"}}, "/mcstatus/a.com?bedrock=true"},
+		{"query off", "query=false", url.Values{}, "/project/mc-status/a.com?query=false"},
+		{"query port", "query_port=25575", url.Values{"query": {"true"}, "query_port": {"25575"}}, "/project/mc-status/a.com?query_port=25575"},
+		{"highest query port", "query_port=65535", url.Values{"query": {"true"}, "query_port": {"65535"}}, "/project/mc-status/a.com?query_port=65535"},
+		{"query port above the highest", "query_port=65536", url.Values{"query": {"true"}}, "/project/mc-status/a.com"},
+		{"query port with leading zeros", "query_port=0025575", url.Values{"query": {"true"}, "query_port": {"25575"}}, "/project/mc-status/a.com?query_port=25575"},
+		{"signed query port is dropped", "query_port=%2B80", url.Values{"query": {"true"}}, "/project/mc-status/a.com"},
+		{"invalid query port is dropped", "query_port=99999", url.Values{"query": {"true"}}, "/project/mc-status/a.com"},
+		{"query port is ignored when the query is off", "query=false&query_port=25575", url.Values{}, "/project/mc-status/a.com?query=false"},
+		{"bedrock", "bedrock=true", url.Values{"bedrock": {"true"}}, "/project/mc-status/a.com?bedrock=true"},
+		{"bedrock ignores the query and its port", "bedrock=true&query_port=25575", url.Values{"bedrock": {"true"}}, "/project/mc-status/a.com?bedrock=true"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -181,70 +181,54 @@ func TestEmbedOffline(t *testing.T) {
 	}
 }
 
-func TestEmbedLookupFailures(t *testing.T) {
-	const (
-		unavailable = "status lookup unavailable"
-		rateLimited = "status lookups are rate limited"
-		unexpected  = "unexpected status response"
-	)
-	cases := []struct {
-		name       string
-		apiStatus  int
-		body       string
-		wantStatus int
-		wantRetry  string
-		wantBody   string
-	}{
-		{"rate limited", http.StatusTooManyRequests, `{"detail":"boom"}`, http.StatusServiceUnavailable, "60", rateLimited},
-		{"api error", http.StatusInternalServerError, `{"detail":"boom"}`, http.StatusServiceUnavailable, "30", unavailable},
-		{"empty object", http.StatusOK, `{}`, http.StatusServiceUnavailable, "30", unavailable},
-		{"null", http.StatusOK, `null`, http.StatusServiceUnavailable, "30", unavailable},
-		{"not json", http.StatusOK, `<html>boom`, http.StatusServiceUnavailable, "30", unavailable},
-		{"mistyped field", http.StatusOK, `{"motd":"Hi","num_players":"x"}`, http.StatusServiceUnavailable, "30", unavailable},
-		{"oversized body", http.StatusOK, bodyOfSize(1<<20 + 1), http.StatusServiceUnavailable, "30", unavailable},
-		{"undocumented status", http.StatusTeapot, `{"detail":"boom"}`, http.StatusBadGateway, "", unexpected},
-		{"unauthorized", http.StatusUnauthorized, `{"detail":"boom"}`, http.StatusBadGateway, "", unexpected},
-		{"bad gateway", http.StatusBadGateway, `{"detail":"boom"}`, http.StatusBadGateway, "", unexpected},
-		{"service unavailable", http.StatusServiceUnavailable, `{"detail":"boom"}`, http.StatusBadGateway, "", unexpected},
-		{"gateway timeout", http.StatusGatewayTimeout, `{"detail":"boom"}`, http.StatusBadGateway, "", unexpected},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			newFakeAPI(t, tc.apiStatus, tc.body)
-			rec := getEmbed("a.com", "")
-			if rec.Code != tc.wantStatus {
-				t.Errorf("status = %d, want %d", rec.Code, tc.wantStatus)
-			}
-			if got := rec.Header().Get("Retry-After"); got != tc.wantRetry {
-				t.Errorf("Retry-After = %q, want %q", got, tc.wantRetry)
-			}
-			if got := rec.Header().Get("Cache-Control"); got != "no-store" {
-				t.Errorf("Cache-Control = %q, want %q", got, "no-store")
-			}
-			if got := rec.Body.String(); got != tc.wantBody+"\n" {
-				t.Errorf("body = %q, want only %q", got, tc.wantBody)
-			}
-		})
-	}
-}
-
-func assertUnavailable(t *testing.T, rec *httptest.ResponseRecorder) {
+func assertBarePage(t *testing.T, rec *httptest.ResponseRecorder, wantStatus int) {
 	t.Helper()
-	if rec.Code != http.StatusServiceUnavailable || rec.Header().Get("Retry-After") != "30" {
-		t.Errorf("status = %d, Retry-After = %q", rec.Code, rec.Header().Get("Retry-After"))
+	if rec.Code != wantStatus {
+		t.Errorf("status = %d, want %d", rec.Code, wantStatus)
 	}
 	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
 		t.Errorf("Cache-Control = %q, want %q", got, "no-store")
 	}
-	if got := rec.Body.String(); got != "status lookup unavailable\n" {
-		t.Errorf("body = %q, want only %q", got, "status lookup unavailable")
+	body := rec.Body.String()
+	if !strings.Contains(body, `id="mc-status-host"`) {
+		t.Error("the checker form should still be served")
+	}
+	if h := head(t, body); strings.Contains(h, "og:") || !strings.Contains(h, "<title>NeuralNexus</title>") {
+		t.Errorf("the generic head should carry no preview tags:\n%s", h)
+	}
+}
+
+func TestEmbedLookupFailures(t *testing.T) {
+	cases := []struct {
+		name      string
+		apiStatus int
+		body      string
+	}{
+		{"rate limited", http.StatusTooManyRequests, `{"detail":"boom"}`},
+		{"api error", http.StatusInternalServerError, `{"detail":"boom"}`},
+		{"empty object", http.StatusOK, `{}`},
+		{"null", http.StatusOK, `null`},
+		{"not json", http.StatusOK, `<html>boom`},
+		{"mistyped field", http.StatusOK, `{"motd":"Hi","num_players":"x"}`},
+		{"oversized body", http.StatusOK, bodyOfSize(1<<20 + 1)},
+		{"undocumented status", http.StatusTeapot, `{"detail":"boom"}`},
+		{"unauthorized", http.StatusUnauthorized, `{"detail":"boom"}`},
+		{"bad gateway", http.StatusBadGateway, `{"detail":"boom"}`},
+		{"service unavailable", http.StatusServiceUnavailable, `{"detail":"boom"}`},
+		{"gateway timeout", http.StatusGatewayTimeout, `{"detail":"boom"}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			newFakeAPI(t, tc.apiStatus, tc.body)
+			assertBarePage(t, getEmbed("a.com", ""), http.StatusOK)
+		})
 	}
 }
 
 func TestEmbedAPIUnreachable(t *testing.T) {
 	f := newFakeAPI(t, http.StatusOK, onlineBody)
 	f.server.Close()
-	assertUnavailable(t, getEmbed("a.com", ""))
+	assertBarePage(t, getEmbed("a.com", ""), http.StatusOK)
 }
 
 func TestEmbedCancelsTheUpstreamLookupWhenTheClientGoesAway(t *testing.T) {
@@ -262,11 +246,11 @@ func TestEmbedCancelsTheUpstreamLookupWhenTheClientGoesAway(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	req := httptest.NewRequest(http.MethodGet, "/mcstatus/a.com", nil).WithContext(ctx)
+	req := httptest.NewRequest(http.MethodGet, "/project/mc-status/a.com", nil).WithContext(ctx)
 	req.SetPathValue("host", "a.com")
 	done := make(chan struct{})
 	go func() {
-		McStatusEmbedHandler(httptest.NewRecorder(), req)
+		McStatusPageHandler(httptest.NewRecorder(), req)
 		close(done)
 	}()
 
@@ -341,7 +325,7 @@ func TestEmbedRejectsAnInvalidAPIURL(t *testing.T) {
 	apiURL := config.APIURL
 	config.APIURL = "http://a b"
 	t.Cleanup(func() { config.APIURL = apiURL })
-	assertUnavailable(t, getEmbed("a.com", ""))
+	assertBarePage(t, getEmbed("a.com", ""), http.StatusOK)
 }
 
 func hostOfLength(n int) string {
@@ -386,13 +370,7 @@ func TestEmbedRejectsInvalidHosts(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			f.request = nil
-			rec := getEmbed(tc.host, "")
-			if rec.Code != http.StatusBadRequest {
-				t.Errorf("status = %d, want 400", rec.Code)
-			}
-			if got := rec.Header().Get("Cache-Control"); got != "no-store" {
-				t.Errorf("Cache-Control = %q, want %q", got, "no-store")
-			}
+			assertBarePage(t, getEmbed(tc.host, ""), http.StatusBadRequest)
 			if f.request != nil {
 				t.Error("an invalid host must not reach the API")
 			}
@@ -505,30 +483,36 @@ func TestEmbedAcceptsABodyAtTheLimit(t *testing.T) {
 func TestEmbedTreatsOnlyProblemJSON404AsOffline(t *testing.T) {
 	cases := []struct {
 		name, contentType string
-		wantStatus        int
-		wantCache         string
+		wantOffline       bool
 	}{
-		{"problem+json", "application/problem+json", http.StatusOK, "public, max-age=30"},
-		{"problem+json with a charset", "application/problem+json; charset=utf-8", http.StatusOK, "public, max-age=30"},
-		{"whitespace before the parameters", "application/problem+json ; charset=utf-8", http.StatusOK, "public, max-age=30"},
-		{"mixed case", "Application/Problem+JSON", http.StatusOK, "public, max-age=30"},
-		{"problem+xml", "application/problem+xml", http.StatusBadGateway, "no-store"},
-		{"problem+json as a parameter", "text/x; a=application/problem+json", http.StatusBadGateway, "no-store"},
-		{"other +json type", "application/vnd.api+json", http.StatusBadGateway, "no-store"},
-		{"problem+json with a suffix", "application/problem+json2", http.StatusBadGateway, "no-store"},
-		{"plain json", "application/json", http.StatusBadGateway, "no-store"},
-		{"html from a proxy", "text/html", http.StatusBadGateway, "no-store"},
-		{"no content type", "", http.StatusBadGateway, "no-store"},
+		{"problem+json", "application/problem+json", true},
+		{"problem+json with a charset", "application/problem+json; charset=utf-8", true},
+		{"whitespace before the parameters", "application/problem+json ; charset=utf-8", true},
+		{"mixed case", "Application/Problem+JSON", true},
+		{"problem+xml", "application/problem+xml", false},
+		{"problem+json as a parameter", "text/x; a=application/problem+json", false},
+		{"other +json type", "application/vnd.api+json", false},
+		{"problem+json with a suffix", "application/problem+json2", false},
+		{"plain json", "application/json", false},
+		{"html from a proxy", "text/html", false},
+		{"no content type", "", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			newFakeAPIWithType(t, http.StatusNotFound, tc.contentType, `{"status":404}`)
 			rec := getEmbed("a.com", "")
-			if rec.Code != tc.wantStatus {
-				t.Errorf("status = %d, want %d", rec.Code, tc.wantStatus)
+			if !tc.wantOffline {
+				assertBarePage(t, rec, http.StatusOK)
+				return
 			}
-			if got := rec.Header().Get("Cache-Control"); got != tc.wantCache {
-				t.Errorf("Cache-Control = %q, want %q", got, tc.wantCache)
+			if rec.Code != http.StatusOK {
+				t.Errorf("status = %d, want 200", rec.Code)
+			}
+			if got := rec.Header().Get("Cache-Control"); got != "public, max-age=30" {
+				t.Errorf("Cache-Control = %q, want %q", got, "public, max-age=30")
+			}
+			if !strings.Contains(head(t, rec.Body.String()), "Server offline or unreachable") {
+				t.Error("an offline server should get the offline description")
 			}
 		})
 	}
@@ -539,9 +523,9 @@ func TestEmbedRouteWiring(t *testing.T) {
 	router := NewWebServer("", false).Setup()
 
 	get := httptest.NewRecorder()
-	router.ServeHTTP(get, httptest.NewRequest(http.MethodGet, "/mcstatus/Play.Example.com:25570?query=false", nil))
+	router.ServeHTTP(get, httptest.NewRequest(http.MethodGet, "/project/mc-status/Play.Example.com:25570?query=false", nil))
 	if get.Code != http.StatusOK || !strings.Contains(get.Body.String(), `property="og:title" content="play.example.com:25570"`) {
-		t.Fatalf("GET /mcstatus/{host} did not reach the handler: %d %s", get.Code, get.Body.String())
+		t.Fatalf("GET /project/mc-status/{host} did not reach the handler: %d %s", get.Code, get.Body.String())
 	}
 	if f.request == nil || f.request.URL.Path != "/api/v1/mcstatus/play.example.com:25570" {
 		t.Errorf("the host path value did not reach the API: %v", f.request)
@@ -552,12 +536,25 @@ func TestEmbedRouteWiring(t *testing.T) {
 	router.ServeHTTP(catchAll, httptest.NewRequest(http.MethodGet, "/", nil))
 	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch} {
 		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, httptest.NewRequest(method, "/mcstatus/a.com", nil))
+		router.ServeHTTP(rec, httptest.NewRequest(method, "/project/mc-status/a.com", nil))
 		if rec.Code != catchAll.Code || rec.Body.String() != catchAll.Body.String() {
 			t.Errorf("%s should fall through to the catch-all route, got %d", method, rec.Code)
 		}
 	}
 	if f.request != nil {
 		t.Error("non-GET requests must not reach the API")
+	}
+
+	f.request = nil
+	bare := httptest.NewRecorder()
+	router.ServeHTTP(bare, httptest.NewRequest(http.MethodGet, "/project/mc-status", nil))
+	if bare.Code != http.StatusOK || !strings.Contains(bare.Body.String(), `id="mc-status-host"`) || strings.Contains(bare.Body.String(), "og:title") {
+		t.Errorf("GET /project/mc-status should serve the bare checker: %d", bare.Code)
+	}
+	if bare.Header().Get("Cache-Control") != "" {
+		t.Errorf("the bare checker should not set Cache-Control, got %q", bare.Header().Get("Cache-Control"))
+	}
+	if f.request != nil {
+		t.Error("the bare checker must not call the API")
 	}
 }

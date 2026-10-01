@@ -331,12 +331,20 @@ test.describe('mc status page - query port', () => {
 });
 
 test.describe('mc status page - share links', () => {
-  test('?host= runs the lookup on load and fills the form', async ({ page }) => {
+  test('a host in the path runs the lookup on load and fills the form', async ({ page }) => {
     const requests = await mockMcStatus(page, () => json(ONLINE));
-    await page.goto('/project/mc-status?host=play.example.net');
+    await page.goto('/project/mc-status/play.example.net');
     await expect(page.locator('#mc-status-result')).toBeVisible();
     await expect(page.locator('#mc-status-host')).toHaveValue('play.example.net');
     expect(requests.status).toHaveLength(1);
+  });
+
+  test('a host with a port is decoded from the path and kept readable in the shared URL', async ({ page }) => {
+    await mockMcStatus(page, () => json(ONLINE));
+    await page.goto('/project/mc-status/play.example.net%3A25570');
+    await expect(page.locator('#mc-status-result')).toBeVisible();
+    await expect(page.locator('#mc-status-host')).toHaveValue('play.example.net:25570');
+    expect(new URL(page.url()).pathname).toBe('/project/mc-status/play.example.net:25570');
   });
 
   test('a lookup rewrites the URL so the result can be shared', async ({ page }) => {
@@ -344,7 +352,8 @@ test.describe('mc status page - share links', () => {
     await page.goto('/project/mc-status');
     await lookup(page, 'play.example.net');
     await expect(page.locator('#mc-status-result')).toBeVisible();
-    expect(new URL(page.url()).search).toBe('?host=play.example.net');
+    expect(new URL(page.url()).pathname).toBe('/project/mc-status/play.example.net');
+    expect(new URL(page.url()).search).toBe('');
   });
 
   test('Bedrock and query=false are kept in the shared URL', async ({ page }) => {
@@ -353,18 +362,19 @@ test.describe('mc status page - share links', () => {
     await pickEdition(page, 'bedrock');
     await lookup(page, 'bedrock.example.net');
     await expect(page.locator('#mc-status-result')).toBeVisible();
-    expect(new URL(page.url()).search).toBe('?host=bedrock.example.net&bedrock=true');
+    expect(new URL(page.url()).pathname).toBe('/project/mc-status/bedrock.example.net');
+    expect(new URL(page.url()).search).toBe('?bedrock=true');
 
     await pickEdition(page, 'java');
     await openAdvanced(page);
     await page.locator('#mc-status-query').uncheck();
     await page.locator('#mc-status-submit').click();
-    await expect(page).toHaveURL(/\?host=bedrock\.example\.net&query=false$/);
+    await expect(page).toHaveURL(/\/project\/mc-status\/bedrock\.example\.net\?query=false$/);
   });
 
   test('?bedrock=true selects Bedrock and skips the query', async ({ page }) => {
     const requests = await mockMcStatus(page, () => json(ONLINE));
-    await page.goto('/project/mc-status?host=bedrock.example.net&bedrock=true');
+    await page.goto('/project/mc-status/bedrock.example.net?bedrock=true');
     await expect(page.locator('#mc-status-result')).toBeVisible();
     await expect(page.locator('input[name="mc-edition"][value="bedrock"]')).toBeChecked();
     expect(requests.status[0].searchParams.get('bedrock')).toBe('true');
@@ -373,7 +383,7 @@ test.describe('mc status page - share links', () => {
 
   test('?query=false leaves the query box unticked', async ({ page }) => {
     const requests = await mockMcStatus(page, () => json(ONLINE));
-    await page.goto('/project/mc-status?host=play.example.net&query=false');
+    await page.goto('/project/mc-status/play.example.net?query=false');
     await expect(page.locator('#mc-status-result')).toBeVisible();
     await expect(page.locator('#mc-status-query')).not.toBeChecked();
     expect(requests.status[0].searchParams.has('query')).toBe(false);
@@ -381,7 +391,7 @@ test.describe('mc status page - share links', () => {
 
   test('a valid ?query_port= fills the field, opens Advanced and is sent', async ({ page }) => {
     const requests = await mockMcStatus(page, () => json(ONLINE));
-    await page.goto('/project/mc-status?host=play.example.net&query_port=25575');
+    await page.goto('/project/mc-status/play.example.net?query_port=25575');
     await expect(page.locator('#mc-status-result')).toBeVisible();
     await expect(page.locator('#mc-status-query-port')).toHaveValue('25575');
     await expect(page.locator('#mc-status-advanced')).toHaveAttribute('open', '');
@@ -390,12 +400,13 @@ test.describe('mc status page - share links', () => {
 
   test('an invalid ?query_port= is dropped from the field, the request and the URL', async ({ page }) => {
     const requests = await mockMcStatus(page, () => json(ONLINE));
-    await page.goto('/project/mc-status?host=play.example.net&query_port=0');
+    await page.goto('/project/mc-status/play.example.net?query_port=0');
     await expect(page.locator('#mc-status-result')).toBeVisible();
     await expect(page.locator('#mc-status-query-port')).toHaveValue('');
     await expect(page.locator('#mc-status-advanced')).not.toHaveAttribute('open', '');
     expect(requests.status[0].searchParams.has('query_port')).toBe(false);
-    expect(new URL(page.url()).search).toBe('?host=play.example.net');
+    expect(new URL(page.url()).pathname).toBe('/project/mc-status/play.example.net');
+    expect(new URL(page.url()).search).toBe('');
   });
 });
 
@@ -606,7 +617,7 @@ test.describe('mc status page - request sequencing', () => {
   });
 });
 
-test.describe('mc status embed route', () => {
+test.describe('mc status page - server-rendered route', () => {
   const invalid = {
     'an illegal character': 'a_b$c',
     'a space': 'bad host',
@@ -618,10 +629,11 @@ test.describe('mc status embed route', () => {
   };
 
   for (const [name, host] of Object.entries(invalid)) {
-    test(`rejects ${name} with a 400 that is not cached`, async ({ request }) => {
-      const res = await request.get(`/mcstatus/${encodeURIComponent(host)}`);
+    test(`rejects ${name} with a 400 that is not cached and still serves the form`, async ({ request }) => {
+      const res = await request.get(`/project/mc-status/${encodeURIComponent(host)}`);
       expect(res.status()).toBe(400);
       expect(res.headers()['cache-control']).toBe('no-store');
+      expect(await res.text()).toContain('id="mc-status-host"');
     });
   }
 });

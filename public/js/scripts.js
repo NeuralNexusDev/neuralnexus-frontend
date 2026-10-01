@@ -564,6 +564,7 @@ function showBeeAdminLink() {
         });
 }
 
+const MC_STATUS_PATH = '/project/mc-status';
 const MC_STATUS_TIMEOUT_MS = 30000;
 let mcStatusController = null;
 
@@ -691,7 +692,7 @@ function checkMcStatus(event) {
             params.set('query_port', queryPort);
         }
     }
-    const urlParams = new URLSearchParams({ host });
+    const urlParams = new URLSearchParams();
     if (bedrock) {
         urlParams.set('bedrock', 'true');
     } else if (!query) {
@@ -699,7 +700,8 @@ function checkMcStatus(event) {
     } else if (queryPort) {
         urlParams.set('query_port', queryPort);
     }
-    history.replaceState(null, '', `${window.location.pathname}?${urlParams}`);
+    const search = urlParams.toString();
+    history.replaceState(null, '', `${MC_STATUS_PATH}/${encodeURIComponent(host).replace(/%3A/gi, ':')}${search ? `?${search}` : ''}`);
 
     const controller = new AbortController();
     mcStatusController = controller;
@@ -763,7 +765,14 @@ function checkMcStatus(event) {
 
 function loadMcStatusFromUrl() {
     const params = new URLSearchParams(window.location.search);
-    const host = params.get('host');
+    let host = '';
+    if (window.location.pathname.startsWith(`${MC_STATUS_PATH}/`)) {
+        try {
+            host = decodeURIComponent(window.location.pathname.slice(MC_STATUS_PATH.length + 1));
+        } catch {
+            return;
+        }
+    }
     if (!host) {
         return;
     }
