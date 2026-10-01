@@ -159,7 +159,7 @@ templ Projects() {
 		</div>
 		@projectSection("The APIary", "REST APIs, each with a live demo to poke at") {
 			@projectCard("/project/bee-name-generator", "🐝", "Bee Name Generator", "Generate a random bee name, or suggest one of your own")
-			@projectCardSoon("⛏️", "MC Status", "Check whether a Minecraft server is online and who's playing")
+			@projectCard("/project/mc-status", "⛏️", "MC Status", "Check whether a Minecraft server is online and who's playing")
 		}
 		if false {
 			@projectSection("Other Projects", "Everything that isn't an API") {
@@ -295,29 +295,91 @@ templ BeeNameGeneratorAdminPage() {
 	@WrapContents(BeeNameGeneratorAdmin())
 }
 
-// templ McStatus() {
-// 	<div class="mcstatus">
-// 		<h1>MC Status</h1>
-// 	</div>
-// 	<br/>
-// 	<form @submit.prevent="useRouterCustom()">
-// 		<input type="text" v-model="address" placeholder="Server Address"/>
-// 		<button type="submit">Check</button>
-// 	</form>
-// }
+templ McStatus() {
+	<div class="mx-auto max-w-md space-y-6">
+		<div class="space-y-2 text-center">
+			<h1 class="text-3xl font-bold">MC Status</h1>
+			<p class="text-balance text-gray-500 dark:text-gray-400">
+				Check whether a Minecraft server is online and who's playing
+			</p>
+		</div>
+		<form class="space-y-4" onsubmit="checkMcStatus(event)">
+			<div class="space-y-2">
+				<label class="text-sm font-medium leading-none" for="mc-status-host">Server address</label>
+				<input
+					class="text-black flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+					id="mc-status-host"
+					name="host"
+					placeholder="play.example.net:25565"
+					autocomplete="off"
+					autocapitalize="off"
+					spellcheck="false"
+					required
+					type="text"
+				/>
+			</div>
+			<div class="grid grid-cols-2 gap-1 rounded-md border border-input p-1 text-sm font-medium">
+				<label class="cursor-pointer rounded px-3 py-1.5 text-center has-checked:bg-primary has-checked:text-primary-foreground has-focus-visible:ring-2 has-focus-visible:ring-ring">
+					<input class="sr-only" type="radio" name="mc-edition" value="java" checked/>
+					Java
+				</label>
+				<label class="cursor-pointer rounded px-3 py-1.5 text-center has-checked:bg-primary has-checked:text-primary-foreground has-focus-visible:ring-2 has-focus-visible:ring-ring">
+					<input class="sr-only" type="radio" name="mc-edition" value="bedrock"/>
+					Bedrock
+				</label>
+			</div>
+			<details class="text-sm">
+				<summary class="cursor-pointer text-gray-500 dark:text-gray-400">Advanced</summary>
+				<label class="mt-2 flex items-center gap-2">
+					<input id="mc-status-query" type="checkbox"/>
+					Use the query protocol (Java only, if the server has it enabled)
+				</label>
+			</details>
+			<button
+				id="mc-status-submit"
+				class="border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
+				type="submit"
+			>
+				Check
+			</button>
+		</form>
+		<div id="mc-status-error" hidden class="space-y-1 rounded-md border border-destructive bg-destructive/10 p-3 text-center text-sm text-destructive">
+			<p id="mc-status-error-message" class="font-medium"></p>
+			<p id="mc-status-error-detail" hidden></p>
+		</div>
+		<div id="mc-status-result" hidden class="space-y-4 rounded-lg border border-input p-4">
+			<div class="flex items-center gap-3">
+				<img id="mc-status-icon" hidden alt="Server icon" class="h-16 w-16 rounded" style="image-rendering: pixelated"/>
+				<div class="min-w-0 flex-1 space-y-1">
+					<h2 id="mc-status-name" class="truncate text-lg font-semibold"></h2>
+					<div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+						<span id="mc-status-pill"></span>
+						<span id="mc-status-type" class="rounded-full border border-input px-2.5 py-0.5"></span>
+						<span id="mc-status-version"></span>
+					</div>
+				</div>
+			</div>
+			<p id="mc-status-motd" class="whitespace-pre-line text-sm"></p>
+			<div class="space-y-1">
+				<div class="flex justify-between text-sm">
+					<span>Players</span>
+					<span id="mc-status-players-count"></span>
+				</div>
+				<div class="h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+					<div id="mc-status-players-bar" class="h-full bg-primary"></div>
+				</div>
+			</div>
+			<ul id="mc-status-players" class="flex flex-wrap gap-2"></ul>
+			<p id="mc-status-players-hidden" hidden class="text-center text-sm text-gray-500 dark:text-gray-400">
+				Player list hidden by server
+			</p>
+		</div>
+	</div>
+	<script>
+		loadMcStatusFromUrl();
+	</script>
+}
 
-// templ McServerStatus(address string) {
-// 	<div class="mcserverstatus">
-// 		<h1>McServerStatus</h1>
-// 	</div>
-// 	<br/>
-// 	<div>
-// 		<h2>Server Address: { { address } }</h2>
-// 	</div>
-// 	<br/>
-// 	<div style="text-align: center" id="motd"></div>
-// 	<br/>
-// 	<img class="center" src="" alt="Server Favicon" id="favicon"/>
-// 	<br/>
-// 	<p style="text-align: center">Players: { { ONLINE_PLAYERS } }/{ { MAX_PLAYERS } }</p>
-// }
+templ McStatusPage() {
+	@WrapContents(McStatus())
+}

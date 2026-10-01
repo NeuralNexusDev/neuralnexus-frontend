@@ -672,3 +672,148 @@ function showBeeAdminLink() {
             console.error('Error:', error);
         });
 }
+
+let mcStatusSeq = 0;
+
+/**
+ * @description Renders a server status response into the MC Status result
+ * card. All server-supplied text goes in via textContent.
+ * @param {Object} status - Server status from the mcstatus API
+ */
+function renderMcStatus(status) {
+    const maxPlayers = status.max_players ?? 0;
+    const numPlayers = status.num_players ?? 0;
+    const players = status.players || [];
+
+    document.getElementById('mc-status-name').textContent = status.name || status.host;
+    document.getElementById('mc-status-motd').textContent = (status.motd || '').replace(/§[0-9a-fk-or]/gi, '').trim();
+    document.getElementById('mc-status-version').textContent = status.version || 'Unknown version';
+    document.getElementById('mc-status-type').textContent = status.server_type === 'bedrock' ? 'Bedrock' : 'Java';
+    document.getElementById('mc-status-players-count').textContent = `${numPlayers} / ${maxPlayers}`;
+    document.getElementById('mc-status-players-bar').style.width = maxPlayers > 0 ? `${Math.min(100, (numPlayers / maxPlayers) * 100)}%` : '0%';
+
+    const icon = document.getElementById('mc-status-icon');
+    const favicon = status.favicon || '';
+    icon.hidden = !favicon.startsWith('data:image/png;base64,');
+    icon.src = icon.hidden ? '' : favicon;
+
+    const pill = document.getElementById('mc-status-pill');
+    pill.textContent = 'Online';
+    pill.className = 'rounded-full bg-green-500/15 px-2.5 py-0.5 text-xs font-medium text-green-600 dark:text-green-400';
+
+    const list = document.getElementById('mc-status-players');
+    list.replaceChildren();
+    players.forEach((player) => {
+        const chip = document.createElement('li');
+        chip.className = 'rounded-full border border-input px-2.5 py-0.5 text-xs';
+        chip.textContent = player.name;
+        list.appendChild(chip);
+    });
+    document.getElementById('mc-status-players-hidden').hidden = players.length > 0 || numPlayers === 0;
+    document.getElementById('mc-status-result').hidden = false;
+}
+
+/**
+ * @description Shows an error in the MC Status result area in place of the
+ * result card.
+ * @param {string} message - Headline to show
+ * @param {string} [detail] - Optional extra detail from the API
+ */
+function showMcStatusError(message, detail) {
+    document.getElementById('mc-status-result').hidden = true;
+    document.getElementById('mc-status-error-message').textContent = message;
+    const detailEl = document.getElementById('mc-status-error-detail');
+    detailEl.textContent = detail || '';
+    detailEl.hidden = !detail;
+    document.getElementById('mc-status-error').hidden = false;
+}
+
+/**
+ * @description Looks up a server's status from the form values, keeps the
+ * address bar in sync so the lookup can be shared, and renders the result.
+ * @param {Event} [event] - Form submit event
+ */
+function checkMcStatus(event) {
+    if (event) {
+        event.preventDefault();
+    }
+    const host = document.getElementById('mc-status-host').value.trim();
+    if (!host) {
+        return;
+    }
+    const bedrock = document.querySelector('input[name="mc-edition"]:checked').value === 'bedrock';
+    const query = !bedrock && document.getElementById('mc-status-query').checked;
+
+    const params = new URLSearchParams({ host });
+    if (bedrock) {
+        params.set('bedrock', 'true');
+    }
+    if (query) {
+        params.set('query', 'true');
+    }
+    history.replaceState(null, '', `${window.location.pathname}?${params}`);
+
+    const apiParams = new URLSearchParams();
+    if (bedrock) {
+        apiParams.set('bedrock', 'true');
+    }
+    if (query) {
+        apiParams.set('query', 'true');
+    }
+
+    const seq = ++mcStatusSeq;
+    const button = document.getElementById('mc-status-submit');
+    button.disabled = true;
+    button.textContent = 'Checking...';
+    document.getElementById('mc-status-error').hidden = true;
+
+    fetch(`${apiBaseUrl()}/api/v1/mcstatus/${encodeURIComponent(host)}?${apiParams}`)
+        .then((res) => {
+            if (res.ok) {
+                return res.json().then((status) => {
+                    if (seq === mcStatusSeq) {
+                        renderMcStatus(status);
+                    }
+                });
+            }
+            return res.json().catch(() => ({})).then((problem) => {
+                if (seq !== mcStatusSeq) {
+                    return;
+                }
+                if (res.status === 502) {
+                    showMcStatusError("Couldn't reach that server", problem.detail);
+                } else {
+                    showMcStatusError('Something went wrong', problem.detail);
+                }
+            });
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+            if (seq === mcStatusSeq) {
+                showMcStatusError('Something went wrong', 'Check your connection and try again.');
+            }
+        })
+        .finally(() => {
+            if (seq === mcStatusSeq) {
+                button.disabled = false;
+                button.textContent = 'Check';
+            }
+        });
+}
+
+/**
+ * @description Fills the MC Status form from the address bar and runs the
+ * lookup when a host is present, so shared links open on their result.
+ */
+function loadMcStatusFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const host = params.get('host');
+    if (!host) {
+        return;
+    }
+    document.getElementById('mc-status-host').value = host;
+    const edition = params.get('bedrock') === 'true' ? 'bedrock' : 'java';
+    document.querySelector(`input[name="mc-edition"][value="${edition}"]`).checked = true;
+    document.getElementById('mc-status-query').checked = params.get('query') === 'true';
+    checkMcStatus();
+}
