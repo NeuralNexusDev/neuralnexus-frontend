@@ -32,7 +32,7 @@ const (
 var (
 	mcStatusClient = &http.Client{Timeout: mcStatusTimeout}
 	mcColorCode    = regexp.MustCompile(`(?s)§.`)
-	mcHostPattern  = regexp.MustCompile(`^(?P<host>(?:[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*)|\[[0-9A-Fa-f:.]+\])(?::(?P<port>[0-9]{1,5}))?$`)
+	mcHostPattern  = regexp.MustCompile(`^(?P<host>(?:[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*))(?::(?P<port>[0-9]{1,5}))?$`)
 )
 
 type lookupResult int

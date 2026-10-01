@@ -242,7 +242,9 @@ func TestEmbedRejectsInvalidHosts(t *testing.T) {
 		{"trailing colon", "a.com:"},
 		{"label over 63", strings.Repeat("a", 64) + ".com"},
 		{"name over 253", strings.Repeat(strings.Repeat("a", 60)+".", 5) + "com"},
-		{"ipv6 without brackets", "::1"},
+		{"ipv6", "::1"},
+		{"bracketed ipv6", "[::1]"},
+		{"bracketed ipv6 with a port", "[2001:db8::1]:25565"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -263,12 +265,10 @@ func TestEmbedRejectsInvalidHosts(t *testing.T) {
 
 func TestNormalizeMcHost(t *testing.T) {
 	cases := map[string]string{
-		"Example.COM":         "example.com",
-		"example.com:25565":   "example.com:25565",
-		"example.com:00080":   "example.com:80",
-		"[2001:DB8::1]:25565": "[2001:db8::1]:25565",
-		"[::1]":               "[::1]",
-		"a_b.example.com":     "a_b.example.com",
+		"Example.COM":       "example.com",
+		"example.com:25565": "example.com:25565",
+		"example.com:00080": "example.com:80",
+		"a_b.example.com":   "a_b.example.com",
 	}
 	for raw, want := range cases {
 		if got, ok := normalizeMcHost(raw); !ok || got != want {
