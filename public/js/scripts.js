@@ -32,14 +32,7 @@ function steamOpenIdLoginUrl() {
     return document.getElementById('steam-openid-login-url').innerText;
 }
 
-const COMMON_SECOND_LEVEL_LABELS = ['ac', 'co', 'com', 'edu', 'gov', 'net', 'org'];
-
-/**
- * Without a public suffix list, a two-label shared suffix like "co.uk" is
- * indistinguishable from a real domain by shape, so common second-level
- * labels are treated as suffixes and fall back to a host-only cookie.
- */
-function sharedCookieDomain(siteHost, apiHost) {
+function sharedHostSuffix(siteHost, apiHost) {
     const isIp = (host) => /^[\d.]+$/.test(host) || host.includes(':');
     if (siteHost === apiHost || isIp(siteHost) || isIp(apiHost)) {
         return '';
@@ -50,27 +43,31 @@ function sharedCookieDomain(siteHost, apiHost) {
     while (shared.length < siteLabels.length && siteLabels[shared.length] === apiLabels[shared.length]) {
         shared.push(siteLabels[shared.length]);
     }
-    if (shared.length < 2) {
-        return '';
-    }
-    const [tld, secondLevel] = shared;
-    if (shared.length === 2 && tld.length === 2 && COMMON_SECOND_LEVEL_LABELS.includes(secondLevel)) {
-        return '';
-    }
-    return `.${shared.reverse().join('.')}`;
+    return shared.length >= 2 ? `.${shared.reverse().join('.')}` : '';
 }
 
-/** SameSite=None requires Secure, so plain http (local dev) falls back to Lax. */
-function createNonce() {
-    const nonce = Math.random().toString(36).substring(2, 15);
-
-    const domain = sharedCookieDomain(location.hostname, new URL(apiBaseUrl()).hostname);
-    const domainAttr = domain ? `; domain=${domain}` : '';
+/**
+ * A Domain the browser rejects (a public suffix like co.uk) drops the cookie
+ * silently, so confirm it stuck and fall back to a host-only cookie.
+ * SameSite=None requires Secure, so plain http (local dev) falls back to Lax.
+ */
+function setNonceCookie(nonce, domain) {
     const secureAttr = location.protocol === 'https:' ? '; Secure' : '';
     const sameSite = secureAttr ? 'None' : 'Lax';
     const expires = new Date(Date.now() + 5 * 60 * 1000).toUTCString();
-    document.cookie = `nonce=${nonce}; expires=${expires}; path=/${domainAttr}; SameSite=${sameSite}${secureAttr}`;
+    const attrs = `; expires=${expires}; path=/; SameSite=${sameSite}${secureAttr}`;
+    if (domain) {
+        document.cookie = `nonce=${nonce}; domain=${domain}${attrs}`;
+        if (document.cookie.split('; ').includes(`nonce=${nonce}`)) {
+            return;
+        }
+    }
+    document.cookie = `nonce=${nonce}${attrs}`;
+}
 
+function createNonce() {
+    const nonce = Math.random().toString(36).substring(2, 15);
+    setNonceCookie(nonce, sharedHostSuffix(location.hostname, new URL(apiBaseUrl()).hostname));
     return nonce;
 }
 
@@ -582,7 +579,7 @@ function formatMcMotd(motd) {
     return motd
         .replace(/\\n/g, '\n')
         .replace(/§x(?:§[0-9a-f]){6}/gi, '')
-        .replace(/§[0-9a-fk-or]/gi, '')
+        .replace(/§./gi, '')
         .trim();
 }
 
@@ -602,7 +599,7 @@ function renderMcStatus(status, bedrock) {
     bar.style.width = maxPlayers > 0 ? `${Math.min(100, (numPlayers / maxPlayers) * 100)}%` : '0%';
     const track = bar.parentElement;
     track.setAttribute('aria-valuemax', maxPlayers);
-    track.setAttribute('aria-valuenow', numPlayers);
+    track.setAttribute('aria-valuenow', Math.min(numPlayers, maxPlayers));
 
     const icon = document.getElementById('mc-status-icon');
     const favicon = status.favicon || '';
@@ -629,6 +626,7 @@ function renderMcStatus(status, bedrock) {
         list.appendChild(more);
     }
     document.getElementById('mc-status-players-unavailable').hidden = players.length > 0 || numPlayers === 0;
+    document.getElementById('mc-status-error').hidden = true;
     document.getElementById('mc-status-result').hidden = false;
 }
 
@@ -641,7 +639,6 @@ function showMcStatusError(message, detail) {
     document.getElementById('mc-status-error').hidden = false;
 }
 
-/** The query protocol is Java-only, so the option is unavailable for Bedrock. */
 function syncMcStatusQueryOption() {
     const bedrock = document.querySelector('input[name="mc-edition"]:checked').value === 'bedrock';
     const query = document.getElementById('mc-status-query');
@@ -651,15 +648,21 @@ function syncMcStatusQueryOption() {
     }
 }
 
+function abortMcStatus() {
+    if (mcStatusController) {
+        mcStatusController.abort();
+        mcStatusController = null;
+    }
+    document.getElementById('mc-status-submit').textContent = 'Check';
+}
+
 function checkMcStatus(event) {
     if (event) {
         event.preventDefault();
     }
+    abortMcStatus();
     const host = document.getElementById('mc-status-host').value.trim();
-    if (!host) {
-        return;
-    }
-    if (isDotSegment(host)) {
+    if (!host || isDotSegment(host)) {
         showMcStatusError('Enter a valid server address');
         return;
     }
@@ -677,9 +680,6 @@ function checkMcStatus(event) {
     params.forEach((value, key) => urlParams.set(key, value));
     history.replaceState(null, '', `${window.location.pathname}?${urlParams}`);
 
-    if (mcStatusController) {
-        mcStatusController.abort();
-    }
     const controller = new AbortController();
     mcStatusController = controller;
     let timedOut = false;
@@ -696,10 +696,16 @@ function checkMcStatus(event) {
     fetch(`${apiBaseUrl()}/api/v1/mcstatus/${encodeURIComponent(host)}?${params}`, { signal: controller.signal })
         .then((res) => {
             if (res.ok) {
-                return res.json().then((status) => renderMcStatus(status, bedrock));
+                return res.json().then((status) => {
+                    if (controller === mcStatusController) {
+                        renderMcStatus(status, bedrock);
+                    }
+                });
             }
             return problemDetail(res, '').then((detail) => {
-                showMcStatusError(res.status === 502 ? "Couldn't reach that server" : 'Something went wrong', detail);
+                if (controller === mcStatusController) {
+                    showMcStatusError(res.status === 502 ? "Couldn't reach that server" : 'Something went wrong', detail);
+                }
             });
         })
         .catch((error) => {

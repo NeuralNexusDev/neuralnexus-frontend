@@ -61,16 +61,25 @@ test.describe('nonce cookie domain', () => {
     ['localhost', 'api.neuralnexus.dev', ''],
     ['neuralnexus.dev', 'other.dev', ''],
     ['10.0.0.1', '192.168.0.1', ''],
-    ['a.co.uk', 'b.co.uk', ''],
+    ['a.co.uk', 'b.co.uk', '.co.uk'],
     ['www.example.co.uk', 'api.example.co.uk', '.example.co.uk'],
   ];
   for (const [site, api, expected] of cases) {
     test(`${site} + ${api} -> "${expected}"`, async ({ page }) => {
       await page.goto('/');
-      const domain = await page.evaluate(([s, a]) => sharedCookieDomain(s, a), [site, api]);
+      const domain = await page.evaluate(([s, a]) => sharedHostSuffix(s, a), [site, api]);
       expect(domain).toBe(expected);
     });
   }
+});
+
+test.describe('nonce cookie fallback', () => {
+  test('a rejected Domain falls back to a host-only cookie', async ({ page, context }) => {
+    await page.goto('/');
+    await page.evaluate(() => setNonceCookie('abc123', '.co.uk'));
+    const cookies = await context.cookies();
+    expect(cookies.find((c) => c.name === 'nonce' && c.value === 'abc123')).toBeTruthy();
+  });
 });
 
 test.describe('OAuth state encoding', () => {
