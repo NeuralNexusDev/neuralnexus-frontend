@@ -37,6 +37,12 @@ dev:
 	make tailwind-clean
 	make -j3 tailwind-watch templ server
 
+test-go: export NN_API_URL = http://api.test
+test-go: export NN_SITE_URL = http://site.test
+test-go:
+	go tool templ generate
+	go test ./...
+
 # Containerized test environment
 
 test-env-up:
