@@ -644,27 +644,21 @@ function syncMcStatusQueryOption() {
 }
 
 const MC_MAX_PORT = 65535;
-const MC_MAX_HOSTNAME = 253;
-const MC_HOST_PATTERN = /^[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*(?::([0-9]{1,5}))?$/;
 
 function parseMcPort(value) {
     const port = /^\d+$/.test(value) ? Number(value) : 0;
     return port >= 1 && port <= MC_MAX_PORT ? port : null;
 }
 
-/** The shareable path for a host, normalised the way the server does; the bare path when the server would reject it. */
-function mcStatusPath(host) {
-    const match = MC_HOST_PATTERN.exec(host);
-    if (!match) {
-        return MC_STATUS_PATH;
-    }
-    const portText = match[1];
-    const name = portText === undefined ? host : host.slice(0, -portText.length - 1);
-    const port = portText === undefined ? null : parseMcPort(portText);
-    if (name.length > MC_MAX_HOSTNAME || (portText !== undefined && port === null)) {
-        return MC_STATUS_PATH;
-    }
-    return `${MC_STATUS_PATH}/${name.toLowerCase()}${port === null ? '' : `:${port}`}`;
+/** The API's canonical host, bracketed when it is an IPv6 address, with the port unless it is the edition's default. */
+function mcDisplayHost(target, bedrock) {
+    const host = target.host.includes(':') ? `[${target.host}]` : target.host;
+    return target.port === (bedrock ? 19132 : 25565) ? host : `${host}:${target.port}`;
+}
+
+function setMcStatusUrl(host, search) {
+    const path = `${MC_STATUS_PATH}/${encodeURIComponent(host).replaceAll('%3A', ':')}`;
+    history.replaceState(null, '', search ? `${path}?${search}` : path);
 }
 
 function validateMcQueryPort() {
@@ -717,9 +711,7 @@ function checkMcStatus(event) {
     } else if (queryPort) {
         urlParams.set('query_port', queryPort);
     }
-    const path = mcStatusPath(host);
-    const search = path === MC_STATUS_PATH ? '' : urlParams.toString();
-    history.replaceState(null, '', search ? `${path}?${search}` : path);
+    const search = urlParams.toString();
 
     const controller = new AbortController();
     mcStatusController = controller;
@@ -739,11 +731,13 @@ function checkMcStatus(event) {
             if (res.ok) {
                 return res.json().then((status) => {
                     if (controller === mcStatusController) {
-                        renderMcStatus(status, bedrock, host);
+                        const canonicalHost = mcDisplayHost(status, bedrock);
+                        renderMcStatus(status, bedrock, canonicalHost);
+                        setMcStatusUrl(canonicalHost, search);
                     }
                 });
             }
-            return problemDetail(res, '').then((detail) => {
+            return res.json().catch(() => ({})).then((problem) => {
                 if (controller !== mcStatusController) {
                     return;
                 }
@@ -751,8 +745,15 @@ function checkMcStatus(event) {
                     showMcStatusError("Couldn't reach that server", 'The lookup timed out.');
                     return;
                 }
+                const detail = problem.detail || '';
                 if (res.status === 404 && (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase() === 'application/problem+json') {
                     showMcStatusError("Couldn't reach that server", detail);
+                    if (problem.host && problem.port) {
+                        setMcStatusUrl(mcDisplayHost(problem, bedrock), search);
+                    }
+                } else if (res.status === 400) {
+                    history.replaceState(null, '', MC_STATUS_PATH);
+                    showMcStatusError('Enter a valid server address', detail);
                 } else if (res.status === 429) {
                     showMcStatusError('Too many lookups', 'Please try again in a minute.');
                 } else if (res.status === 500) {
