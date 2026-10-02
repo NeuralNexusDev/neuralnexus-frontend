@@ -11,6 +11,7 @@ import (
 // McStatusEmbedData holds the lookup options and server status used for the link-preview tags.
 type McStatusEmbedData struct {
 	Host      string
+	Port      int
 	Bedrock   bool
 	Query     bool
 	QueryPort int
@@ -48,9 +49,25 @@ func (d McStatusEmbedData) ShareOptions() url.Values {
 	return v
 }
 
+// DisplayHost returns the canonical host, bracketed when it is an IPv6 address and followed by the port unless it is the edition's default.
+func (d McStatusEmbedData) DisplayHost() string {
+	host := d.Host
+	if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	defaultPort := 25565
+	if d.Bedrock {
+		defaultPort = 19132
+	}
+	if d.Port != defaultPort {
+		host += ":" + strconv.Itoa(d.Port)
+	}
+	return host
+}
+
 // PageURL returns the canonical URL of the status page for the server.
 func (d McStatusEmbedData) PageURL() string {
-	u := config.SiteURL + "/project/mc-status/" + url.PathEscape(d.Host)
+	u := config.SiteURL + "/project/mc-status/" + url.PathEscape(d.DisplayHost())
 	if q := d.ShareOptions().Encode(); q != "" {
 		u += "?" + q
 	}
@@ -59,7 +76,7 @@ func (d McStatusEmbedData) PageURL() string {
 
 // IconURL returns the API icon URL for the host.
 func (d McStatusEmbedData) IconURL() string {
-	u := config.APIURL + "/api/v1/mcstatus/icon/" + url.PathEscape(d.Host)
+	u := config.APIURL + "/api/v1/mcstatus/icon/" + url.PathEscape(d.DisplayHost())
 	if d.Bedrock {
 		u += "?bedrock=true"
 	}
@@ -96,7 +113,7 @@ func (d McStatusEmbedData) Description() string {
 
 // McStatusEmbedPage renders the status checker with link-preview tags for data.
 templ McStatusEmbedPage(data McStatusEmbedData) {
-	@WrapContentsWithHead(data.Host, mcStatusEmbedHead(data), McStatus())
+	@WrapContentsWithHead(data.DisplayHost(), mcStatusEmbedHead(data), McStatus())
 }
 
 templ mcStatusEmbedHead(data McStatusEmbedData) {
@@ -106,11 +123,11 @@ templ mcStatusEmbedHead(data McStatusEmbedData) {
 	<meta name="robots" content="noindex"/>
 	<link rel="canonical" href={ data.PageURL() }/>
 	<meta name="theme-color" content="#7C0014"/>
-	<meta property="og:title" content={ data.Host }/>
+	<meta property="og:title" content={ data.DisplayHost() }/>
 	<meta property="og:description" content={ data.Description() }/>
 	<meta property="og:url" content={ data.PageURL() }/>
 	<meta property="og:image" content={ data.IconURL() }/>
-	<meta property="og:image:alt" content={ data.Host + " server icon" }/>
+	<meta property="og:image:alt" content={ data.DisplayHost() + " server icon" }/>
 	<meta property="og:image:width" content="64"/>
 	<meta property="og:image:height" content="64"/>
 }

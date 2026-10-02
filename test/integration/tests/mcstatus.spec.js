@@ -654,20 +654,26 @@ test.describe('mc status page - request sequencing', () => {
 });
 
 test.describe('mc status page - server-rendered route', () => {
-  const invalid = {
+  const rejectedByTheAPI = {
     'an illegal character': 'a_b$c',
     'a space': 'bad host',
+    'a single-label name': 'localhost',
     'port 0': 'a.com:0',
     'port 65536': 'a.com:65536',
-    'a six digit port': 'a.com:123456',
-    'a label over 63 characters': `${'a'.repeat(64)}.com`,
-    'a name over 253 characters': `${`${'a'.repeat(60)}.`.repeat(5)}com`,
+    'a bracketed IPv4 address': '[1.2.3.4]',
+    'an IPv6 address with a zone': '[fe80::1%eth0]',
   };
 
   const html = async (request, path) => {
     const res = await request.get(path);
     expect(res.status()).toBe(200);
     return { res, body: await res.text() };
+  };
+
+  const expectBare = (res, body) => {
+    expect(res.headers()['cache-control']).toBe('no-store');
+    expect(body).toContain('id="mc-status-host"');
+    expect(body).not.toContain('og:title');
   };
 
   test('an online server gets the preview tags and the checker form', async ({ request }) => {
@@ -680,6 +686,17 @@ test.describe('mc status page - server-rendered route', () => {
     expect(body).toContain('id="mc-status-host"');
   });
 
+  test('the default port is left out of the title and canonical URL, another port is kept', async ({ request }) => {
+    const site = process.env.BASE_URL || 'http://localhost:8099';
+    const withDefault = await html(request, '/project/mc-status/online.example.net:25565');
+    expect(withDefault.body).toContain('<title>online.example.net</title>');
+    expect(withDefault.body).toContain(`rel="canonical" href="${site}/project/mc-status/online.example.net"`);
+
+    const other = await html(request, '/project/mc-status/online.example.net:25566');
+    expect(other.body).toContain('<title>online.example.net:25566</title>');
+    expect(other.body).toContain(`rel="canonical" href="${site}/project/mc-status/online.example.net:25566"`);
+  });
+
   test('an offline server gets the offline preview and the checker form', async ({ request }) => {
     const { res, body } = await html(request, '/project/mc-status/offline.example.net');
     expect(res.headers()['cache-control']).toBe('public, max-age=30');
@@ -690,15 +707,30 @@ test.describe('mc status page - server-rendered route', () => {
 
   test('a Bedrock preview asks for the Bedrock icon', async ({ request }) => {
     const { body } = await html(request, '/project/mc-status/online.example.net?bedrock=true');
+    expect(body).toContain('<title>online.example.net</title>');
     expect(body).toContain(`property="og:image" content="${process.env.NN_API_URL}/api/v1/mcstatus/icon/online.example.net?bedrock=true"`);
   });
 
-  for (const [name, host] of Object.entries(invalid)) {
-    test(`rejects ${name} with a 400 that is not cached and still serves the form`, async ({ request }) => {
-      const res = await request.get(`/project/mc-status/${encodeURIComponent(host)}`);
-      expect(res.status()).toBe(400);
-      expect(res.headers()['cache-control']).toBe('no-store');
-      expect(await res.text()).toContain('id="mc-status-host"');
+  test('an IPv6 server gets the preview tags with the bracketed canonical host', async ({ request }) => {
+    for (const path of ['%5B2001:DB8::1%5D', '[2001:db8:0:0:0:0:0:1]', '2001:db8::1', '%5B2001:db8::1%5D:25565']) {
+      const { body } = await html(request, `/project/mc-status/${path}`);
+      expect(body).toContain('<title>[2001:db8::1]</title>');
+      expect(body).toContain('property="og:title" content="[2001:db8::1]"');
+      expect(body).toContain(`property="og:image" content="${process.env.NN_API_URL}/api/v1/mcstatus/icon/%5B2001:db8::1%5D"`);
+      expect(body).toContain('/project/mc-status/%5B2001:db8::1%5D"');
+      expect(body).toContain('Players: 3/20');
+    }
+  });
+
+  for (const [name, host] of Object.entries(rejectedByTheAPI)) {
+    test(`${name} is rejected by the API and gets the bare checker, not cached`, async ({ request }) => {
+      const { res, body } = await html(request, `/project/mc-status/${encodeURIComponent(host)}`);
+      expectBare(res, body);
     });
   }
+
+  test('a host over 260 characters gets the bare checker, not cached', async ({ request }) => {
+    const { res, body } = await html(request, `/project/mc-status/${'a'.repeat(261)}`);
+    expectBare(res, body);
+  });
 });
