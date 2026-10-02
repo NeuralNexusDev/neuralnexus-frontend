@@ -645,41 +645,11 @@ function syncMcStatusQueryOption() {
 
 const MC_MAX_PORT = 65535;
 const MC_MAX_HOSTNAME = 253;
-const MC_HOST_PATTERN = /^(?:([A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*)|\[([0-9A-Fa-f:.]+)\])(?::([0-9]{1,5}))?$/;
+const MC_HOST_PATTERN = /^[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*(?::([0-9]{1,5}))?$/;
 
 function parseMcPort(value) {
     const port = /^\d+$/.test(value) ? Number(value) : 0;
     return port >= 1 && port <= MC_MAX_PORT ? port : null;
-}
-
-/** Whether text is an IPv6 address the way the server's parser reads it (an IPv4 tail is allowed, a zone is not). */
-function isMcIPv6(text) {
-    let head = text;
-    let size = 8;
-    if (text.includes('.')) {
-        const cut = text.lastIndexOf(':') + 1;
-        const octets = text.slice(cut).split('.');
-        if (cut === 0 || octets.length !== 4 || !octets.every((octet) => /^(0|[1-9][0-9]{0,2})$/.test(octet) && Number(octet) <= 255)) {
-            return false;
-        }
-        head = text.slice(0, cut);
-        if (!head.endsWith('::')) {
-            head = head.slice(0, -1);
-        }
-        size = 6;
-    }
-    const sides = head.split('::');
-    if (sides.length > 2) {
-        return false;
-    }
-    const groups = (side) => (side === '' ? [] : side.split(':'));
-    const valid = (list) => list.every((group) => /^[0-9A-Fa-f]{1,4}$/.test(group));
-    const left = groups(sides[0]);
-    if (sides.length === 1) {
-        return left.length === size && valid(left);
-    }
-    const right = groups(sides[1]);
-    return left.length + right.length < size && valid(left) && valid(right);
 }
 
 /** The shareable path for a host, normalised the way the server does; the bare path when the server would reject it. */
@@ -688,13 +658,13 @@ function mcStatusPath(host) {
     if (!match) {
         return MC_STATUS_PATH;
     }
-    const [, name, ip, portText] = match;
+    const portText = match[1];
+    const name = portText === undefined ? host : host.slice(0, -portText.length - 1);
     const port = portText === undefined ? null : parseMcPort(portText);
-    if ((name !== undefined && name.length > MC_MAX_HOSTNAME) || (ip !== undefined && !isMcIPv6(ip)) || (portText !== undefined && port === null)) {
+    if (name.length > MC_MAX_HOSTNAME || (portText !== undefined && port === null)) {
         return MC_STATUS_PATH;
     }
-    const target = ip === undefined ? name.toLowerCase() : `%5B${ip.toLowerCase()}%5D`;
-    return `${MC_STATUS_PATH}/${target}${port === null ? '' : `:${port}`}`;
+    return `${MC_STATUS_PATH}/${name.toLowerCase()}${port === null ? '' : `:${port}`}`;
 }
 
 function validateMcQueryPort() {

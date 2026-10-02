@@ -22,7 +22,7 @@ http
       res.writeHead(200).end('ok');
     } else if (pathname.startsWith('/api/v1/mcstatus/icon/')) {
       res.writeHead(200, { 'Content-Type': 'image/png' }).end(PNG_1X1);
-    } else if (['online.example.net', '[2001:db8::1]'].includes(host)) {
+    } else if (host === 'online.example.net') {
       res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(ONLINE));
     } else {
       res.writeHead(404, { 'Content-Type': 'application/problem+json' }).end(JSON.stringify({ title: 'Not Found', status: 404 }));

@@ -117,41 +117,6 @@ func TestEmbedOnline(t *testing.T) {
 	}
 }
 
-func TestEmbedIPv6Host(t *testing.T) {
-	cases := []struct {
-		name, query, wantURI, wantSuffix string
-	}{
-		{"java", "", "/api/v1/mcstatus/%5B2001:db8::1%5D:25565?query=true", ""},
-		{"bedrock", "bedrock=true", "/api/v1/mcstatus/%5B2001:db8::1%5D:25565?bedrock=true", "?bedrock=true"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			f := newFakeAPI(t, http.StatusOK, onlineBody)
-			rec := getEmbed("[2001:DB8::1]:25565", tc.query)
-			if rec.Code != http.StatusOK {
-				t.Fatalf("status = %d", rec.Code)
-			}
-			if f.request == nil || f.request.RequestURI != tc.wantURI {
-				t.Errorf("API request = %v, want %s", f.request, tc.wantURI)
-			}
-			pageURL := testSiteURL + "/project/mc-status/%5B2001:db8::1%5D:25565" + tc.wantSuffix
-			h := head(t, rec.Body.String())
-			for _, want := range []string{
-				"<title>[2001:db8::1]:25565</title>",
-				`property="og:title" content="[2001:db8::1]:25565"`,
-				`property="og:url" content="` + pageURL + `"`,
-				`rel="canonical" href="` + pageURL + `"`,
-				`property="og:image" content="` + f.server.URL + `/api/v1/mcstatus/icon/%5B2001:db8::1%5D:25565` + tc.wantSuffix + `"`,
-				`property="og:image:alt" content="[2001:db8::1]:25565 server icon"`,
-			} {
-				if !strings.Contains(h, want) {
-					t.Errorf("head is missing %q:\n%s", want, h)
-				}
-			}
-		})
-	}
-}
-
 func TestEmbedForwardsOptions(t *testing.T) {
 	cases := []struct {
 		name, query string
@@ -405,23 +370,6 @@ func TestEmbedRejectsInvalidHosts(t *testing.T) {
 		{"trailing colon", "a.com:"},
 		{"label over 63", strings.Repeat("a", 64) + ".com"},
 		{"name over 253", hostOfLength(254)},
-		{"IPv6 without brackets", "2001:db8::1"},
-		{"IPv6 missing the closing bracket", "[2001:db8::1"},
-		{"IPv6 with a second closing bracket", "[::1]]"},
-		{"empty brackets", "[]"},
-		{"IPv4 in brackets", "[1.2.3.4]"},
-		{"invalid IPv6 digits", "[::g]"},
-		{"too many IPv6 groups", "[1:2:3:4:5:6:7:8:9]"},
-		{"IPv6 with a zone", "[fe80::1%eth0]"},
-		{"IPv6 port zero", "[::1]:0"},
-		{"IPv6 port too large", "[::1]:65536"},
-		{"IPv6 trailing colon", "[::1]:"},
-		{"brackets around a name", "[a.com]"},
-		{"IPv4 tail with a leading zero", "[::1.2.3.04]"},
-		{"IPv4 tail octet over 255", "[::1.2.3.256]"},
-		{"eight groups and a double colon", "[1:2:3:4:5:6:7:8::]"},
-		{"leading single colon", "[:1:2:3:4:5:6:7]"},
-		{"two double colons", "[1::2::3]"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -442,16 +390,6 @@ func TestEmbedNormalizesHosts(t *testing.T) {
 		"example.com:40000": "example.com:40000",
 		"example.com:65535": "example.com:65535",
 		"a_b.example.com":   "a_b.example.com",
-
-		"[::1]":                      "[::1]",
-		"[2001:DB8::1]":              "[2001:db8::1]",
-		"[2001:db8::1]:25565":        "[2001:db8::1]:25565",
-		"[2001:db8::1]:00080":        "[2001:db8::1]:80",
-		"[::ffff:1.2.3.4]":           "[::ffff:1.2.3.4]",
-		"[2001:db8:0:0:0:0:0:1]:443": "[2001:db8:0:0:0:0:0:1]:443",
-		"[::]":                       "[::]",
-		"[1:2:3:4:5:6:7::]":          "[1:2:3:4:5:6:7::]",
-		"[::1.2.3.4]":                "[::1.2.3.4]",
 	}
 	for raw, want := range cases {
 		t.Run(raw, func(t *testing.T) {

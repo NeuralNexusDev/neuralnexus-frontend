@@ -5,7 +5,6 @@ import (
 	"io"
 	"mime"
 	"net/http"
-	"net/netip"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -27,7 +26,7 @@ const (
 
 var (
 	mcColorCode   = regexp.MustCompile(`(?s)§.`)
-	mcHostPattern = regexp.MustCompile(`^(?:(?P<host>[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*)|\[(?P<ip>[0-9A-Fa-f:.]+)\])(?::(?P<port>[0-9]{1,5}))?$`)
+	mcHostPattern = regexp.MustCompile(`^(?P<host>[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*)(?::(?P<port>[0-9]{1,5}))?$`)
 )
 
 type apiMcStatus struct {
@@ -56,14 +55,7 @@ func McStatusPageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	host := strings.ToLower(m[1])
 	if m[2] != "" {
-		if addr, err := netip.ParseAddr(m[2]); err != nil || !addr.Is6() {
-			bare(http.StatusBadRequest)
-			return
-		}
-		host = "[" + strings.ToLower(m[2]) + "]"
-	}
-	if m[3] != "" {
-		port, err := strconv.ParseUint(m[3], 10, 16)
+		port, err := strconv.ParseUint(m[2], 10, 16)
 		if err != nil || port < 1 {
 			bare(http.StatusBadRequest)
 			return
