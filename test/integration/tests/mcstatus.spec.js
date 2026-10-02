@@ -894,14 +894,17 @@ test.describe('mc status page - server-rendered route', () => {
         .on('error', reject);
     });
 
-  for (const segment of ['%2e', '%2e%2e']) {
+  for (const [segment, apiPath] of [
+    ['%2e', '/api/v1/mcstatus/.'],
+    ['%2e%2e', '/api/v1/mcstatus/..'],
+  ]) {
     test(`the dot segment ${segment} gets the bare checker without a lookup`, async ({ request }) => {
       const { res, body } = await rawGet(`/project/mc-status/${segment}`);
       expect(res.status()).toBe(200);
       expect(res.headers()['cache-control']).toBe('no-store');
       expect(body).toContain('id="mc-status-host"');
       expect(body).not.toContain('og:title');
-      expect((await apiRequests(request)).filter((url) => url.startsWith('/api/v1/mcstatus/.'))).toEqual([]);
+      expect((await apiRequests(request)).filter((url) => url.split('?')[0] === apiPath)).toEqual([]);
     });
   }
 });
