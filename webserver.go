@@ -40,8 +40,8 @@ func (s *WebServer) Setup() http.Handler {
 	router.Handle("/projects", templ.Handler(components.ProjectsPage()))
 	router.Handle("/project/bee-name-generator", templ.Handler(components.BeeNameGeneratorPage()))
 	router.Handle("/project/bee-name-generator/admin", templ.Handler(components.BeeNameGeneratorAdminPage()))
-	router.Handle("/project/mc-status", templ.Handler(components.McStatusPage()))
-	router.HandleFunc("GET /mcstatus/{host}", McStatusEmbedHandler)
+	router.HandleFunc("GET /project/mc-status", McStatusPageHandler)
+	router.HandleFunc("GET /project/mc-status/{host}", McStatusPageHandler)
 	router.Handle("/teapot", templ.Handler(components.TeapotPage()))
 
 	middlewareStack := mw.CreateStack(

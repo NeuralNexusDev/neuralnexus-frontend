@@ -8,7 +8,7 @@ import (
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/config"
 )
 
-// McStatusEmbedData holds the lookup options and server status rendered by the link-preview page.
+// McStatusEmbedData holds the lookup options and server status used for the link-preview tags.
 type McStatusEmbedData struct {
 	Host      string
 	Bedrock   bool
@@ -48,28 +48,22 @@ func (d McStatusEmbedData) ShareOptions() url.Values {
 	return v
 }
 
-// PageURL returns the canonical URL of the preview page.
+// PageURL returns the canonical URL of the status page for the server.
 func (d McStatusEmbedData) PageURL() string {
-	u := config.SiteURL + "/mcstatus/" + url.PathEscape(d.Host)
+	u := config.SiteURL + "/project/mc-status/" + url.PathEscape(d.Host)
 	if q := d.ShareOptions().Encode(); q != "" {
 		u += "?" + q
 	}
 	return u
 }
 
-// InteractiveURL returns the checker page URL for the same server and options.
-func (d McStatusEmbedData) InteractiveURL() string {
-	v := d.ShareOptions()
-	v.Set("host", d.Host)
-	return "/project/mc-status?" + v.Encode()
-}
-
-// IconURL returns the API icon URL, or an empty string when there is no icon.
+// IconURL returns the API icon URL for the host.
 func (d McStatusEmbedData) IconURL() string {
-	if !d.Online || d.Bedrock {
-		return ""
+	u := config.APIURL + "/api/v1/mcstatus/icon/" + url.PathEscape(d.Host)
+	if d.Bedrock {
+		u += "?bedrock=true"
 	}
-	return config.APIURL + "/api/v1/mcstatus/icon/" + url.PathEscape(d.Host)
+	return u
 }
 
 const (
@@ -84,7 +78,7 @@ func truncateRunes(s string, max int) string {
 	return s
 }
 
-// Description returns the description shown in the og:description tag and on the card.
+// Description returns the text for the og:description tag.
 func (d McStatusEmbedData) Description() string {
 	if !d.Online {
 		return "Server offline or unreachable"
@@ -100,36 +94,23 @@ func (d McStatusEmbedData) Description() string {
 	return strings.Join(lines, "\n")
 }
 
-// McStatusEmbedPage renders the link-preview page for data.
+// McStatusEmbedPage renders the status checker with link-preview tags for data.
 templ McStatusEmbedPage(data McStatusEmbedData) {
-	{{ description := data.Description() }}
-	@WrapContentsWithHead("IP: "+data.Host, mcStatusEmbedHead(data, description), mcStatusEmbed(data, description))
+	@WrapContentsWithHead(data.Host, mcStatusEmbedHead(data), McStatus())
 }
 
-templ mcStatusEmbedHead(data McStatusEmbedData, description string) {
-	{{ iconURL := data.IconURL() }}
+templ mcStatusEmbedHead(data McStatusEmbedData) {
 	<meta property="og:site_name" content="Powered by NeuralNexus.dev"/>
 	<meta property="og:type" content="website"/>
 	<meta name="twitter:card" content="summary"/>
 	<meta name="robots" content="noindex"/>
 	<link rel="canonical" href={ data.PageURL() }/>
 	<meta name="theme-color" content="#7C0014"/>
-	<meta property="og:title" content={ "IP: " + data.Host }/>
-	<meta property="og:description" content={ description }/>
+	<meta property="og:title" content={ data.Host }/>
+	<meta property="og:description" content={ data.Description() }/>
 	<meta property="og:url" content={ data.PageURL() }/>
-	if iconURL != "" {
-		<meta property="og:image" content={ iconURL }/>
-		<meta property="og:image:alt" content={ data.Host + " server icon" }/>
-		<meta property="og:image:width" content="64"/>
-		<meta property="og:image:height" content="64"/>
-	}
-}
-
-templ mcStatusEmbed(data McStatusEmbedData, description string) {
-	<div class="mx-auto max-w-md space-y-4 text-center">
-		<h1 class="break-words text-2xl font-bold [overflow-wrap:anywhere]">
-			<a class="underline" href={ templ.SafeURL(data.InteractiveURL()) }>{ data.Host }</a>
-		</h1>
-		<p class="whitespace-pre-line break-words text-sm [overflow-wrap:anywhere]">{ description }</p>
-	</div>
+	<meta property="og:image" content={ data.IconURL() }/>
+	<meta property="og:image:alt" content={ data.Host + " server icon" }/>
+	<meta property="og:image:width" content="64"/>
+	<meta property="og:image:height" content="64"/>
 }
