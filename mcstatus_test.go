@@ -117,6 +117,41 @@ func TestEmbedOnline(t *testing.T) {
 	}
 }
 
+func TestEmbedIPv6Host(t *testing.T) {
+	cases := []struct {
+		name, query, wantURI, wantSuffix string
+	}{
+		{"java", "", "/api/v1/mcstatus/%5B2001:db8::1%5D:25565?query=true", ""},
+		{"bedrock", "bedrock=true", "/api/v1/mcstatus/%5B2001:db8::1%5D:25565?bedrock=true", "?bedrock=true"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFakeAPI(t, http.StatusOK, onlineBody)
+			rec := getEmbed("[2001:DB8::1]:25565", tc.query)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d", rec.Code)
+			}
+			if f.request == nil || f.request.RequestURI != tc.wantURI {
+				t.Errorf("API request = %v, want %s", f.request, tc.wantURI)
+			}
+			pageURL := testSiteURL + "/project/mc-status/%5B2001:db8::1%5D:25565" + tc.wantSuffix
+			h := head(t, rec.Body.String())
+			for _, want := range []string{
+				"<title>[2001:db8::1]:25565</title>",
+				`property="og:title" content="[2001:db8::1]:25565"`,
+				`property="og:url" content="` + pageURL + `"`,
+				`rel="canonical" href="` + pageURL + `"`,
+				`property="og:image" content="` + f.server.URL + `/api/v1/mcstatus/icon/%5B2001:db8::1%5D:25565` + tc.wantSuffix + `"`,
+				`property="og:image:alt" content="[2001:db8::1]:25565 server icon"`,
+			} {
+				if !strings.Contains(h, want) {
+					t.Errorf("head is missing %q:\n%s", want, h)
+				}
+			}
+		})
+	}
+}
+
 func TestEmbedForwardsOptions(t *testing.T) {
 	cases := []struct {
 		name, query string
