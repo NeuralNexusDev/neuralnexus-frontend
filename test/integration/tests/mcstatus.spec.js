@@ -1,3 +1,4 @@
+import http from 'node:http';
 import { test, expect } from '@playwright/test';
 
 const API = `${process.env.NN_API_URL}/api/v1`;
@@ -21,6 +22,20 @@ function json(body, status = 200) {
   return { status, contentType: 'application/json', body: JSON.stringify(body) };
 }
 
+function withTarget(response, requestUrl) {
+  const { pathname, searchParams } = new URL(requestUrl);
+  const typed = decodeURIComponent(pathname.split('/').pop());
+  const [, bracketed, bracketedPort] = /^\[(.*)\](?::(\d+))?$/.exec(typed) || [];
+  const [, name, namePort] = /^([^:]*)(?::(\d+))?$/.exec(typed) || [];
+  const host = (bracketed ?? name ?? typed).toLowerCase();
+  const port = Number(bracketedPort ?? namePort ?? (searchParams.get('bedrock') === 'true' ? 19132 : 25565));
+  const isJson = response.status === 200 || (response.status === 404 && response.contentType === 'application/problem+json');
+  if (!isJson) {
+    return response;
+  }
+  return { ...response, body: JSON.stringify({ host, port, ...JSON.parse(response.body) }) };
+}
+
 async function mockMcStatus(page, status) {
   const requests = { status: [], icon: [] };
   await page.route(`${API}/mcstatus/**`, async (route) => {
@@ -30,7 +45,7 @@ async function mockMcStatus(page, status) {
       return route.fulfill({ status: 200, contentType: 'image/png', body: PNG_1X1 });
     }
     requests.status.push(url);
-    return route.fulfill(await status(url));
+    return route.fulfill(withTarget(await status(url), url.href));
   });
   return requests;
 }
@@ -216,7 +231,7 @@ test.describe('mc status page - lookups', () => {
 
   test('the icon stays hidden when the icon request fails', async ({ page }) => {
     await page.route(`${API}/mcstatus/icon/**`, (route) => route.fulfill({ status: 404 }));
-    await page.route(`${API}/mcstatus/play.example.net*`, (route) => route.fulfill(json(ONLINE)));
+    await page.route(`${API}/mcstatus/play.example.net*`, (route) => route.fulfill(withTarget(json(ONLINE), route.request().url())));
     await page.goto('/project/mc-status');
     const iconResponse = page.waitForResponse((res) => res.url().includes('/mcstatus/icon/'));
     await lookup(page, 'play.example.net');
@@ -231,7 +246,7 @@ test.describe('mc status page - lookups', () => {
       route.fulfill({ status: 200, contentType: 'image/png', body: PNG_1X1 })
     );
     await page.route(`${API}/mcstatus/icon/no-icon.example.net*`, (route) => route.fulfill({ status: 404 }));
-    await page.route(`${API}/mcstatus/*.example.net*`, (route) => route.fulfill(json(ONLINE)));
+    await page.route(`${API}/mcstatus/*.example.net*`, (route) => route.fulfill(withTarget(json(ONLINE), route.request().url())));
     await page.goto('/project/mc-status');
 
     await lookup(page, 'with-icon.example.net');
@@ -355,33 +370,141 @@ test.describe('mc status page - share links', () => {
     expect(requests.status).toHaveLength(0);
   });
 
-  test('the shared URL uses the host the way the server normalises it', async ({ page }) => {
-    await mockMcStatus(page, () => json(ONLINE));
+  test('the shared URL uses the canonical host and port from the API', async ({ page }) => {
+    await mockMcStatus(page, () => json({ ...ONLINE, host: 'play.example.net', port: 80 }));
     await page.goto('/project/mc-status');
     await lookup(page, 'Play.Example.NET:00080');
     await expect(page).toHaveURL(/\/project\/mc-status\/play\.example\.net:80$/);
   });
 
-  const rejectedByTheServer = {
-    'a space': 'a b',
-    'a non-ASCII name': 'bücher.de',
-    'a trailing dot': 'example.com.',
-    'port 0': 'a.com:0',
-    'port 99999': 'a.com:99999',
-    'a path': 'a.com/b',
-    'a scheme': 'http://a.com',
-    'a name over 253 characters': `${`${'a'.repeat(60)}.`.repeat(5)}com`,
+  const typedHosts = {
+    'a space': ['a b', 'a%20b'],
+    'a non-ASCII name': ['bücher.de', 'b%C3%BCcher.de'],
+    'a trailing dot': ['example.com.', 'example.com.'],
+    'a path': ['a.com/b', 'a.com%2Fb'],
+    'a scheme': ['http://a.com', 'http%3A%2F%2Fa.com'],
+    'a query string': ['a.com?x=1', 'a.com%3Fx%3D1'],
+    'upper case and a padded port': ['Play.Example.NET:00080', 'Play.Example.NET%3A00080'],
+    'a bracketed IPv6 address': ['[2001:DB8::1]:25565', '%5B2001%3ADB8%3A%3A1%5D%3A25565'],
   };
 
-  for (const [name, host] of Object.entries(rejectedByTheServer)) {
-    test(`a lookup for ${name} leaves the URL on the bare checker`, async ({ page }) => {
-      await mockMcStatus(page, () => json(ONLINE));
-      await page.goto('/project/mc-status/play.example.net');
+  for (const [name, [typed, escaped]] of Object.entries(typedHosts)) {
+    test(`${name} is sent to the API as typed`, async ({ page }) => {
+      const requests = await mockMcStatus(page, () => json(ONLINE));
+      await page.goto('/project/mc-status');
+      await lookup(page, typed);
       await expect(page.locator('#mc-status-result')).toBeVisible();
-      await lookup(page, host);
-      await expect(page).toHaveURL(/\/project\/mc-status$/);
+      expect(requests.status[0].pathname).toBe(`${API_PATH}/mcstatus/${escaped}`);
     });
   }
+
+  test('a host the API rejects shows its message and resets the URL to the bare checker', async ({ page }) => {
+    const detail = 'The host must be a domain name, an IPv4 address or an IPv6 address, optionally followed by a port.';
+    const requests = await mockMcStatus(page, (url) =>
+      url.pathname.endsWith('/localhost')
+        ? { status: 400, contentType: 'application/problem+json', body: JSON.stringify({ title: 'Bad Request', status: 400, detail }) }
+        : json(ONLINE)
+    );
+    await page.goto('/project/mc-status/play.example.net?bedrock=true');
+    await expect(page.locator('#mc-status-result')).toBeVisible();
+    expect(new URL(page.url()).pathname).toBe('/project/mc-status/play.example.net');
+
+    await lookup(page, 'localhost');
+    await expect(page.locator('#mc-status-error-message')).toHaveText('Enter a valid server address');
+    await expect(page.locator('#mc-status-error-detail')).toHaveText(detail);
+    await expect(page.locator('#mc-status-result')).toBeHidden();
+    expect(requests.status.at(-1).pathname).toBe(`${API_PATH}/mcstatus/localhost`);
+    expect(new URL(page.url()).pathname).toBe('/project/mc-status');
+    expect(new URL(page.url()).search).toBe('');
+  });
+
+  test('a rejected host in the path is cleared from the address bar and left in the form', async ({ page }) => {
+    await mockMcStatus(page, () => ({ status: 400, contentType: 'application/problem+json', body: JSON.stringify({ detail: 'bad host' }) }));
+    await page.goto('/project/mc-status/bad%20host?query=false');
+    await expect(page.locator('#mc-status-error-message')).toHaveText('Enter a valid server address');
+    await expect(page.locator('#mc-status-host')).toHaveValue('bad host');
+    expect(new URL(page.url()).pathname).toBe('/project/mc-status');
+    expect(new URL(page.url()).search).toBe('');
+  });
+
+  for (const [name, response] of Object.entries({
+    '429': { status: 429, contentType: 'application/problem+json', body: '{}' },
+    '500': { status: 500, contentType: 'application/problem+json', body: '{}' },
+    'a 404 that is not a problem': { status: 404, contentType: 'text/html', body: 'Not Found' },
+  })) {
+    test(`a failed lookup (${name}) does not rewrite the URL`, async ({ page }) => {
+      await mockMcStatus(page, () => response);
+      await page.goto('/project/mc-status');
+      await lookup(page, 'play.example.net');
+      await expect(page.locator('#mc-status-error')).toBeVisible();
+      expect(new URL(page.url()).pathname).toBe('/project/mc-status');
+    });
+  }
+
+  test('an offline server puts its canonical host in the shared URL', async ({ page }) => {
+    await mockMcStatus(page, () => ({
+      status: 404,
+      contentType: 'application/problem+json',
+      body: JSON.stringify({ title: 'Not Found', status: 404, host: '2001:db8::1', port: 25566 }),
+    }));
+    await page.goto('/project/mc-status');
+    await lookup(page, '[2001:DB8:0:0:0:0:0:1]:25566');
+    await expect(page.locator('#mc-status-error-message')).toHaveText("Couldn't reach that server");
+    expect(new URL(page.url()).pathname).toBe('/project/mc-status/%5B2001:db8::1%5D:25566');
+  });
+
+  test('an offline problem without a host leaves the URL alone', async ({ page }) => {
+    await page.route(`${API}/mcstatus/**`, (route) =>
+      route.fulfill({ status: 404, contentType: 'application/problem+json', body: JSON.stringify({ detail: 'down' }) })
+    );
+    await page.goto('/project/mc-status');
+    await lookup(page, 'play.example.net');
+    await expect(page.locator('#mc-status-error-message')).toHaveText("Couldn't reach that server");
+    expect(new URL(page.url()).pathname).toBe('/project/mc-status');
+  });
+
+  const sharedPaths = {
+    'a Java server on the default port': { edition: 'java', host: 'a.com', port: 25565, path: 'a.com', search: '' },
+    'a Java server on another port': { edition: 'java', host: 'a.com', port: 25566, path: 'a.com:25566', search: '' },
+    'a Java server on the Bedrock default': { edition: 'java', host: 'a.com', port: 19132, path: 'a.com:19132', search: '' },
+    'a Bedrock server on the default port': { edition: 'bedrock', host: 'a.com', port: 19132, path: 'a.com', search: '?bedrock=true' },
+    'a Bedrock server on another port': { edition: 'bedrock', host: 'a.com', port: 19133, path: 'a.com:19133', search: '?bedrock=true' },
+    'a Bedrock server on the Java default': { edition: 'bedrock', host: 'a.com', port: 25565, path: 'a.com:25565', search: '?bedrock=true' },
+    'an IPv6 server on the default port': { edition: 'java', host: '2001:db8::1', port: 25565, path: '%5B2001:db8::1%5D', search: '' },
+    'an IPv6 server on another port': { edition: 'java', host: '2001:db8::1', port: 25566, path: '%5B2001:db8::1%5D:25566', search: '' },
+    'a Bedrock IPv6 server on the default port': { edition: 'bedrock', host: '2001:db8::1', port: 19132, path: '%5B2001:db8::1%5D', search: '?bedrock=true' },
+  };
+
+  for (const [name, { edition, host, port, path, search }] of Object.entries(sharedPaths)) {
+    test(`${name} gets ${path}${search} as its shared URL and name`, async ({ page }) => {
+      const requests = await mockMcStatus(page, () => json({ ...ONLINE, host, port }));
+      await page.goto('/project/mc-status');
+      await pickEdition(page, edition);
+      await lookup(page, 'typed.example.net');
+      await expect(page.locator('#mc-status-result')).toBeVisible();
+      expect(new URL(page.url()).pathname).toBe(`/project/mc-status/${path}`);
+      expect(new URL(page.url()).search).toBe(search);
+      await expect(page.locator('#mc-status-name')).toHaveText(decodeURIComponent(path));
+      expect(requests.icon[0].pathname).toBe(`${API_PATH}/mcstatus/icon/${encodeURIComponent(decodeURIComponent(path))}`);
+    });
+  }
+
+  test('an IPv6 host in the path fills the form and is looked up as typed', async ({ page }) => {
+    const requests = await mockMcStatus(page, () => json(ONLINE));
+    await page.goto('/project/mc-status/%5B2001:db8::1%5D:25566');
+    await expect(page.locator('#mc-status-result')).toBeVisible();
+    await expect(page.locator('#mc-status-host')).toHaveValue('[2001:db8::1]:25566');
+    expect(requests.status[0].pathname).toBe(`${API_PATH}/mcstatus/%5B2001%3Adb8%3A%3A1%5D%3A25566`);
+    expect(new URL(page.url()).pathname).toBe('/project/mc-status/%5B2001:db8::1%5D:25566');
+  });
+
+  test('an IPv6 host with unescaped brackets in the path fills the form', async ({ page }) => {
+    await mockMcStatus(page, () => json(ONLINE));
+    await page.goto('/project/mc-status/[2001:db8::1]');
+    await expect(page.locator('#mc-status-host')).toHaveValue('[2001:db8::1]');
+    await expect(page.locator('#mc-status-result')).toBeVisible();
+    expect(new URL(page.url()).pathname).toBe('/project/mc-status/%5B2001:db8::1%5D');
+  });
 
   test('a lookup rewrites the URL so the result can be shared', async ({ page }) => {
     await mockMcStatus(page, () => json(ONLINE));
@@ -596,7 +719,7 @@ test.describe('mc status page - request sequencing', () => {
     await page.route(`${API}/mcstatus/old.example.net*`, () => new Promise(() => {}));
     await page.route(`${API}/mcstatus/new.example.net*`, async (route) => {
       await newestReleased;
-      await route.fulfill(json(ONLINE));
+      await route.fulfill(withTarget(json(ONLINE), route.request().url()));
     });
 
     await page.goto('/project/mc-status');
@@ -625,11 +748,11 @@ test.describe('mc status page - request sequencing', () => {
     );
     await page.route(`${API}/mcstatus/slow.example.net*`, async (route) => {
       await slow;
-      await route.fulfill(json(ONLINE)).catch(() => {});
+      await route.fulfill(withTarget(json(ONLINE), route.request().url())).catch(() => {});
       slowServed();
     });
-    await page.route(`${API}/mcstatus/fast.example.net*`, (route) => route.fulfill(json(ONLINE)));
-    await page.route(`${API}/mcstatus/last.example.net*`, (route) => route.fulfill(json(ONLINE)));
+    await page.route(`${API}/mcstatus/fast.example.net*`, (route) => route.fulfill(withTarget(json(ONLINE), route.request().url())));
+    await page.route(`${API}/mcstatus/last.example.net*`, (route) => route.fulfill(withTarget(json(ONLINE), route.request().url())));
 
     await page.goto('/project/mc-status');
     await page.evaluate(() => {
@@ -654,20 +777,26 @@ test.describe('mc status page - request sequencing', () => {
 });
 
 test.describe('mc status page - server-rendered route', () => {
-  const invalid = {
+  const rejectedByTheAPI = {
     'an illegal character': 'a_b$c',
     'a space': 'bad host',
+    'a single-label name': 'localhost',
     'port 0': 'a.com:0',
     'port 65536': 'a.com:65536',
-    'a six digit port': 'a.com:123456',
-    'a label over 63 characters': `${'a'.repeat(64)}.com`,
-    'a name over 253 characters': `${`${'a'.repeat(60)}.`.repeat(5)}com`,
+    'a bracketed IPv4 address': '[1.2.3.4]',
+    'an IPv6 address with a zone': '[fe80::1%eth0]',
   };
 
   const html = async (request, path) => {
     const res = await request.get(path);
     expect(res.status()).toBe(200);
     return { res, body: await res.text() };
+  };
+
+  const expectBare = (res, body) => {
+    expect(res.headers()['cache-control']).toBe('no-store');
+    expect(body).toContain('id="mc-status-host"');
+    expect(body).not.toContain('og:title');
   };
 
   test('an online server gets the preview tags and the checker form', async ({ request }) => {
@@ -680,6 +809,17 @@ test.describe('mc status page - server-rendered route', () => {
     expect(body).toContain('id="mc-status-host"');
   });
 
+  test('the default port is left out of the title and canonical URL, another port is kept', async ({ request }) => {
+    const site = process.env.BASE_URL || 'http://localhost:8099';
+    const withDefault = await html(request, '/project/mc-status/online.example.net:25565');
+    expect(withDefault.body).toContain('<title>online.example.net</title>');
+    expect(withDefault.body).toContain(`rel="canonical" href="${site}/project/mc-status/online.example.net"`);
+
+    const other = await html(request, '/project/mc-status/online.example.net:25566');
+    expect(other.body).toContain('<title>online.example.net:25566</title>');
+    expect(other.body).toContain(`rel="canonical" href="${site}/project/mc-status/online.example.net:25566"`);
+  });
+
   test('an offline server gets the offline preview and the checker form', async ({ request }) => {
     const { res, body } = await html(request, '/project/mc-status/offline.example.net');
     expect(res.headers()['cache-control']).toBe('public, max-age=30');
@@ -690,15 +830,81 @@ test.describe('mc status page - server-rendered route', () => {
 
   test('a Bedrock preview asks for the Bedrock icon', async ({ request }) => {
     const { body } = await html(request, '/project/mc-status/online.example.net?bedrock=true');
+    expect(body).toContain('<title>online.example.net</title>');
     expect(body).toContain(`property="og:image" content="${process.env.NN_API_URL}/api/v1/mcstatus/icon/online.example.net?bedrock=true"`);
   });
 
-  for (const [name, host] of Object.entries(invalid)) {
-    test(`rejects ${name} with a 400 that is not cached and still serves the form`, async ({ request }) => {
-      const res = await request.get(`/project/mc-status/${encodeURIComponent(host)}`);
-      expect(res.status()).toBe(400);
+  test('an IPv6 server gets the preview tags with the bracketed canonical host', async ({ request }) => {
+    for (const path of ['%5B2001:DB8::1%5D', '[2001:db8:0:0:0:0:0:1]', '2001:db8::1', '%5B2001:db8::1%5D:25565']) {
+      const { body } = await html(request, `/project/mc-status/${path}`);
+      expect(body).toContain('<title>[2001:db8::1]</title>');
+      expect(body).toContain('property="og:title" content="[2001:db8::1]"');
+      expect(body).toContain('property="og:image:alt" content="[2001:db8::1] server icon"');
+      expect(body).toContain(`property="og:image" content="${process.env.NN_API_URL}/api/v1/mcstatus/icon/%5B2001:db8::1%5D"`);
+      expect(body).toContain('/project/mc-status/%5B2001:db8::1%5D"');
+      expect(body).toContain('Players: 3/20');
+    }
+  });
+
+  for (const [name, host] of Object.entries(rejectedByTheAPI)) {
+    test(`${name} is rejected by the API and gets the bare checker, not cached`, async ({ request }) => {
+      const { res, body } = await html(request, `/project/mc-status/${encodeURIComponent(host)}`);
+      expectBare(res, body);
+    });
+  }
+
+  for (const state of ['online', 'offline']) {
+    for (const missing of ['host', 'port']) {
+      test(`an ${state} answer without a ${missing} gets the bare checker, not cached`, async ({ request }) => {
+        const { res, body } = await html(request, `/project/mc-status/${state}-no-${missing}.example.net`);
+        expectBare(res, body);
+      });
+    }
+  }
+
+  const apiRequests = async (request) => (await request.get(`${process.env.NN_API_URL}/__requests`)).json();
+  const longHost = (last) => `${`${'a'.repeat(60)}.`.repeat(4)}${last}`;
+
+  test('a host of 260 characters is looked up', async ({ request }) => {
+    const host = longHost('b'.repeat(16));
+    expect(host).toHaveLength(260);
+    await html(request, `/project/mc-status/${host}`);
+    expect((await apiRequests(request)).some((url) => url.includes(host))).toBe(true);
+  });
+
+  test('a host over 260 characters gets the bare checker without a lookup', async ({ request }) => {
+    const host = longHost('c'.repeat(17));
+    expect(host).toHaveLength(261);
+    const { res, body } = await html(request, `/project/mc-status/${host}`);
+    expectBare(res, body);
+    expect((await apiRequests(request)).some((url) => url.includes(host))).toBe(false);
+  });
+
+  // Playwright's request client collapses %2e segments itself, so the raw path goes out over node:http.
+  const rawGet = (path) =>
+    new Promise((resolve, reject) => {
+      const base = new URL(process.env.BASE_URL || 'http://localhost:8099');
+      http
+        .get({ host: base.hostname, port: base.port, path }, (res) => {
+          let body = '';
+          res.setEncoding('utf8');
+          res.on('data', (chunk) => (body += chunk));
+          res.on('end', () => resolve({ res: { status: () => res.statusCode, headers: () => res.headers }, body }));
+        })
+        .on('error', reject);
+    });
+
+  for (const [segment, apiPath] of [
+    ['%2e', '/api/v1/mcstatus/.'],
+    ['%2e%2e', '/api/v1/mcstatus/..'],
+  ]) {
+    test(`the dot segment ${segment} gets the bare checker without a lookup`, async ({ request }) => {
+      const { res, body } = await rawGet(`/project/mc-status/${segment}`);
+      expect(res.status()).toBe(200);
       expect(res.headers()['cache-control']).toBe('no-store');
-      expect(await res.text()).toContain('id="mc-status-host"');
+      expect(body).toContain('id="mc-status-host"');
+      expect(body).not.toContain('og:title');
+      expect((await apiRequests(request)).filter((url) => url.split('?')[0] === apiPath)).toEqual([]);
     });
   }
 });

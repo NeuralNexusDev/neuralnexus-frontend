@@ -20,20 +20,33 @@ const (
 	noStore         = "no-store"
 	onlineMaxAge    = "public, max-age=60"
 	offlineMaxAge   = "public, max-age=30"
-	maxMcHostname   = 253
+	maxMcHostInput  = 260
 	problemJSON     = "application/problem+json"
 )
 
-var (
-	mcColorCode   = regexp.MustCompile(`(?s)§.`)
-	mcHostPattern = regexp.MustCompile(`^(?P<host>[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*)(?::(?P<port>[0-9]{1,5}))?$`)
-)
+var mcColorCode = regexp.MustCompile(`(?s)§.`)
 
 type apiMcStatus struct {
+	Host       string `json:"host"`
+	Port       int    `json:"port"`
 	Motd       string `json:"motd"`
 	NumPlayers int    `json:"num_players"`
 	MaxPlayers int    `json:"max_players"`
 	Version    string `json:"version"`
+}
+
+func decodeMcStatus(body io.Reader) (apiMcStatus, bool) {
+	var status apiMcStatus
+	if json.NewDecoder(io.LimitReader(body, maxMcStatusBody)).Decode(&status) != nil {
+		return status, false
+	}
+	if status.Host == "" {
+		return status, false
+	}
+	if status.Port == 0 {
+		return status, false
+	}
+	return status, true
 }
 
 // McStatusPageHandler serves the status checker, with link-preview tags when the server lookup succeeds or reports offline.
@@ -43,29 +56,21 @@ func McStatusPageHandler(w http.ResponseWriter, r *http.Request) {
 		templ.Handler(components.McStatusPage()).ServeHTTP(w, r)
 		return
 	}
-	bare := func(status int) {
+	bare := func() {
 		w.Header().Set("Cache-Control", noStore)
-		templ.Handler(components.McStatusPage(), templ.WithStatus(status)).ServeHTTP(w, r)
+		templ.Handler(components.McStatusPage()).ServeHTTP(w, r)
 	}
-
-	m := mcHostPattern.FindStringSubmatch(rawHost)
-	if m == nil || len(m[1]) > maxMcHostname {
-		bare(http.StatusBadRequest)
+	if len(rawHost) > maxMcHostInput {
+		bare()
 		return
 	}
-	host := strings.ToLower(m[1])
-	if m[2] != "" {
-		port, err := strconv.ParseUint(m[2], 10, 16)
-		if err != nil || port < 1 {
-			bare(http.StatusBadRequest)
-			return
-		}
-		host += ":" + strconv.FormatUint(port, 10)
+	if rawHost == "." || rawHost == ".." {
+		bare()
+		return
 	}
 
 	query := r.URL.Query()
 	data := components.McStatusEmbedData{
-		Host:    host,
 		Bedrock: query.Get("bedrock") == "true",
 		Query:   query.Get("query") != "false",
 	}
@@ -73,27 +78,27 @@ func McStatusPageHandler(w http.ResponseWriter, r *http.Request) {
 		data.QueryPort = int(port)
 	}
 
-	endpoint := config.APIURL + "/api/v1/mcstatus/" + url.PathEscape(host)
+	endpoint := config.APIURL + "/api/v1/mcstatus/" + url.PathEscape(rawHost)
 	if q := data.Options().Encode(); q != "" {
 		endpoint += "?" + q
 	}
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, endpoint, nil)
 	if err != nil {
-		bare(http.StatusOK)
+		bare()
 		return
 	}
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		bare(http.StatusOK)
+		bare()
 		return
 	}
 	defer res.Body.Close()
 
 	switch {
 	case res.StatusCode == http.StatusOK:
-		var status apiMcStatus
-		if json.NewDecoder(io.LimitReader(res.Body, maxMcStatusBody)).Decode(&status) != nil || status == (apiMcStatus{}) {
-			bare(http.StatusOK)
+		status, ok := decodeMcStatus(res.Body)
+		if !ok {
+			bare()
 			return
 		}
 		motd := strings.ReplaceAll(status.Motd, `\n`, "\n")
@@ -103,6 +108,8 @@ func McStatusPageHandler(w http.ResponseWriter, r *http.Request) {
 				data.Motd = append(data.Motd, line)
 			}
 		}
+		data.Host = status.Host
+		data.Port = status.Port
 		data.Online = true
 		data.Players = status.NumPlayers
 		data.Max = status.MaxPlayers
@@ -110,12 +117,19 @@ func McStatusPageHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", onlineMaxAge)
 	case res.StatusCode == http.StatusNotFound:
 		if mediaType, _, _ := mime.ParseMediaType(res.Header.Get("Content-Type")); mediaType != problemJSON {
-			bare(http.StatusOK)
+			bare()
 			return
 		}
+		status, ok := decodeMcStatus(res.Body)
+		if !ok {
+			bare()
+			return
+		}
+		data.Host = status.Host
+		data.Port = status.Port
 		w.Header().Set("Cache-Control", offlineMaxAge)
 	default:
-		bare(http.StatusOK)
+		bare()
 		return
 	}
 	templ.Handler(components.McStatusEmbedPage(data)).ServeHTTP(w, r)

@@ -69,10 +69,12 @@ func head(t *testing.T, body string) string {
 	return body[start:end]
 }
 
-const onlineBody = `{"motd":"§aHello\\n§c§lWorld","num_players":3,"max_players":20,"version":"Paper 1.21"}`
+const bedrockBody = `{"host":"a.com","port":19132,"motd":"Hi","num_players":1,"max_players":2,"version":"v"}`
+
+const onlineBody = `{"host":"a.com","port":25565,"motd":"§aHello\\n§c§lWorld","num_players":3,"max_players":20,"version":"Paper 1.21"}`
 
 func TestEmbedOnline(t *testing.T) {
-	f := newFakeAPI(t, http.StatusOK, onlineBody)
+	f := newFakeAPI(t, http.StatusOK, `{"host":"play.example.net","port":80,"motd":"§aHello\\n§c§lWorld","num_players":3,"max_players":20,"version":"Paper 1.21"}`)
 	rec := getEmbed("Play.Example.NET:00080", "")
 
 	if rec.Code != http.StatusOK {
@@ -84,7 +86,7 @@ func TestEmbedOnline(t *testing.T) {
 	if f.request == nil {
 		t.Fatal("the API was not called")
 	}
-	if f.request.URL.Path != "/api/v1/mcstatus/play.example.net:80" {
+	if f.request.URL.Path != "/api/v1/mcstatus/Play.Example.NET:00080" {
 		t.Errorf("API path = %q", f.request.URL.Path)
 	}
 	if got := f.request.URL.Query().Get("query"); got != "true" {
@@ -117,6 +119,101 @@ func TestEmbedOnline(t *testing.T) {
 	}
 }
 
+func TestEmbedIPv6Host(t *testing.T) {
+	cases := []struct {
+		name, query, body, wantURI, wantHost, wantSuffix string
+	}{
+		{"java", "", `{"host":"2001:db8::1","port":25565,"num_players":1}`, "/api/v1/mcstatus/%5B2001:DB8::1%5D:25565?query=true", "[2001:db8::1]", ""},
+		{"java with a port", "", `{"host":"2001:db8::1","port":25566,"num_players":1}`, "/api/v1/mcstatus/%5B2001:DB8::1%5D:25565?query=true", "[2001:db8::1]:25566", ""},
+		{"bedrock", "bedrock=true", `{"host":"2001:db8::1","port":19132,"num_players":1}`, "/api/v1/mcstatus/%5B2001:DB8::1%5D:25565?bedrock=true", "[2001:db8::1]", "?bedrock=true"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFakeAPI(t, http.StatusOK, tc.body)
+			rec := getEmbed("[2001:DB8::1]:25565", tc.query)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d", rec.Code)
+			}
+			if f.request == nil || f.request.RequestURI != tc.wantURI {
+				t.Errorf("API request = %v, want %s", f.request, tc.wantURI)
+			}
+			path := strings.NewReplacer("[", "%5B", "]", "%5D").Replace(tc.wantHost)
+			pageURL := testSiteURL + "/project/mc-status/" + path + tc.wantSuffix
+			h := head(t, rec.Body.String())
+			for _, want := range []string{
+				"<title>" + tc.wantHost + "</title>",
+				`property="og:title" content="` + tc.wantHost + `"`,
+				`property="og:url" content="` + pageURL + `"`,
+				`rel="canonical" href="` + pageURL + `"`,
+				`property="og:image" content="` + f.server.URL + `/api/v1/mcstatus/icon/` + path + tc.wantSuffix + `"`,
+				`property="og:image:alt" content="` + tc.wantHost + ` server icon"`,
+			} {
+				if !strings.Contains(h, want) {
+					t.Errorf("head is missing %q:\n%s", want, h)
+				}
+			}
+		})
+	}
+}
+
+func TestEmbedShowsThePortOnlyWhenItIsNotTheDefault(t *testing.T) {
+	cases := []struct {
+		name, query, host string
+		port              int
+		wantHost          string
+	}{
+		{"java default", "", "a.com", 25565, "a.com"},
+		{"java other", "", "a.com", 25566, "a.com:25566"},
+		{"java on the Bedrock default", "", "a.com", 19132, "a.com:19132"},
+		{"bedrock default", "bedrock=true", "a.com", 19132, "a.com"},
+		{"bedrock other", "bedrock=true", "a.com", 19133, "a.com:19133"},
+		{"bedrock on the Java default", "bedrock=true", "a.com", 25565, "a.com:25565"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			newFakeAPI(t, http.StatusOK, fmt.Sprintf(`{"host":%q,"port":%d,"num_players":1}`, tc.host, tc.port))
+			suffix := ""
+			if tc.query != "" {
+				suffix = "?" + tc.query
+			}
+			h := head(t, getEmbed(tc.host, tc.query).Body.String())
+			for _, want := range []string{
+				"<title>" + tc.wantHost + "</title>",
+				`property="og:url" content="` + testSiteURL + "/project/mc-status/" + tc.wantHost + suffix + `"`,
+				`rel="canonical" href="` + testSiteURL + "/project/mc-status/" + tc.wantHost + suffix + `"`,
+				`/api/v1/mcstatus/icon/` + tc.wantHost + suffix + `"`,
+			} {
+				if !strings.Contains(h, want) {
+					t.Errorf("head is missing %q:\n%s", want, h)
+				}
+			}
+		})
+	}
+}
+
+func TestEmbedEscapesTheAPIHost(t *testing.T) {
+	f := newFakeAPI(t, http.StatusOK, `{"host":"x\"><script>alert(1)</script>.com","port":25566,"num_players":1}`)
+	body := getEmbed("a.com", "").Body.String()
+	h := head(t, body)
+	if strings.Contains(body, "<script>alert") {
+		t.Error("the API host appears unescaped in the page")
+	}
+	const escaped = `x&#34;&gt;&lt;script&gt;alert(1)&lt;/script&gt;.com:25566`
+	pageURL := testSiteURL + `/project/mc-status/x%22%3E%3Cscript%3Ealert%281%29%3C%2Fscript%3E.com:25566`
+	for _, want := range []string{
+		"<title>" + escaped + "</title>",
+		`property="og:title" content="` + escaped + `"`,
+		`property="og:image:alt" content="` + escaped + ` server icon"`,
+		`property="og:url" content="` + pageURL + `"`,
+		`rel="canonical" href="` + pageURL + `"`,
+		`property="og:image" content="` + f.server.URL + `/api/v1/mcstatus/icon/x%22%3E%3Cscript%3Ealert%281%29%3C%2Fscript%3E.com:25566"`,
+	} {
+		if !strings.Contains(h, want) {
+			t.Errorf("head is missing %q:\n%s", want, h)
+		}
+	}
+}
+
 func TestEmbedForwardsOptions(t *testing.T) {
 	cases := []struct {
 		name, query string
@@ -136,7 +233,11 @@ func TestEmbedForwardsOptions(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			f := newFakeAPI(t, http.StatusOK, onlineBody)
+			body := onlineBody
+			if strings.HasPrefix(tc.query, "bedrock=true") {
+				body = bedrockBody
+			}
+			f := newFakeAPI(t, http.StatusOK, body)
 			rec := getEmbed("a.com", tc.query)
 			if f.request == nil {
 				t.Fatal("the API was not called")
@@ -155,7 +256,7 @@ func TestEmbedForwardsOptions(t *testing.T) {
 }
 
 func TestEmbedBedrockHasAnImage(t *testing.T) {
-	f := newFakeAPI(t, http.StatusOK, onlineBody)
+	f := newFakeAPI(t, http.StatusOK, bedrockBody)
 	rec := getEmbed("a.com", "bedrock=true")
 	want := `property="og:image" content="` + f.server.URL + `/api/v1/mcstatus/icon/a.com?bedrock=true"`
 	if !strings.Contains(head(t, rec.Body.String()), want) {
@@ -164,7 +265,7 @@ func TestEmbedBedrockHasAnImage(t *testing.T) {
 }
 
 func TestEmbedOffline(t *testing.T) {
-	f := newFakeAPI(t, http.StatusNotFound, `{"status":404}`)
+	f := newFakeAPI(t, http.StatusNotFound, `{"host":"a.com","port":25565,"status":404}`)
 	rec := getEmbed("a.com", "")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d", rec.Code)
@@ -185,10 +286,10 @@ func TestEmbedOffline(t *testing.T) {
 	}
 }
 
-func assertBarePage(t *testing.T, rec *httptest.ResponseRecorder, wantStatus int) {
+func assertBarePage(t *testing.T, rec *httptest.ResponseRecorder) {
 	t.Helper()
-	if rec.Code != wantStatus {
-		t.Errorf("status = %d, want %d", rec.Code, wantStatus)
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", rec.Code)
 	}
 	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
 		t.Errorf("Cache-Control = %q, want %q", got, "no-store")
@@ -220,11 +321,17 @@ func TestEmbedLookupFailures(t *testing.T) {
 		{"bad gateway", http.StatusBadGateway, `{"detail":"boom"}`},
 		{"service unavailable", http.StatusServiceUnavailable, `{"detail":"boom"}`},
 		{"gateway timeout", http.StatusGatewayTimeout, `{"detail":"boom"}`},
+		{"rejected host", http.StatusBadRequest, `{"detail":"The host must be a domain name, an IPv4 address or an IPv6 address, optionally followed by a port."}`},
+		{"online without a host", http.StatusOK, `{"port":25565,"motd":"Hi","num_players":1,"max_players":2}`},
+		{"online without a port", http.StatusOK, `{"host":"a.com","motd":"Hi","num_players":1,"max_players":2}`},
+		{"offline without a host", http.StatusNotFound, `{"port":25565,"status":404}`},
+		{"offline without a port", http.StatusNotFound, `{"host":"a.com","status":404}`},
+		{"offline without a body", http.StatusNotFound, ``},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			newFakeAPI(t, tc.apiStatus, tc.body)
-			assertBarePage(t, getEmbed("a.com", ""), http.StatusOK)
+			assertBarePage(t, getEmbed("a.com", ""))
 		})
 	}
 }
@@ -232,7 +339,7 @@ func TestEmbedLookupFailures(t *testing.T) {
 func TestEmbedAPIUnreachable(t *testing.T) {
 	f := newFakeAPI(t, http.StatusOK, onlineBody)
 	f.server.Close()
-	assertBarePage(t, getEmbed("a.com", ""), http.StatusOK)
+	assertBarePage(t, getEmbed("a.com", ""))
 }
 
 func TestEmbedCancelsTheUpstreamLookupWhenTheClientGoesAway(t *testing.T) {
@@ -281,7 +388,7 @@ func TestEmbedClosesTheUpstreamBody(t *testing.T) {
 		body        string
 	}{
 		{"online", http.StatusOK, "application/json", onlineBody + strings.Repeat(" ", 1<<16)},
-		{"offline", http.StatusNotFound, "application/problem+json", `{"status":404}`},
+		{"offline", http.StatusNotFound, "application/problem+json", `{"host":"a.com","port":25565,"status":404}`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -329,85 +436,69 @@ func TestEmbedRejectsAnInvalidAPIURL(t *testing.T) {
 	apiURL := config.APIURL
 	config.APIURL = "http://a b"
 	t.Cleanup(func() { config.APIURL = apiURL })
-	assertBarePage(t, getEmbed("a.com", ""), http.StatusOK)
-}
-
-func hostOfLength(n int) string {
-	var labels []string
-	for n > 0 {
-		label := min(n, 63)
-		if n-label == 1 {
-			label--
-		}
-		labels = append(labels, strings.Repeat("a", label))
-		n -= label + 1
-	}
-	return strings.Join(labels, ".")
+	assertBarePage(t, getEmbed("a.com", ""))
 }
 
 func TestEmbedAcceptsAHostAtTheLimit(t *testing.T) {
 	f := newFakeAPI(t, http.StatusOK, onlineBody)
-	host := hostOfLength(253)
-	if len(host) != 253 {
-		t.Fatalf("test host is %d characters, want 253", len(host))
-	}
-	if rec := getEmbed(host, ""); rec.Code != http.StatusOK || f.request == nil {
+	if rec := getEmbed(strings.Repeat("a", 260), ""); rec.Code != http.StatusOK || f.request == nil {
 		t.Errorf("status = %d, API called = %v", rec.Code, f.request != nil)
 	}
 }
 
-func TestEmbedRejectsInvalidHosts(t *testing.T) {
+func TestEmbedGuardsTheRequestPath(t *testing.T) {
 	f := newFakeAPI(t, http.StatusOK, onlineBody)
 	cases := []struct{ name, host string }{
-		{"empty label", "a..b"},
-		{"leading dot", ".a.com"},
-		{"illegal character", "a_b$c"},
-		{"space", "bad host"},
-		{"path", "a.com/b"},
-		{"port zero", "a.com:0"},
-		{"port too large", "a.com:65536"},
-		{"port too long", "a.com:123456"},
-		{"trailing colon", "a.com:"},
-		{"label over 63", strings.Repeat("a", 64) + ".com"},
-		{"name over 253", hostOfLength(254)},
+		{"dot", "."},
+		{"dot dot", ".."},
+		{"over the limit", strings.Repeat("a", 261)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			f.request = nil
-			assertBarePage(t, getEmbed(tc.host, ""), http.StatusBadRequest)
+			assertBarePage(t, getEmbed(tc.host, ""))
 			if f.request != nil {
-				t.Error("an invalid host must not reach the API")
+				t.Error("the host must not reach the API")
 			}
 		})
 	}
 }
 
-func TestEmbedNormalizesHosts(t *testing.T) {
+func TestEmbedPassesTheHostThroughToTheAPI(t *testing.T) {
 	cases := map[string]string{
-		"Example.COM":       "example.com",
-		"example.com:25565": "example.com:25565",
-		"example.com:00080": "example.com:80",
-		"example.com:40000": "example.com:40000",
-		"example.com:65535": "example.com:65535",
-		"a_b.example.com":   "a_b.example.com",
+		"Example.COM":         "Example.COM",
+		"example.com:00080":   "example.com:00080",
+		"[2001:DB8::1]:25565": "%5B2001:DB8::1%5D:25565",
+		"2001:db8::1":         "2001:db8::1",
+		"bad host":            "bad%20host",
+		"a.com/b":             "a.com%2Fb",
+		"a.com?x=1":           "a.com%3Fx=1",
+		"a.com#f":             "a.com%23f",
+		"%41":                 "%2541",
 	}
 	for raw, want := range cases {
 		t.Run(raw, func(t *testing.T) {
 			f := newFakeAPI(t, http.StatusOK, onlineBody)
-			if rec := getEmbed(raw, ""); rec.Code != http.StatusOK {
-				t.Fatalf("status = %d", rec.Code)
-			}
-			if f.request == nil || f.request.URL.Path != "/api/v1/mcstatus/"+want {
-				t.Errorf("API path = %v, want /api/v1/mcstatus/%s", f.request, want)
+			getEmbed(raw, "")
+			if f.request == nil || f.request.RequestURI != "/api/v1/mcstatus/"+want+"?query=true" {
+				t.Errorf("API request = %v, want /api/v1/mcstatus/%s?query=true", f.request, want)
 			}
 		})
+	}
+}
+
+func TestEmbedServesTheBareCheckerWhenTheAPIRejectsTheHost(t *testing.T) {
+	f := newFakeAPI(t, http.StatusBadRequest, `{"detail":"The host must be a domain name, an IPv4 address or an IPv6 address, optionally followed by a port."}`)
+	assertBarePage(t, getEmbed("localhost", ""))
+	if f.request == nil || f.request.URL.Path != "/api/v1/mcstatus/localhost" {
+		t.Errorf("API request = %v", f.request)
 	}
 }
 
 func TestEmbedDescriptionIsTruncatedAndEscaped(t *testing.T) {
 	motd := strings.Repeat("é", 300)
 	version := strings.Repeat("v", 100)
-	newFakeAPI(t, http.StatusOK, fmt.Sprintf(`{"motd":%q,"num_players":1,"max_players":2,"version":%q}`, motd, version))
+	newFakeAPI(t, http.StatusOK, fmt.Sprintf(`{"host":"a.com","port":25565,"motd":%q,"num_players":1,"max_players":2,"version":%q}`, motd, version))
 	h := head(t, getEmbed("a.com", "").Body.String())
 
 	if !strings.Contains(h, strings.Repeat("é", 200)+"…\nPlayers: 1/2\nVersion: "+strings.Repeat("v", 64)+"…") {
@@ -421,7 +512,7 @@ func TestEmbedDescriptionIsTruncatedAndEscaped(t *testing.T) {
 func TestEmbedKeepsTextAtTheLimit(t *testing.T) {
 	motd := strings.Repeat("é", 200)
 	version := strings.Repeat("v", 64)
-	newFakeAPI(t, http.StatusOK, fmt.Sprintf(`{"motd":%q,"num_players":1,"max_players":2,"version":%q}`, motd, version))
+	newFakeAPI(t, http.StatusOK, fmt.Sprintf(`{"host":"a.com","port":25565,"motd":%q,"num_players":1,"max_players":2,"version":%q}`, motd, version))
 	h := head(t, getEmbed("a.com", "").Body.String())
 	if strings.Contains(h, "…") {
 		t.Errorf("text exactly at the limit must not be truncated:\n%s", h)
@@ -432,7 +523,7 @@ func TestEmbedKeepsTextAtTheLimit(t *testing.T) {
 }
 
 func TestEmbedEscapesServerText(t *testing.T) {
-	newFakeAPI(t, http.StatusOK, `{"motd":"<script>alert(1)</script>\"><img src=x>","num_players":1,"max_players":2,"version":"<b>1</b>"}`)
+	newFakeAPI(t, http.StatusOK, `{"host":"a.com","port":25565,"motd":"<script>alert(1)</script>\"><img src=x>","num_players":1,"max_players":2,"version":"<b>1</b>"}`)
 	body := getEmbed("a.com", "").Body.String()
 	if !strings.Contains(body, "&lt;script&gt;alert(1)&lt;/script&gt;") {
 		t.Error("the MOTD should still appear, escaped")
@@ -445,7 +536,7 @@ func TestEmbedEscapesServerText(t *testing.T) {
 }
 
 func TestEmbedOmitsEmptyVersion(t *testing.T) {
-	newFakeAPI(t, http.StatusOK, `{"motd":"Hi","num_players":0,"max_players":5,"version":""}`)
+	newFakeAPI(t, http.StatusOK, `{"host":"a.com","port":25565,"motd":"Hi","num_players":0,"max_players":5,"version":""}`)
 	h := head(t, getEmbed("a.com", "").Body.String())
 	if strings.Contains(h, "Version:") {
 		t.Errorf("an empty version should not render a Version line:\n%s", h)
@@ -463,7 +554,7 @@ func TestEmbedMotdLines(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			newFakeAPI(t, http.StatusOK, fmt.Sprintf(`{"motd":%q,"num_players":1,"max_players":2,"version":"v"}`, tc.motd))
+			newFakeAPI(t, http.StatusOK, fmt.Sprintf(`{"host":"a.com","port":25565,"motd":%q,"num_players":1,"max_players":2,"version":"v"}`, tc.motd))
 			h := head(t, getEmbed("a.com", "").Body.String())
 			if want := tc.want + "Players: 1/2\nVersion: v"; !strings.Contains(h, `content="`+want+`"`) {
 				t.Errorf("description should be %q:\n%s", want, h)
@@ -473,7 +564,7 @@ func TestEmbedMotdLines(t *testing.T) {
 }
 
 func bodyOfSize(size int) string {
-	const prefix, suffix = `{"motd":"`, `","num_players":1,"max_players":2,"version":"v"}`
+	const prefix, suffix = `{"host":"a.com","port":25565,"motd":"`, `","num_players":1,"max_players":2,"version":"v"}`
 	return prefix + strings.Repeat("a", size-len(prefix)-len(suffix)) + suffix
 }
 
@@ -503,10 +594,10 @@ func TestEmbedTreatsOnlyProblemJSON404AsOffline(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			newFakeAPIWithType(t, http.StatusNotFound, tc.contentType, `{"status":404}`)
+			newFakeAPIWithType(t, http.StatusNotFound, tc.contentType, `{"host":"a.com","port":25565,"status":404}`)
 			rec := getEmbed("a.com", "")
 			if !tc.wantOffline {
-				assertBarePage(t, rec, http.StatusOK)
+				assertBarePage(t, rec)
 				return
 			}
 			if rec.Code != http.StatusOK {
@@ -523,7 +614,7 @@ func TestEmbedTreatsOnlyProblemJSON404AsOffline(t *testing.T) {
 }
 
 func TestEmbedRouteWiring(t *testing.T) {
-	f := newFakeAPI(t, http.StatusOK, onlineBody)
+	f := newFakeAPI(t, http.StatusOK, `{"host":"play.example.com","port":25570,"num_players":1}`)
 	router := NewWebServer("", false).Setup()
 
 	get := httptest.NewRecorder()
@@ -531,7 +622,7 @@ func TestEmbedRouteWiring(t *testing.T) {
 	if get.Code != http.StatusOK || !strings.Contains(get.Body.String(), `property="og:title" content="play.example.com:25570"`) {
 		t.Fatalf("GET /project/mc-status/{host} did not reach the handler: %d %s", get.Code, get.Body.String())
 	}
-	if f.request == nil || f.request.URL.Path != "/api/v1/mcstatus/play.example.com:25570" {
+	if f.request == nil || f.request.URL.Path != "/api/v1/mcstatus/Play.Example.com:25570" {
 		t.Errorf("the host path value did not reach the API: %v", f.request)
 	}
 
