@@ -650,7 +650,7 @@ function parseMcPort(value) {
     return port >= 1 && port <= MC_MAX_PORT ? port : null;
 }
 
-/** The API's canonical host, bracketed when it is an IPv6 address, with the port unless it is the edition's default. */
+/** Must match McStatusEmbedData.DisplayHost in components/mcstatus_embed.templ, or the shared URL stops round-tripping. */
 function mcDisplayHost(target, bedrock) {
     const host = target.host.includes(':') ? `[${target.host}]` : target.host;
     return target.port === (bedrock ? 19132 : 25565) ? host : `${host}:${target.port}`;

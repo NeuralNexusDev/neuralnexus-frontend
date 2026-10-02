@@ -26,17 +26,27 @@ const (
 
 var mcColorCode = regexp.MustCompile(`(?s)§.`)
 
-type apiMcTarget struct {
-	Host string `json:"host"`
-	Port int    `json:"port"`
-}
-
 type apiMcStatus struct {
-	apiMcTarget
+	Host       string `json:"host"`
+	Port       int    `json:"port"`
 	Motd       string `json:"motd"`
 	NumPlayers int    `json:"num_players"`
 	MaxPlayers int    `json:"max_players"`
 	Version    string `json:"version"`
+}
+
+func decodeMcStatus(body io.Reader) (apiMcStatus, bool) {
+	var status apiMcStatus
+	if json.NewDecoder(io.LimitReader(body, maxMcStatusBody)).Decode(&status) != nil {
+		return status, false
+	}
+	if status.Host == "" {
+		return status, false
+	}
+	if status.Port == 0 {
+		return status, false
+	}
+	return status, true
 }
 
 // McStatusPageHandler serves the status checker, with link-preview tags when the server lookup succeeds or reports offline.
@@ -50,7 +60,11 @@ func McStatusPageHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", noStore)
 		templ.Handler(components.McStatusPage()).ServeHTTP(w, r)
 	}
-	if len(rawHost) > maxMcHostInput || rawHost == "." || rawHost == ".." {
+	if len(rawHost) > maxMcHostInput {
+		bare()
+		return
+	}
+	if rawHost == "." || rawHost == ".." {
 		bare()
 		return
 	}
@@ -82,8 +96,8 @@ func McStatusPageHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case res.StatusCode == http.StatusOK:
-		var status apiMcStatus
-		if json.NewDecoder(io.LimitReader(res.Body, maxMcStatusBody)).Decode(&status) != nil || status.Host == "" || status.Port == 0 {
+		status, ok := decodeMcStatus(res.Body)
+		if !ok {
 			bare()
 			return
 		}
@@ -106,13 +120,13 @@ func McStatusPageHandler(w http.ResponseWriter, r *http.Request) {
 			bare()
 			return
 		}
-		var target apiMcTarget
-		if json.NewDecoder(io.LimitReader(res.Body, maxMcStatusBody)).Decode(&target) != nil || target.Host == "" || target.Port == 0 {
+		status, ok := decodeMcStatus(res.Body)
+		if !ok {
 			bare()
 			return
 		}
-		data.Host = target.Host
-		data.Port = target.Port
+		data.Host = status.Host
+		data.Port = status.Port
 		w.Header().Set("Cache-Control", offlineMaxAge)
 	default:
 		bare()

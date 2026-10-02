@@ -191,6 +191,29 @@ func TestEmbedShowsThePortOnlyWhenItIsNotTheDefault(t *testing.T) {
 	}
 }
 
+func TestEmbedEscapesTheAPIHost(t *testing.T) {
+	f := newFakeAPI(t, http.StatusOK, `{"host":"x\"><script>alert(1)</script>.com","port":25566,"num_players":1}`)
+	body := getEmbed("a.com", "").Body.String()
+	h := head(t, body)
+	if strings.Contains(body, "<script>alert") {
+		t.Error("the API host appears unescaped in the page")
+	}
+	const escaped = `x&#34;&gt;&lt;script&gt;alert(1)&lt;/script&gt;.com:25566`
+	pageURL := testSiteURL + `/project/mc-status/x%22%3E%3Cscript%3Ealert%281%29%3C%2Fscript%3E.com:25566`
+	for _, want := range []string{
+		"<title>" + escaped + "</title>",
+		`property="og:title" content="` + escaped + `"`,
+		`property="og:image:alt" content="` + escaped + ` server icon"`,
+		`property="og:url" content="` + pageURL + `"`,
+		`rel="canonical" href="` + pageURL + `"`,
+		`property="og:image" content="` + f.server.URL + `/api/v1/mcstatus/icon/x%22%3E%3Cscript%3Ealert%281%29%3C%2Fscript%3E.com:25566"`,
+	} {
+		if !strings.Contains(h, want) {
+			t.Errorf("head is missing %q:\n%s", want, h)
+		}
+	}
+}
+
 func TestEmbedForwardsOptions(t *testing.T) {
 	cases := []struct {
 		name, query string

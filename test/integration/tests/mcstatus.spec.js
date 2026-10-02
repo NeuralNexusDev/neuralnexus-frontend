@@ -1,3 +1,4 @@
+import http from 'node:http';
 import { test, expect } from '@playwright/test';
 
 const API = `${process.env.NN_API_URL}/api/v1`;
@@ -838,6 +839,7 @@ test.describe('mc status page - server-rendered route', () => {
       const { body } = await html(request, `/project/mc-status/${path}`);
       expect(body).toContain('<title>[2001:db8::1]</title>');
       expect(body).toContain('property="og:title" content="[2001:db8::1]"');
+      expect(body).toContain('property="og:image:alt" content="[2001:db8::1] server icon"');
       expect(body).toContain(`property="og:image" content="${process.env.NN_API_URL}/api/v1/mcstatus/icon/%5B2001:db8::1%5D"`);
       expect(body).toContain('/project/mc-status/%5B2001:db8::1%5D"');
       expect(body).toContain('Players: 3/20');
@@ -851,8 +853,55 @@ test.describe('mc status page - server-rendered route', () => {
     });
   }
 
-  test('a host over 260 characters gets the bare checker, not cached', async ({ request }) => {
-    const { res, body } = await html(request, `/project/mc-status/${'a'.repeat(261)}`);
-    expectBare(res, body);
+  for (const state of ['online', 'offline']) {
+    for (const missing of ['host', 'port']) {
+      test(`an ${state} answer without a ${missing} gets the bare checker, not cached`, async ({ request }) => {
+        const { res, body } = await html(request, `/project/mc-status/${state}-no-${missing}.example.net`);
+        expectBare(res, body);
+      });
+    }
+  }
+
+  const apiRequests = async (request) => (await request.get(`${process.env.NN_API_URL}/__requests`)).json();
+  const longHost = (last) => `${`${'a'.repeat(60)}.`.repeat(4)}${last}`;
+
+  test('a host of 260 characters is looked up', async ({ request }) => {
+    const host = longHost('b'.repeat(16));
+    expect(host).toHaveLength(260);
+    await html(request, `/project/mc-status/${host}`);
+    expect((await apiRequests(request)).some((url) => url.includes(host))).toBe(true);
   });
+
+  test('a host over 260 characters gets the bare checker without a lookup', async ({ request }) => {
+    const host = longHost('c'.repeat(17));
+    expect(host).toHaveLength(261);
+    const { res, body } = await html(request, `/project/mc-status/${host}`);
+    expectBare(res, body);
+    expect((await apiRequests(request)).some((url) => url.includes(host))).toBe(false);
+  });
+
+  // Playwright's request client collapses %2e segments itself, so the raw path goes out over node:http.
+  const rawGet = (path) =>
+    new Promise((resolve, reject) => {
+      const base = new URL(process.env.BASE_URL || 'http://localhost:8099');
+      http
+        .get({ host: base.hostname, port: base.port, path }, (res) => {
+          let body = '';
+          res.setEncoding('utf8');
+          res.on('data', (chunk) => (body += chunk));
+          res.on('end', () => resolve({ res: { status: () => res.statusCode, headers: () => res.headers }, body }));
+        })
+        .on('error', reject);
+    });
+
+  for (const segment of ['%2e', '%2e%2e']) {
+    test(`the dot segment ${segment} gets the bare checker without a lookup`, async ({ request }) => {
+      const { res, body } = await rawGet(`/project/mc-status/${segment}`);
+      expect(res.status()).toBe(200);
+      expect(res.headers()['cache-control']).toBe('no-store');
+      expect(body).toContain('id="mc-status-host"');
+      expect(body).not.toContain('og:title');
+      expect((await apiRequests(request)).filter((url) => url.startsWith('/api/v1/mcstatus/.'))).toEqual([]);
+    });
+  }
 });
