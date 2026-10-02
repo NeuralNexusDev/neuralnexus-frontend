@@ -370,6 +370,18 @@ func TestEmbedRejectsInvalidHosts(t *testing.T) {
 		{"trailing colon", "a.com:"},
 		{"label over 63", strings.Repeat("a", 64) + ".com"},
 		{"name over 253", hostOfLength(254)},
+		{"IPv6 without brackets", "2001:db8::1"},
+		{"IPv6 missing the closing bracket", "[2001:db8::1"},
+		{"IPv6 with a second closing bracket", "[::1]]"},
+		{"empty brackets", "[]"},
+		{"IPv4 in brackets", "[1.2.3.4]"},
+		{"invalid IPv6 digits", "[::g]"},
+		{"too many IPv6 groups", "[1:2:3:4:5:6:7:8:9]"},
+		{"IPv6 with a zone", "[fe80::1%eth0]"},
+		{"IPv6 port zero", "[::1]:0"},
+		{"IPv6 port too large", "[::1]:65536"},
+		{"IPv6 trailing colon", "[::1]:"},
+		{"brackets around a name", "[a.com]"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -390,6 +402,13 @@ func TestEmbedNormalizesHosts(t *testing.T) {
 		"example.com:40000": "example.com:40000",
 		"example.com:65535": "example.com:65535",
 		"a_b.example.com":   "a_b.example.com",
+
+		"[::1]":                      "[::1]",
+		"[2001:DB8::1]":              "[2001:db8::1]",
+		"[2001:db8::1]:25565":        "[2001:db8::1]:25565",
+		"[2001:db8::1]:00080":        "[2001:db8::1]:80",
+		"[::ffff:1.2.3.4]":           "[::ffff:1.2.3.4]",
+		"[2001:db8:0:0:0:0:0:1]:443": "[2001:db8:0:0:0:0:0:1]:443",
 	}
 	for raw, want := range cases {
 		t.Run(raw, func(t *testing.T) {
