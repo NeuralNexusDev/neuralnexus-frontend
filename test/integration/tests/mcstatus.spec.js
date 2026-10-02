@@ -371,7 +371,55 @@ test.describe('mc status page - share links', () => {
     'a path': 'a.com/b',
     'a scheme': 'http://a.com',
     'a name over 253 characters': `${`${'a'.repeat(60)}.`.repeat(5)}com`,
+    'an IPv6 address without brackets': '2001:db8::1',
+    'an unclosed IPv6 bracket': '[2001:db8::1',
+    'an IPv4 address in brackets': '[1.2.3.4]',
+    'invalid IPv6 digits': '[::g]',
+    'an IPv6 zone': '[fe80::1%eth0]',
+    'too many IPv6 groups': '[1:2:3:4:5:6:7:8:9]',
+    'eight IPv6 groups and a double colon': '[1:2:3:4:5:6:7:8::]',
+    'two IPv6 double colons': '[1::2::3]',
+    'an IPv4 tail with a leading zero': '[::1.2.3.04]',
+    'an IPv4 tail octet over 255': '[::1.2.3.256]',
+    'an IPv6 port 0': '[::1]:0',
+    'an IPv6 port 99999': '[::1]:99999',
   };
+
+  const acceptedByTheServer = {
+    '[::1]': '%5B::1%5D',
+    '[2001:DB8::1]': '%5B2001:db8::1%5D',
+    '[2001:db8::1]:25565': '%5B2001:db8::1%5D:25565',
+    '[2001:DB8::1]:00080': '%5B2001:db8::1%5D:80',
+    '[2001:db8:0:0:0:0:0:1]': '%5B2001:db8:0:0:0:0:0:1%5D',
+    '[::ffff:1.2.3.4]': '%5B::ffff:1.2.3.4%5D',
+    '[::1.2.3.4]': '%5B::1.2.3.4%5D',
+    '[::]': '%5B::%5D',
+    '[1:2:3:4:5:6:7::]': '%5B1:2:3:4:5:6:7::%5D',
+  };
+
+  for (const [host, path] of Object.entries(acceptedByTheServer)) {
+    test(`a lookup for the IPv6 host ${host} puts ${path} in the shared URL`, async ({ page }) => {
+      await mockMcStatus(page, () => json(ONLINE));
+      await page.goto('/project/mc-status');
+      await lookup(page, host);
+      await expect.poll(() => new URL(page.url()).pathname).toBe(`/project/mc-status/${path}`);
+    });
+  }
+
+  test('an IPv6 host in the path fills the form and is looked up as typed', async ({ page }) => {
+    const requests = await mockMcStatus(page, () => json(ONLINE));
+    await page.goto('/project/mc-status/%5B2001:db8::1%5D:25565');
+    await expect(page.locator('#mc-status-result')).toBeVisible();
+    await expect(page.locator('#mc-status-host')).toHaveValue('[2001:db8::1]:25565');
+    expect(decodeURIComponent(requests.status[0].pathname.split('/').pop())).toBe('[2001:db8::1]:25565');
+  });
+
+  test('an IPv6 host with unescaped brackets in the path fills the form', async ({ page }) => {
+    await mockMcStatus(page, () => json(ONLINE));
+    await page.goto('/project/mc-status/[2001:db8::1]');
+    await expect(page.locator('#mc-status-host')).toHaveValue('[2001:db8::1]');
+    await expect(page.locator('#mc-status-result')).toBeVisible();
+  });
 
   for (const [name, host] of Object.entries(rejectedByTheServer)) {
     test(`a lookup for ${name} leaves the URL on the bare checker`, async ({ page }) => {
@@ -662,6 +710,9 @@ test.describe('mc status page - server-rendered route', () => {
     'a six digit port': 'a.com:123456',
     'a label over 63 characters': `${'a'.repeat(64)}.com`,
     'a name over 253 characters': `${`${'a'.repeat(60)}.`.repeat(5)}com`,
+    'an IPv6 address without brackets': '2001:db8::1',
+    'an IPv4 address in brackets': '[1.2.3.4]',
+    'an IPv6 port 0': '[::1]:0',
   };
 
   const html = async (request, path) => {
@@ -678,6 +729,16 @@ test.describe('mc status page - server-rendered route', () => {
     expect(body).toContain(`property="og:image" content="${process.env.NN_API_URL}/api/v1/mcstatus/icon/online.example.net"`);
     expect(body).toContain('Players: 3/20');
     expect(body).toContain('id="mc-status-host"');
+  });
+
+  test('an online IPv6 server gets the preview tags with the bracketed host', async ({ request }) => {
+    for (const path of ['%5B2001:DB8::1%5D', '[2001:db8::1]']) {
+      const { body } = await html(request, `/project/mc-status/${path}`);
+      expect(body).toContain('<title>[2001:db8::1]</title>');
+      expect(body).toContain('property="og:title" content="[2001:db8::1]"');
+      expect(body).toContain(`property="og:image" content="${process.env.NN_API_URL}/api/v1/mcstatus/icon/%5B2001:db8::1%5D"`);
+      expect(body).toContain('Players: 3/20');
+    }
   });
 
   test('an offline server gets the offline preview and the checker form', async ({ request }) => {

@@ -382,6 +382,11 @@ func TestEmbedRejectsInvalidHosts(t *testing.T) {
 		{"IPv6 port too large", "[::1]:65536"},
 		{"IPv6 trailing colon", "[::1]:"},
 		{"brackets around a name", "[a.com]"},
+		{"IPv4 tail with a leading zero", "[::1.2.3.04]"},
+		{"IPv4 tail octet over 255", "[::1.2.3.256]"},
+		{"eight groups and a double colon", "[1:2:3:4:5:6:7:8::]"},
+		{"leading single colon", "[:1:2:3:4:5:6:7]"},
+		{"two double colons", "[1::2::3]"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -409,6 +414,9 @@ func TestEmbedNormalizesHosts(t *testing.T) {
 		"[2001:db8::1]:00080":        "[2001:db8::1]:80",
 		"[::ffff:1.2.3.4]":           "[::ffff:1.2.3.4]",
 		"[2001:db8:0:0:0:0:0:1]:443": "[2001:db8:0:0:0:0:0:1]:443",
+		"[::]":                       "[::]",
+		"[1:2:3:4:5:6:7::]":          "[1:2:3:4:5:6:7::]",
+		"[::1.2.3.4]":                "[::1.2.3.4]",
 	}
 	for raw, want := range cases {
 		t.Run(raw, func(t *testing.T) {
