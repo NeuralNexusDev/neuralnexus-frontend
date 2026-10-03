@@ -68,6 +68,17 @@ templ AdminUsers() {
 		<p id="admin-users-empty" hidden class="text-center text-sm text-gray-500 dark:text-gray-400">
 			No users found
 		</p>
+		<div id="admin-users-more" hidden class="space-y-2 text-center">
+			<button
+				id="admin-users-more-button"
+				type="button"
+				onclick="loadMoreAdminUsers()"
+				class="border border-input hover:bg-accent hover:text-accent-foreground inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+			>
+				Load more
+			</button>
+			<p class="text-xs text-gray-500 dark:text-gray-400">Search covers the users loaded so far</p>
+		</div>
 	</div>
 	<script>
 		loadAdminUsers();

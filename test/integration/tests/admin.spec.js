@@ -99,10 +99,25 @@ test.describe('admin - dashboard', () => {
 });
 
 test.describe('admin - user list', () => {
+  const listUrl = new RegExp(`^${API.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/users\\?`);
+
   async function mockList(page, { users = USERS, roles = json(ROLES) } = {}) {
-    await page.route(`${API}/users`, (route) => route.fulfill(Array.isArray(users) ? json(users) : users));
+    const requests = [];
+    await page.route(listUrl, (route) => {
+      const url = new URL(route.request().url());
+      requests.push(url.search);
+      if (!Array.isArray(users)) {
+        return route.fulfill(typeof users === 'function' ? users(requests.length) : users);
+      }
+      const limit = Number(url.searchParams.get('limit'));
+      const offset = Number(url.searchParams.get('offset'));
+      return route.fulfill(json(users.slice(offset, offset + limit)));
+    });
     await page.route(`${API}/roles`, (route) => route.fulfill(roles));
+    return requests;
   }
+
+  const manyUsers = (count) => Array.from({ length: count }, (_, i) => ({ user_id: String(i + 1), username: `user${i + 1}`, roles: [] }));
 
   test('lists every user with a link to its editor and role names', async ({ page }) => {
     await mockList(page);
@@ -147,6 +162,57 @@ test.describe('admin - user list', () => {
     await expect(page.locator('#admin-users li')).toContainText('<img src=x onerror="window.__xss=1">');
     await expect(page.locator('#admin-users img')).toHaveCount(0);
     expect(await page.evaluate(() => window.__xss)).toBeUndefined();
+  });
+
+  test('loads a page at a time and offers more only while a page comes back full', async ({ page }) => {
+    const requests = await mockList(page, { users: manyUsers(250) });
+    await page.goto('/admin/users');
+    await expect(page.locator('#admin-users li')).toHaveCount(200);
+    await expect(page.locator('#admin-users-more')).toBeVisible();
+
+    await page.locator('#admin-users-more-button').click();
+    await expect(page.locator('#admin-users li')).toHaveCount(250);
+    await expect(page.locator('#admin-users-more')).toBeHidden();
+    expect(requests).toEqual(['?limit=200&offset=0', '?limit=200&offset=200']);
+    await expect(page.locator('#admin-users li').last()).toContainText('user250');
+  });
+
+  test('a list of exactly one full page still offers more, and an empty next page ends it', async ({ page }) => {
+    const requests = await mockList(page, { users: manyUsers(200) });
+    await page.goto('/admin/users');
+    await expect(page.locator('#admin-users li')).toHaveCount(200);
+    await expect(page.locator('#admin-users-more')).toBeVisible();
+    await page.locator('#admin-users-more-button').click();
+    await expect(page.locator('#admin-users-more')).toBeHidden();
+    await expect(page.locator('#admin-users li')).toHaveCount(200);
+    expect(requests).toHaveLength(2);
+  });
+
+  test('a short first page offers no more', async ({ page }) => {
+    await mockList(page);
+    await page.goto('/admin/users');
+    await expect(page.locator('#admin-users li')).toHaveCount(3);
+    await expect(page.locator('#admin-users-more')).toBeHidden();
+  });
+
+  test('search covers the users loaded after a Load more', async ({ page }) => {
+    await mockList(page, { users: manyUsers(250) });
+    await page.goto('/admin/users');
+    await expect(page.locator('#admin-users li')).toHaveCount(200);
+    await page.locator('#admin-users-search').fill('user250');
+    await expect(page.locator('#admin-users li')).toHaveCount(0);
+    await page.locator('#admin-users-more-button').click();
+    await expect(page.locator('#admin-users li')).toHaveCount(1);
+  });
+
+  test('a failed Load more shows the API message, keeps the list and can be retried', async ({ page }) => {
+    await mockList(page, { users: (call) => (call === 1 ? json(manyUsers(200)) : problem(500, 'Failed to list users')) });
+    await page.goto('/admin/users');
+    await expect(page.locator('#admin-users li')).toHaveCount(200);
+    await page.locator('#admin-users-more-button').click();
+    await expect(page.locator('#admin-error')).toHaveText('Failed to list users');
+    await expect(page.locator('#admin-users li')).toHaveCount(200);
+    await expect(page.locator('#admin-users-more-button')).toBeEnabled();
   });
 
   test('a refused list shows the API message', async ({ page }) => {

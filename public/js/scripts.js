@@ -874,25 +874,42 @@ function loadAdminRoles() {
     });
 }
 
+const ADMIN_USERS_PAGE_SIZE = 200;
 let adminUsers = [];
 let adminUsersRoles = null;
 
+function fetchAdminUsersPage() {
+    return adminRequest(`/users?limit=${ADMIN_USERS_PAGE_SIZE}&offset=${adminUsers.length}`).then((res) => {
+        if (!res.ok) {
+            return showAdminProblem(res, 'Failed to load users').then(() => null);
+        }
+        return res.json();
+    });
+}
+
+function addAdminUsersPage(page) {
+    if (page === null) {
+        return;
+    }
+    adminUsers = adminUsers.concat(page);
+    document.getElementById('admin-users-more').hidden = page.length < ADMIN_USERS_PAGE_SIZE;
+    renderAdminUsers();
+}
+
 function loadAdminUsers() {
-    Promise.all([adminRequest('/users'), loadAdminRoles()])
-        .then(([res, roles]) => {
-            if (!res.ok) {
-                return showAdminProblem(res, 'Failed to load users');
-            }
-            return res.json().then((users) => {
-                adminUsers = users;
-                adminUsersRoles = roles;
-                renderAdminUsers();
-            });
+    Promise.all([fetchAdminUsersPage(), loadAdminRoles()])
+        .then(([page, roles]) => {
+            adminUsersRoles = roles;
+            addAdminUsersPage(page);
         })
         .catch((error) => {
             console.error('Error:', error);
             showAdminError('Failed to load users');
         });
+}
+
+function loadMoreAdminUsers() {
+    runAdminAction(document.getElementById('admin-users-more-button'), () => fetchAdminUsersPage().then(addAdminUsersPage), 'Failed to load users');
 }
 
 function adminRoleName(roles, id) {
