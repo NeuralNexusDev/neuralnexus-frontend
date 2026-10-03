@@ -805,3 +805,277 @@ function loadMcStatusFromUrl() {
     syncMcStatusQueryOption();
     checkMcStatus();
 }
+
+function adminRequest(path, options) {
+    return fetch(`${apiBaseUrl()}/api/v1${path}`, { credentials: 'include', ...options }).then((res) => {
+        if (res.status === 401) {
+            window.location.href = '/login';
+        }
+        return res;
+    });
+}
+
+/** Cosmetic only - the admin endpoints enforce the permission. */
+function hasAdminPermission(permissions, node) {
+    return permissions.some((permission) => permission === node || permission.startsWith(`${node}:`));
+}
+
+function showAdminError(message) {
+    const error = document.getElementById('admin-error');
+    error.textContent = message;
+    error.hidden = false;
+}
+
+function showAdminProblem(res, fallback) {
+    return problemDetail(res, fallback).then(showAdminError);
+}
+
+function showAdminDashboardLink() {
+    adminRequest('/users/me/permissions')
+        .then((res) => (res.ok ? res.json() : null))
+        .then((permissions) => {
+            if (permissions && (hasAdminPermission(permissions, 'users.admin') || hasAdminPermission(permissions, 'roles.admin'))) {
+                document.getElementById('admin-dashboard-link').hidden = false;
+            }
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+        });
+}
+
+function loadAdminDashboard() {
+    adminRequest('/users/me/permissions')
+        .then((res) => {
+            if (!res.ok) {
+                return showAdminProblem(res, 'Failed to load your permissions');
+            }
+            return res.json().then((permissions) => {
+                const users = hasAdminPermission(permissions, 'users.admin');
+                document.getElementById('admin-users-link').hidden = !users;
+                document.getElementById('admin-denied').hidden = users;
+            });
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+            showAdminError('Failed to load your permissions');
+        });
+}
+
+/** Role names and descriptions by ID, or null when the caller lacks roles.admin. */
+function loadAdminRoles() {
+    return adminRequest('/roles').then((res) => {
+        if (!res.ok) {
+            return null;
+        }
+        return res.json().then((roles) => new Map(roles.map((role) => [role.id, role])));
+    });
+}
+
+let adminUsers = [];
+let adminUsersRoles = null;
+
+function loadAdminUsers() {
+    Promise.all([adminRequest('/users'), loadAdminRoles()])
+        .then(([res, roles]) => {
+            if (!res.ok) {
+                return showAdminProblem(res, 'Failed to load users');
+            }
+            return res.json().then((users) => {
+                adminUsers = users;
+                adminUsersRoles = roles;
+                renderAdminUsers();
+            });
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+            showAdminError('Failed to load users');
+        });
+}
+
+function adminRoleName(roles, id) {
+    return roles && roles.has(id) ? roles.get(id).name : id;
+}
+
+function renderAdminUsers() {
+    const search = document.getElementById('admin-users-search').value.trim().toLowerCase();
+    const matches = adminUsers.filter((user) => (user.username || '').toLowerCase().includes(search) || user.user_id.includes(search));
+    const list = document.getElementById('admin-users');
+    list.replaceChildren();
+    matches.forEach((user) => {
+        const item = document.createElement('li');
+        const link = document.createElement('a');
+        link.href = `/admin/users/${encodeURIComponent(user.user_id)}`;
+        link.className = 'block rounded-lg border border-input p-3 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+        const name = document.createElement('span');
+        name.className = 'block font-medium';
+        name.textContent = user.username || 'No username';
+        const id = document.createElement('span');
+        id.className = 'block break-all text-xs text-gray-500 dark:text-gray-400';
+        id.textContent = user.user_id;
+        link.append(name, id);
+        const roles = user.roles || [];
+        if (roles.length > 0) {
+            const chips = document.createElement('span');
+            chips.className = 'mt-2 flex flex-wrap gap-2';
+            roles.forEach((roleId) => {
+                const chip = document.createElement('span');
+                chip.className = 'rounded-full border border-input px-2.5 py-0.5 text-xs';
+                chip.textContent = adminRoleName(adminUsersRoles, roleId);
+                chips.appendChild(chip);
+            });
+            link.appendChild(chips);
+        }
+        item.appendChild(link);
+        list.appendChild(item);
+    });
+    document.getElementById('admin-users-empty').hidden = matches.length > 0;
+}
+
+let adminUserId = '';
+let adminUserRolesEditable = false;
+
+function adminUserIdFromPath() {
+    try {
+        return decodeURIComponent(window.location.pathname.slice('/admin/users/'.length));
+    } catch {
+        return '';
+    }
+}
+
+function loadAdminUser() {
+    adminUserId = adminUserIdFromPath();
+    document.getElementById('admin-user-id').textContent = adminUserId;
+    const id = encodeURIComponent(adminUserId);
+    Promise.all([adminRequest(`/users/${id}`), adminRequest(`/users/${id}/links`), adminRequest(`/users/${id}/permissions`), loadAdminRoles()])
+        .then(([userRes, linksRes, permissionsRes, roles]) => {
+            if (!userRes.ok) {
+                return showAdminProblem(userRes, 'Failed to load the user');
+            }
+            return Promise.all([
+                userRes.json(),
+                linksRes.ok ? linksRes.json() : [],
+                permissionsRes.ok ? permissionsRes.json() : [],
+            ]).then(([user, links, permissions]) => {
+                renderAdminUser(user, roles);
+                renderAdminUserLinks(links || []);
+                renderAdminUserPermissions(permissions || []);
+                document.getElementById('admin-user-form').hidden = false;
+            });
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+            showAdminError('Failed to load the user');
+        });
+}
+
+function renderAdminUser(user, roles) {
+    document.getElementById('admin-user-title').textContent = user.username || 'No username';
+    document.getElementById('admin-user-username').value = user.username || '';
+    adminUserRolesEditable = roles !== null;
+    document.getElementById('admin-user-roles-note').hidden = adminUserRolesEditable;
+    const held = new Set(user.roles || []);
+    const list = document.getElementById('admin-user-roles');
+    list.replaceChildren();
+    if (!adminUserRolesEditable) {
+        held.forEach((roleId) => {
+            const item = document.createElement('li');
+            item.className = 'rounded-md border border-input px-3 py-2 text-sm';
+            item.textContent = roleId;
+            list.appendChild(item);
+        });
+        return;
+    }
+    roles.forEach((role) => {
+        const item = document.createElement('li');
+        const label = document.createElement('label');
+        label.className = 'flex cursor-pointer items-start gap-3 rounded-md border border-input px-3 py-2 text-sm';
+        const box = document.createElement('input');
+        box.type = 'checkbox';
+        box.value = role.id;
+        box.checked = held.has(role.id);
+        box.className = 'mt-1';
+        const text = document.createElement('span');
+        const name = document.createElement('span');
+        name.className = 'block font-medium';
+        name.textContent = role.name;
+        const description = document.createElement('span');
+        description.className = 'block text-xs text-gray-500 dark:text-gray-400';
+        description.textContent = role.description;
+        text.append(name, description);
+        label.append(box, text);
+        item.appendChild(label);
+        list.appendChild(item);
+    });
+}
+
+function renderAdminUserLinks(links) {
+    const list = document.getElementById('admin-user-links');
+    list.replaceChildren();
+    links.forEach((link) => {
+        const item = document.createElement('li');
+        item.className = 'flex justify-between gap-3 rounded-md border border-input px-3 py-2';
+        const platform = document.createElement('span');
+        platform.className = 'font-medium capitalize';
+        platform.textContent = link.platform;
+        const username = document.createElement('span');
+        username.className = 'min-w-0 truncate text-gray-500 dark:text-gray-400';
+        username.textContent = link.platform_username || link.platform_id || '';
+        item.append(platform, username);
+        list.appendChild(item);
+    });
+    document.getElementById('admin-user-links-empty').hidden = links.length > 0;
+}
+
+function renderAdminUserPermissions(permissions) {
+    const list = document.getElementById('admin-user-permissions');
+    list.replaceChildren();
+    permissions.forEach((permission) => {
+        const chip = document.createElement('li');
+        chip.className = 'rounded-full border border-input px-2.5 py-0.5 text-xs';
+        chip.textContent = permission;
+        list.appendChild(chip);
+    });
+    document.getElementById('admin-user-permissions-empty').hidden = permissions.length > 0;
+}
+
+function saveAdminUser(event) {
+    event.preventDefault();
+    const body = { username: document.getElementById('admin-user-username').value.trim() };
+    if (adminUserRolesEditable) {
+        body.roles = [...document.querySelectorAll('#admin-user-roles input:checked')].map((box) => box.value);
+    }
+    const save = document.getElementById('admin-user-save');
+    const status = document.getElementById('admin-user-status');
+    document.getElementById('admin-error').hidden = true;
+    status.hidden = true;
+    save.disabled = true;
+    adminRequest(`/users/${encodeURIComponent(adminUserId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    })
+        .then((res) => {
+            if (!res.ok) {
+                return showAdminProblem(res, 'Failed to save the user');
+            }
+            return res.json().then((user) => {
+                document.getElementById('admin-user-title').textContent = user.username || 'No username';
+                status.textContent = 'Saved';
+                status.hidden = false;
+                return adminRequest(`/users/${encodeURIComponent(adminUserId)}/permissions`)
+                    .then((permissionsRes) => (permissionsRes.ok ? permissionsRes.json() : null))
+                    .then((permissions) => {
+                        if (permissions) {
+                            renderAdminUserPermissions(permissions);
+                        }
+                    });
+            });
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+            showAdminError('Failed to save the user');
+        })
+        .finally(() => {
+            save.disabled = false;
+        });
+}

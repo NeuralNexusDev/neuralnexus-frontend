@@ -1,0 +1,133 @@
+package components
+
+templ AdminError() {
+	<div id="admin-error" role="alert" hidden class="rounded-md border border-destructive bg-destructive/10 p-3 text-center text-sm text-destructive"></div>
+}
+
+templ adminCardLink(id string, href string, title string, description string) {
+	<a
+		id={ id }
+		hidden
+		href={ templ.SafeURL(href) }
+		class="block rounded-lg border border-input p-4 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+	>
+		<span class="block font-semibold">{ title }</span>
+		<span class="block text-sm text-gray-500 dark:text-gray-400">{ description }</span>
+	</a>
+}
+
+templ AdminDashboard() {
+	<div class="mx-auto max-w-md space-y-6">
+		<div class="space-y-2 text-center">
+			<h1 class="text-3xl font-bold">Admin Dashboard</h1>
+			<p class="text-balance text-gray-500 dark:text-gray-400">
+				Manage accounts, roles and permissions
+			</p>
+		</div>
+		@AdminError()
+		<div class="space-y-3">
+			@adminCardLink("admin-users-link", "/admin/users", "Users", "Browse accounts and edit their username and roles")
+			<p id="admin-denied" hidden class="text-center text-sm text-gray-500 dark:text-gray-400">
+				Your account has no admin permissions
+			</p>
+		</div>
+	</div>
+	<script>
+		loadAdminDashboard();
+	</script>
+}
+
+templ AdminDashboardPage() {
+	@WrapContents(AdminDashboard())
+}
+
+templ AdminUsers() {
+	<div class="mx-auto max-w-xl space-y-6">
+		<div class="space-y-2 text-center">
+			<h1 class="text-3xl font-bold">Users</h1>
+			<p class="text-balance text-gray-500 dark:text-gray-400">
+				Select an account to edit it
+			</p>
+		</div>
+		<a href="/admin" class="text-sm text-gray-500 underline dark:text-gray-400">Back to the admin dashboard</a>
+		@AdminError()
+		<div class="space-y-2">
+			<label class="text-sm font-medium leading-none" for="admin-users-search">Search</label>
+			<input
+				id="admin-users-search"
+				type="search"
+				autocomplete="off"
+				placeholder="Username or user ID"
+				oninput="renderAdminUsers()"
+				class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+			/>
+		</div>
+		<ul id="admin-users" class="space-y-2"></ul>
+		<p id="admin-users-empty" hidden class="text-center text-sm text-gray-500 dark:text-gray-400">
+			No users found
+		</p>
+	</div>
+	<script>
+		loadAdminUsers();
+	</script>
+}
+
+templ AdminUsersPage() {
+	@WrapContents(AdminUsers())
+}
+
+templ AdminUser() {
+	<div class="mx-auto max-w-md space-y-6">
+		<div class="space-y-2 text-center">
+			<h1 id="admin-user-title" class="text-3xl font-bold">User</h1>
+			<p id="admin-user-id" class="break-all text-sm text-gray-500 dark:text-gray-400"></p>
+		</div>
+		<a href="/admin/users" class="text-sm text-gray-500 underline dark:text-gray-400">Back to users</a>
+		@AdminError()
+		<form id="admin-user-form" class="space-y-6" hidden onsubmit="saveAdminUser(event)">
+			<div class="space-y-2">
+				<label class="text-sm font-medium leading-none" for="admin-user-username">Username</label>
+				<input
+					id="admin-user-username"
+					type="text"
+					autocomplete="off"
+					autocapitalize="off"
+					spellcheck="false"
+					class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+				/>
+			</div>
+			<fieldset class="space-y-2">
+				<legend class="text-sm font-medium leading-none">Roles</legend>
+				<ul id="admin-user-roles" class="space-y-2"></ul>
+				<p id="admin-user-roles-note" hidden class="text-sm text-gray-500 dark:text-gray-400">
+					Role names and changes need the roles.admin permission, so the roles are shown by ID and left as they are.
+				</p>
+			</fieldset>
+			<div class="space-y-2">
+				<h2 class="text-sm font-medium leading-none">Linked accounts</h2>
+				<ul id="admin-user-links" class="space-y-1 text-sm"></ul>
+				<p id="admin-user-links-empty" hidden class="text-sm text-gray-500 dark:text-gray-400">No linked accounts</p>
+			</div>
+			<div class="space-y-2">
+				<h2 class="text-sm font-medium leading-none">Effective permissions</h2>
+				<ul id="admin-user-permissions" class="flex flex-wrap gap-2"></ul>
+				<p id="admin-user-permissions-empty" hidden class="text-sm text-gray-500 dark:text-gray-400">No permissions</p>
+			</div>
+			<button
+				id="admin-user-save"
+				type="submit"
+				class="border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
+			>
+				Save
+			</button>
+			<p id="admin-user-status" role="status" hidden class="text-center text-sm text-gray-500 dark:text-gray-400"></p>
+		</form>
+	</div>
+	<script>
+		loadAdminUser();
+	</script>
+}
+
+templ AdminUserPage() {
+	@WrapContents(AdminUser())
+}
