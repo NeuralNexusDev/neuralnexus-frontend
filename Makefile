@@ -6,7 +6,7 @@ update:
 	go get -tool github.com/a-h/templ/cmd/templ@latest
 	go get -tool github.com/hookenz/gotailwind/v4@latest
 	go get -tool github.com/air-verse/air@latest
-	go get -tool github.com/axzilla/templui/cmd/templui@latest
+	go get -tool github.com/templui/templui/cmd/templui@latest
 
 templ:
 	go tool templ generate --watch --proxy="http://localhost:8090" --open-browser=false
