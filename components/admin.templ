@@ -1,0 +1,367 @@
+package components
+
+templ AdminError() {
+	<div id="admin-error" role="alert" hidden class="rounded-md border border-destructive bg-destructive/10 p-3 text-center text-sm text-destructive"></div>
+}
+
+templ adminCardLink(id string, href string, title string, description string) {
+	<a
+		id={ id }
+		hidden
+		href={ templ.SafeURL(href) }
+		class="block rounded-lg border border-input p-4 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+	>
+		<span class="block font-semibold">{ title }</span>
+		<span class="block text-sm text-gray-500 dark:text-gray-400">{ description }</span>
+	</a>
+}
+
+templ AdminDashboard() {
+	<div class="mx-auto max-w-md space-y-6">
+		<div class="space-y-2 text-center">
+			<h1 class="text-3xl font-bold">Admin Dashboard</h1>
+			<p class="text-balance text-gray-500 dark:text-gray-400">
+				Manage accounts, roles and permissions
+			</p>
+		</div>
+		@AdminError()
+		<div class="space-y-3">
+			@adminCardLink("admin-users-link", "/admin/users", "Users", "Browse accounts and edit their username and roles")
+			@adminCardLink("admin-roles-link", "/admin/roles", "Roles", "Create roles and choose which permissions they grant")
+			@adminCardLink("admin-permissions-link", "/admin/permissions", "Permissions", "Create and delete the permissions roles can grant")
+			<p id="admin-denied" hidden class="text-center text-sm text-gray-500 dark:text-gray-400">
+				Your account has no admin permissions
+			</p>
+		</div>
+	</div>
+	<script>
+		loadAdminDashboard();
+	</script>
+}
+
+templ AdminDashboardPage() {
+	@WrapContents(AdminDashboard())
+}
+
+templ AdminUsers() {
+	<div class="mx-auto max-w-xl space-y-6">
+		<div class="space-y-2 text-center">
+			<h1 class="text-3xl font-bold">Users</h1>
+			<p class="text-balance text-gray-500 dark:text-gray-400">
+				Select an account to edit it
+			</p>
+		</div>
+		<a href="/admin" class="text-sm text-gray-500 underline dark:text-gray-400">Back to the admin dashboard</a>
+		@AdminError()
+		<div class="space-y-2">
+			<label class="text-sm font-medium leading-none" for="admin-users-search">Search</label>
+			<input
+				id="admin-users-search"
+				type="search"
+				autocomplete="off"
+				placeholder="Username or user ID"
+				oninput="renderAdminUsers()"
+				class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+			/>
+		</div>
+		<ul id="admin-users" class="space-y-2"></ul>
+		<p id="admin-users-empty" hidden class="text-center text-sm text-gray-500 dark:text-gray-400">
+			No users found
+		</p>
+		<div id="admin-users-more" hidden class="space-y-2 text-center">
+			<button
+				id="admin-users-more-button"
+				type="button"
+				onclick="loadMoreAdminUsers()"
+				class="border border-input hover:bg-accent hover:text-accent-foreground inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+			>
+				Load more
+			</button>
+			<p class="text-xs text-gray-500 dark:text-gray-400">Search covers the users loaded so far</p>
+		</div>
+	</div>
+	<script>
+		loadAdminUsers();
+	</script>
+}
+
+templ AdminUsersPage() {
+	@WrapContents(AdminUsers())
+}
+
+templ AdminUser() {
+	<div class="mx-auto max-w-md space-y-6">
+		<div class="space-y-2 text-center">
+			<h1 id="admin-user-title" class="text-3xl font-bold">User</h1>
+			<p id="admin-user-id" class="break-all text-sm text-gray-500 dark:text-gray-400"></p>
+		</div>
+		<a href="/admin/users" class="text-sm text-gray-500 underline dark:text-gray-400">Back to users</a>
+		@AdminError()
+		<form id="admin-user-form" class="space-y-6" hidden onsubmit="saveAdminUser(event)">
+			<div class="space-y-2">
+				<label class="text-sm font-medium leading-none" for="admin-user-username">Username</label>
+				<input
+					id="admin-user-username"
+					type="text"
+					autocomplete="off"
+					autocapitalize="off"
+					spellcheck="false"
+					class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+				/>
+			</div>
+			<fieldset class="space-y-2">
+				<legend class="text-sm font-medium leading-none">Roles</legend>
+				<ul id="admin-user-roles" class="space-y-2"></ul>
+				<p id="admin-user-roles-note" hidden class="text-sm text-gray-500 dark:text-gray-400">
+					Role names and changes need the roles.admin permission, so the roles are shown by ID and left as they are.
+				</p>
+			</fieldset>
+			<div class="space-y-2">
+				<h2 class="text-sm font-medium leading-none">Linked accounts</h2>
+				<ul id="admin-user-links" class="space-y-1 text-sm"></ul>
+				<p id="admin-user-links-empty" hidden class="text-sm text-gray-500 dark:text-gray-400">No linked accounts</p>
+			</div>
+			<div class="space-y-2">
+				<h2 class="text-sm font-medium leading-none">Effective permissions</h2>
+				<ul id="admin-user-permissions" class="flex flex-wrap gap-2"></ul>
+				<p id="admin-user-permissions-empty" hidden class="text-sm text-gray-500 dark:text-gray-400">No permissions</p>
+			</div>
+			<button
+				id="admin-user-save"
+				type="submit"
+				class="border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
+			>
+				Save
+			</button>
+			<p id="admin-user-status" role="status" hidden class="text-center text-sm text-gray-500 dark:text-gray-400"></p>
+		</form>
+	</div>
+	<script>
+		loadAdminUser();
+	</script>
+}
+
+templ AdminUserPage() {
+	@WrapContents(AdminUser())
+}
+
+templ AdminRoles() {
+	<div class="mx-auto max-w-xl space-y-6">
+		<div class="space-y-2 text-center">
+			<h1 class="text-3xl font-bold">Roles</h1>
+			<p class="text-balance text-gray-500 dark:text-gray-400">
+				Select a role to edit the permissions it grants
+			</p>
+		</div>
+		<div class="flex justify-between text-sm text-gray-500 dark:text-gray-400">
+			<a href="/admin" class="underline">Back to the admin dashboard</a>
+			<a href="/admin/permissions" class="underline">Permissions</a>
+		</div>
+		@AdminError()
+		<ul id="admin-roles" class="space-y-2"></ul>
+		<p id="admin-roles-empty" hidden class="text-center text-sm text-gray-500 dark:text-gray-400">No roles</p>
+		<form id="admin-role-create-form" class="space-y-4 rounded-lg border border-input p-4" onsubmit="createAdminRole(event)">
+			<h2 class="text-lg font-semibold">New role</h2>
+			<div class="space-y-2">
+				<label class="text-sm font-medium leading-none" for="admin-role-create-name">Name</label>
+				<input
+					id="admin-role-create-name"
+					type="text"
+					required
+					autocomplete="off"
+					autocapitalize="off"
+					spellcheck="false"
+					placeholder="moderator"
+					class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+				/>
+				<p class="text-xs text-gray-500 dark:text-gray-400">Lower-case letters, digits and underscores, starting with a letter</p>
+			</div>
+			<div class="space-y-2">
+				<label class="text-sm font-medium leading-none" for="admin-role-create-description">Description</label>
+				<input
+					id="admin-role-create-description"
+					type="text"
+					autocomplete="off"
+					class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+				/>
+			</div>
+			<button
+				id="admin-role-create-submit"
+				type="submit"
+				class="border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
+			>
+				Create role
+			</button>
+		</form>
+	</div>
+	<script>
+		loadAdminRolesPage();
+	</script>
+}
+
+templ AdminRolesPage() {
+	@WrapContents(AdminRoles())
+}
+
+templ AdminRole() {
+	<div class="mx-auto max-w-md space-y-6">
+		<div class="space-y-2 text-center">
+			<h1 id="admin-role-title" class="text-3xl font-bold">Role</h1>
+			<p id="admin-role-id" class="break-all text-sm text-gray-500 dark:text-gray-400"></p>
+		</div>
+		<a href="/admin/roles" class="text-sm text-gray-500 underline dark:text-gray-400">Back to roles</a>
+		@AdminError()
+		<div id="admin-role-content" class="space-y-6" hidden>
+			<form class="space-y-4" onsubmit="saveAdminRole(event)">
+				<div class="space-y-2">
+					<label class="text-sm font-medium leading-none" for="admin-role-name">Name</label>
+					<input
+						id="admin-role-name"
+						type="text"
+						required
+						autocomplete="off"
+						autocapitalize="off"
+						spellcheck="false"
+						class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+					/>
+				</div>
+				<div class="space-y-2">
+					<label class="text-sm font-medium leading-none" for="admin-role-description">Description</label>
+					<input
+						id="admin-role-description"
+						type="text"
+						autocomplete="off"
+						class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+					/>
+				</div>
+				<button
+					id="admin-role-save"
+					type="submit"
+					class="border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
+				>
+					Save
+				</button>
+				<p id="admin-role-status" role="status" hidden class="text-center text-sm text-gray-500 dark:text-gray-400"></p>
+			</form>
+			<div class="space-y-2">
+				<h2 class="text-lg font-semibold">Granted permissions</h2>
+				<ul id="admin-role-permissions" class="space-y-2"></ul>
+				<p id="admin-role-permissions-empty" hidden class="text-sm text-gray-500 dark:text-gray-400">This role grants no permissions</p>
+			</div>
+			<form id="admin-role-grant-form" class="space-y-3 rounded-lg border border-input p-4" onsubmit="grantAdminRolePermission(event)">
+				<h2 class="text-lg font-semibold">Grant a permission</h2>
+				<select
+					id="admin-role-grant-permission"
+					aria-label="Permission"
+					onchange="renderAdminGrantValue()"
+					class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+				></select>
+				<div id="admin-role-grant-value"></div>
+				<button
+					id="admin-role-grant-submit"
+					type="submit"
+					class="border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
+				>
+					Grant
+				</button>
+			</form>
+			<p id="admin-role-grant-empty" hidden class="text-sm text-gray-500 dark:text-gray-400">Every permission is already granted</p>
+			<button
+				id="admin-role-delete"
+				type="button"
+				onclick="deleteAdminRole()"
+				class="border border-red-600 text-red-600 hover:bg-red-600/10 dark:border-red-400 dark:text-red-400 dark:hover:bg-red-400/10 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-10 px-4 py-2 w-full"
+			>
+				Delete role
+			</button>
+		</div>
+	</div>
+	<script>
+		loadAdminRole();
+	</script>
+}
+
+templ AdminRolePage() {
+	@WrapContents(AdminRole())
+}
+
+templ AdminPermissions() {
+	<div class="mx-auto max-w-xl space-y-6">
+		<div class="space-y-2 text-center">
+			<h1 class="text-3xl font-bold">Permissions</h1>
+			<p class="text-balance text-gray-500 dark:text-gray-400">
+				The permissions roles can grant
+			</p>
+		</div>
+		<div class="flex justify-between text-sm text-gray-500 dark:text-gray-400">
+			<a href="/admin" class="underline">Back to the admin dashboard</a>
+			<a href="/admin/roles" class="underline">Roles</a>
+		</div>
+		@AdminError()
+		<ul id="admin-permissions" class="space-y-2"></ul>
+		<p id="admin-permissions-empty" hidden class="text-center text-sm text-gray-500 dark:text-gray-400">No permissions</p>
+		<form id="admin-permission-create-form" class="space-y-4 rounded-lg border border-input p-4" onsubmit="createAdminPermission(event)">
+			<h2 class="text-lg font-semibold">New permission</h2>
+			<div class="space-y-2">
+				<label class="text-sm font-medium leading-none" for="admin-permission-create-node">Node</label>
+				<input
+					id="admin-permission-create-node"
+					type="text"
+					required
+					autocomplete="off"
+					autocapitalize="off"
+					spellcheck="false"
+					placeholder="petpictures.admin"
+					class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+				/>
+				<p class="text-xs text-gray-500 dark:text-gray-400">Lower-case words of letters, digits and underscores joined by dots</p>
+			</div>
+			<div class="space-y-2">
+				<label class="text-sm font-medium leading-none" for="admin-permission-create-description">Description</label>
+				<input
+					id="admin-permission-create-description"
+					type="text"
+					autocomplete="off"
+					class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+				/>
+			</div>
+			<div class="space-y-2">
+				<label class="text-sm font-medium leading-none" for="admin-permission-create-type">Value</label>
+				<select
+					id="admin-permission-create-type"
+					onchange="syncAdminPermissionMerge()"
+					class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+				>
+					<option value="">None (granted as is)</option>
+					<option value="int">Whole number</option>
+					<option value="string">Text</option>
+					<option value="string_list">List of text</option>
+				</select>
+			</div>
+			<div id="admin-permission-create-merge-field" class="space-y-2" hidden>
+				<label class="text-sm font-medium leading-none" for="admin-permission-create-merge">When an account holds it through several roles</label>
+				<select
+					id="admin-permission-create-merge"
+					class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+				>
+					<option value="max">Use the highest value</option>
+					<option value="min">Use the lowest value</option>
+				</select>
+			</div>
+			<button
+				id="admin-permission-create-submit"
+				type="submit"
+				class="border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
+			>
+				Create permission
+			</button>
+		</form>
+	</div>
+	<script>
+		loadAdminPermissions();
+	</script>
+}
+
+templ AdminPermissionsPage() {
+	@WrapContents(AdminPermissions())
+}
