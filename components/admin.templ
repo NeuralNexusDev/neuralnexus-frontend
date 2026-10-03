@@ -1,6 +1,6 @@
 package components
 
-templ AdminError() {
+templ adminError() {
 	<div id="admin-error" role="alert" hidden class="rounded-md border border-destructive bg-destructive/10 p-3 text-center text-sm text-destructive"></div>
 }
 
@@ -16,7 +16,7 @@ templ adminCardLink(id string, href string, title string, description string) {
 	</a>
 }
 
-templ AdminDashboard() {
+templ adminDashboard() {
 	<div class="mx-auto max-w-md space-y-6">
 		<div class="space-y-2 text-center">
 			<h1 class="text-3xl font-bold">Admin Dashboard</h1>
@@ -24,7 +24,7 @@ templ AdminDashboard() {
 				Manage accounts, roles and permissions
 			</p>
 		</div>
-		@AdminError()
+		@adminError()
 		<div class="space-y-3">
 			@adminCardLink("admin-users-link", "/admin/users", "Users", "Browse accounts and edit their username and roles")
 			@adminCardLink("admin-roles-link", "/admin/roles", "Roles", "Create roles and choose which permissions they grant")
@@ -39,11 +39,12 @@ templ AdminDashboard() {
 	</script>
 }
 
+// AdminDashboardPage serves the admin dashboard that links to the user, role and permission pages.
 templ AdminDashboardPage() {
-	@WrapContents(AdminDashboard())
+	@WrapContents(adminDashboard())
 }
 
-templ AdminUsers() {
+templ adminUsers() {
 	<div class="mx-auto max-w-xl space-y-6">
 		<div class="space-y-2 text-center">
 			<h1 class="text-3xl font-bold">Users</h1>
@@ -52,8 +53,8 @@ templ AdminUsers() {
 			</p>
 		</div>
 		<a href="/admin" class="text-sm text-gray-500 underline dark:text-gray-400">Back to the admin dashboard</a>
-		@AdminError()
-		<div class="space-y-2">
+		@adminError()
+		<div id="admin-users-tools" hidden class="space-y-2">
 			<label class="text-sm font-medium leading-none" for="admin-users-search">Search</label>
 			<input
 				id="admin-users-search"
@@ -85,18 +86,19 @@ templ AdminUsers() {
 	</script>
 }
 
+// AdminUsersPage serves the searchable list of user accounts.
 templ AdminUsersPage() {
-	@WrapContents(AdminUsers())
+	@WrapContents(adminUsers())
 }
 
-templ AdminUser() {
+templ adminUser() {
 	<div class="mx-auto max-w-md space-y-6">
 		<div class="space-y-2 text-center">
 			<h1 id="admin-user-title" class="text-3xl font-bold">User</h1>
 			<p id="admin-user-id" class="break-all text-sm text-gray-500 dark:text-gray-400"></p>
 		</div>
 		<a href="/admin/users" class="text-sm text-gray-500 underline dark:text-gray-400">Back to users</a>
-		@AdminError()
+		@adminError()
 		<form id="admin-user-form" class="space-y-6" hidden onsubmit="saveAdminUser(event)">
 			<div class="space-y-2">
 				<label class="text-sm font-medium leading-none" for="admin-user-username">Username</label>
@@ -118,11 +120,13 @@ templ AdminUser() {
 			</fieldset>
 			<div class="space-y-2">
 				<h2 class="text-sm font-medium leading-none">Linked accounts</h2>
+				<p id="admin-user-links-error" hidden class="text-sm text-red-600 dark:text-red-400"></p>
 				<ul id="admin-user-links" class="space-y-1 text-sm"></ul>
 				<p id="admin-user-links-empty" hidden class="text-sm text-gray-500 dark:text-gray-400">No linked accounts</p>
 			</div>
 			<div class="space-y-2">
 				<h2 class="text-sm font-medium leading-none">Effective permissions</h2>
+				<p id="admin-user-permissions-error" hidden class="text-sm text-red-600 dark:text-red-400"></p>
 				<ul id="admin-user-permissions" class="flex flex-wrap gap-2"></ul>
 				<p id="admin-user-permissions-empty" hidden class="text-sm text-gray-500 dark:text-gray-400">No permissions</p>
 			</div>
@@ -133,7 +137,7 @@ templ AdminUser() {
 			>
 				Save
 			</button>
-			<p id="admin-user-status" role="status" hidden class="text-center text-sm text-gray-500 dark:text-gray-400"></p>
+			<p id="admin-user-status" role="status" class="text-center text-sm text-gray-500 dark:text-gray-400"></p>
 		</form>
 	</div>
 	<script>
@@ -141,11 +145,12 @@ templ AdminUser() {
 	</script>
 }
 
+// AdminUserPage serves the editor for one user account.
 templ AdminUserPage() {
-	@WrapContents(AdminUser())
+	@WrapContents(adminUser())
 }
 
-templ AdminRoles() {
+templ adminRoles() {
 	<div class="mx-auto max-w-xl space-y-6">
 		<div class="space-y-2 text-center">
 			<h1 class="text-3xl font-bold">Roles</h1>
@@ -157,10 +162,10 @@ templ AdminRoles() {
 			<a href="/admin" class="underline">Back to the admin dashboard</a>
 			<a href="/admin/permissions" class="underline">Permissions</a>
 		</div>
-		@AdminError()
+		@adminError()
 		<ul id="admin-roles" class="space-y-2"></ul>
 		<p id="admin-roles-empty" hidden class="text-center text-sm text-gray-500 dark:text-gray-400">No roles</p>
-		<form id="admin-role-create-form" class="space-y-4 rounded-lg border border-input p-4" onsubmit="createAdminRole(event)">
+		<form id="admin-role-create-form" hidden class="space-y-4 rounded-lg border border-input p-4" onsubmit="createAdminRole(event)">
 			<h2 class="text-lg font-semibold">New role</h2>
 			<div class="space-y-2">
 				<label class="text-sm font-medium leading-none" for="admin-role-create-name">Name</label>
@@ -199,18 +204,19 @@ templ AdminRoles() {
 	</script>
 }
 
+// AdminRolesPage serves the list of roles and the form that creates one.
 templ AdminRolesPage() {
-	@WrapContents(AdminRoles())
+	@WrapContents(adminRoles())
 }
 
-templ AdminRole() {
+templ adminRole() {
 	<div class="mx-auto max-w-md space-y-6">
 		<div class="space-y-2 text-center">
 			<h1 id="admin-role-title" class="text-3xl font-bold">Role</h1>
 			<p id="admin-role-id" class="break-all text-sm text-gray-500 dark:text-gray-400"></p>
 		</div>
 		<a href="/admin/roles" class="text-sm text-gray-500 underline dark:text-gray-400">Back to roles</a>
-		@AdminError()
+		@adminError()
 		<div id="admin-role-content" class="space-y-6" hidden>
 			<form class="space-y-4" onsubmit="saveAdminRole(event)">
 				<div class="space-y-2">
@@ -241,10 +247,10 @@ templ AdminRole() {
 				>
 					Save
 				</button>
-				<p id="admin-role-status" role="status" hidden class="text-center text-sm text-gray-500 dark:text-gray-400"></p>
+				<p id="admin-role-status" role="status" class="text-center text-sm text-gray-500 dark:text-gray-400"></p>
 			</form>
 			<div class="space-y-2">
-				<h2 class="text-lg font-semibold">Granted permissions</h2>
+				<h2 id="admin-role-permissions-title" tabindex="-1" class="text-lg font-semibold">Granted permissions</h2>
 				<ul id="admin-role-permissions" class="space-y-2"></ul>
 				<p id="admin-role-permissions-empty" hidden class="text-sm text-gray-500 dark:text-gray-400">This role grants no permissions</p>
 			</div>
@@ -281,11 +287,12 @@ templ AdminRole() {
 	</script>
 }
 
+// AdminRolePage serves the editor for one role and the permissions it grants.
 templ AdminRolePage() {
-	@WrapContents(AdminRole())
+	@WrapContents(adminRole())
 }
 
-templ AdminPermissions() {
+templ adminPermissions() {
 	<div class="mx-auto max-w-xl space-y-6">
 		<div class="space-y-2 text-center">
 			<h1 class="text-3xl font-bold">Permissions</h1>
@@ -297,10 +304,11 @@ templ AdminPermissions() {
 			<a href="/admin" class="underline">Back to the admin dashboard</a>
 			<a href="/admin/roles" class="underline">Roles</a>
 		</div>
-		@AdminError()
+		@adminError()
+		<h2 id="admin-permissions-title" tabindex="-1" class="sr-only">Permission list</h2>
 		<ul id="admin-permissions" class="space-y-2"></ul>
 		<p id="admin-permissions-empty" hidden class="text-center text-sm text-gray-500 dark:text-gray-400">No permissions</p>
-		<form id="admin-permission-create-form" class="space-y-4 rounded-lg border border-input p-4" onsubmit="createAdminPermission(event)">
+		<form id="admin-permission-create-form" hidden class="space-y-4 rounded-lg border border-input p-4" onsubmit="createAdminPermission(event)">
 			<h2 class="text-lg font-semibold">New permission</h2>
 			<div class="space-y-2">
 				<label class="text-sm font-medium leading-none" for="admin-permission-create-node">Node</label>
@@ -362,6 +370,7 @@ templ AdminPermissions() {
 	</script>
 }
 
+// AdminPermissionsPage serves the list of permissions and the form that creates one.
 templ AdminPermissionsPage() {
-	@WrapContents(AdminPermissions())
+	@WrapContents(adminPermissions())
 }

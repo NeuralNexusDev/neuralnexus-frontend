@@ -806,6 +806,15 @@ function loadMcStatusFromUrl() {
     checkMcStatus();
 }
 
+/** An API refusal whose message is safe to show as it is. */
+class AdminProblem extends Error {}
+
+const ADMIN_INPUT_CLASS = 'text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+const ADMIN_BUTTON_CLASS = 'border border-input hover:bg-accent hover:text-accent-foreground inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50';
+const ADMIN_CHIP_CLASS = 'rounded-full border border-input px-2.5 py-0.5 text-xs';
+const ADMIN_CARD_LINK_CLASS = 'block rounded-lg border border-input p-3 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+const ADMIN_USERS_PAGE_SIZE = 200;
+
 function adminRequest(path, options) {
     return fetch(`${apiBaseUrl()}/api/v1${path}`, { credentials: 'include', ...options }).then((res) => {
         if (res.status === 401) {
@@ -815,9 +824,45 @@ function adminRequest(path, options) {
     });
 }
 
-/** Cosmetic only - the admin endpoints enforce the permission. */
-function hasAdminPermission(permissions, node) {
-    return permissions.some((permission) => permission === node || permission.startsWith(`${node}:`));
+function adminCheck(res, fallback) {
+    if (res.ok) {
+        return Promise.resolve(res);
+    }
+    return problemDetail(res, fallback).then((detail) => {
+        throw new AdminProblem(detail);
+    });
+}
+
+function adminGet(path, fallback) {
+    return adminRequest(path)
+        .then((res) => adminCheck(res, fallback))
+        .then((res) => res.json());
+}
+
+/** Sends a JSON body when there is one, and resolves with the response once it is ok. */
+function adminSend(method, path, body, fallback) {
+    const options = body === undefined ? { method } : { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+    return adminRequest(path, options).then((res) => adminCheck(res, fallback));
+}
+
+function adminErrorMessage(error, fallback) {
+    if (error instanceof AdminProblem) {
+        return error.message;
+    }
+    console.error('Error:', error);
+    return fallback;
+}
+
+function adminFailed(fallback) {
+    return (error) => showAdminError(adminErrorMessage(error, fallback));
+}
+
+/** Resolves with the data or the message to show beside the section that needed it. */
+function adminGetSection(path, fallback) {
+    return adminGet(path, fallback).then(
+        (data) => ({ data }),
+        (error) => ({ error: adminErrorMessage(error, fallback) })
+    );
 }
 
 function showAdminError(message) {
@@ -826,15 +871,90 @@ function showAdminError(message) {
     error.hidden = false;
 }
 
-function showAdminProblem(res, fallback) {
-    return problemDetail(res, fallback).then(showAdminError);
+function hideAdminError() {
+    document.getElementById('admin-error').hidden = true;
+}
+
+function runAdminAction(button, action, fallback) {
+    hideAdminError();
+    button.disabled = true;
+    return Promise.resolve()
+        .then(action)
+        .catch(adminFailed(fallback))
+        .finally(() => {
+            button.disabled = false;
+            if (document.activeElement === document.body && button.isConnected) {
+                button.focus();
+            }
+        });
+}
+
+/** Cosmetic only - the admin endpoints enforce the permission. */
+function hasAdminPermission(permissions, node) {
+    return permissions.some((permission) => permission === node || permission.startsWith(`${node}:`));
+}
+
+function adminIdFromPath(prefix) {
+    try {
+        return decodeURIComponent(window.location.pathname.slice(prefix.length));
+    } catch {
+        return '';
+    }
+}
+
+function adminTextBlock(name, description) {
+    const block = document.createElement('span');
+    block.className = 'min-w-0';
+    const title = document.createElement('span');
+    title.className = 'block break-all font-medium';
+    title.textContent = name;
+    const detail = document.createElement('span');
+    detail.className = 'block break-all text-xs text-gray-500 dark:text-gray-400';
+    detail.textContent = description;
+    block.append(title, detail);
+    return block;
+}
+
+function adminChip(text, tag = 'span') {
+    const chip = document.createElement(tag);
+    chip.className = ADMIN_CHIP_CLASS;
+    chip.textContent = text;
+    return chip;
+}
+
+function adminChipRow(texts) {
+    const row = document.createElement('span');
+    row.className = 'mt-2 flex flex-wrap gap-2';
+    texts.forEach((text) => row.appendChild(adminChip(text)));
+    return row;
+}
+
+function adminCardLink(href, name, description, chips) {
+    const link = document.createElement('a');
+    link.href = href;
+    link.className = ADMIN_CARD_LINK_CLASS;
+    link.append(adminTextBlock(name, description));
+    if (chips.length > 0) {
+        link.appendChild(adminChipRow(chips));
+    }
+    const item = document.createElement('li');
+    item.appendChild(link);
+    return item;
+}
+
+function adminButton(label, onclick) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = ADMIN_BUTTON_CLASS;
+    button.textContent = label;
+    button.onclick = () => onclick(button);
+    return button;
 }
 
 function showAdminDashboardLink() {
-    adminRequest('/users/me/permissions')
-        .then((res) => (res.ok ? res.json() : null))
+    adminGet('/users/me/permissions', 'Failed to load your permissions')
         .then((permissions) => {
-            if (permissions && (hasAdminPermission(permissions, 'users.admin') || hasAdminPermission(permissions, 'roles.admin'))) {
+            if (hasAdminPermission(permissions, 'users.admin') || hasAdminPermission(permissions, 'roles.admin')) {
                 document.getElementById('admin-dashboard-link').hidden = false;
             }
         })
@@ -844,53 +964,38 @@ function showAdminDashboardLink() {
 }
 
 function loadAdminDashboard() {
-    adminRequest('/users/me/permissions')
-        .then((res) => {
-            if (!res.ok) {
-                return showAdminProblem(res, 'Failed to load your permissions');
-            }
-            return res.json().then((permissions) => {
-                const users = hasAdminPermission(permissions, 'users.admin');
-                const roles = hasAdminPermission(permissions, 'roles.admin');
-                document.getElementById('admin-users-link').hidden = !users;
-                document.getElementById('admin-roles-link').hidden = !roles;
-                document.getElementById('admin-permissions-link').hidden = !roles;
-                document.getElementById('admin-denied').hidden = users || roles;
-            });
+    adminGet('/users/me/permissions', 'Failed to load your permissions')
+        .then((permissions) => {
+            const users = hasAdminPermission(permissions, 'users.admin');
+            const roles = hasAdminPermission(permissions, 'roles.admin');
+            document.getElementById('admin-users-link').hidden = !users;
+            document.getElementById('admin-roles-link').hidden = !roles;
+            document.getElementById('admin-permissions-link').hidden = !roles;
+            document.getElementById('admin-denied').hidden = users || roles;
         })
-        .catch((error) => {
-            console.error('Error:', error);
-            showAdminError('Failed to load your permissions');
-        });
+        .catch(adminFailed('Failed to load your permissions'));
 }
 
 /** Role names and descriptions by ID, or null when the caller lacks roles.admin. */
 function loadAdminRoles() {
     return adminRequest('/roles').then((res) => {
-        if (!res.ok) {
+        if (res.status === 403) {
             return null;
         }
-        return res.json().then((roles) => new Map(roles.map((role) => [role.id, role])));
+        return adminCheck(res, 'Failed to load roles')
+            .then((checked) => checked.json())
+            .then((roles) => new Map(roles.map((role) => [role.id, role])));
     });
 }
 
-const ADMIN_USERS_PAGE_SIZE = 200;
 let adminUsers = [];
 let adminUsersRoles = null;
 
 function fetchAdminUsersPage() {
-    return adminRequest(`/users?limit=${ADMIN_USERS_PAGE_SIZE}&offset=${adminUsers.length}`).then((res) => {
-        if (!res.ok) {
-            return showAdminProblem(res, 'Failed to load users').then(() => null);
-        }
-        return res.json();
-    });
+    return adminGet(`/users?limit=${ADMIN_USERS_PAGE_SIZE}&offset=${adminUsers.length}`, 'Failed to load users');
 }
 
 function addAdminUsersPage(page) {
-    if (page === null) {
-        return;
-    }
     adminUsers = adminUsers.concat(page);
     document.getElementById('admin-users-more').hidden = page.length < ADMIN_USERS_PAGE_SIZE;
     renderAdminUsers();
@@ -900,12 +1005,10 @@ function loadAdminUsers() {
     Promise.all([fetchAdminUsersPage(), loadAdminRoles()])
         .then(([page, roles]) => {
             adminUsersRoles = roles;
+            document.getElementById('admin-users-tools').hidden = false;
             addAdminUsersPage(page);
         })
-        .catch((error) => {
-            console.error('Error:', error);
-            showAdminError('Failed to load users');
-        });
+        .catch(adminFailed('Failed to load users'));
 }
 
 function loadMoreAdminUsers() {
@@ -922,82 +1025,46 @@ function renderAdminUsers() {
     const list = document.getElementById('admin-users');
     list.replaceChildren();
     matches.forEach((user) => {
-        const item = document.createElement('li');
-        const link = document.createElement('a');
-        link.href = `/admin/users/${encodeURIComponent(user.user_id)}`;
-        link.className = 'block rounded-lg border border-input p-3 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
-        const name = document.createElement('span');
-        name.className = 'block font-medium';
-        name.textContent = user.username || 'No username';
-        const id = document.createElement('span');
-        id.className = 'block break-all text-xs text-gray-500 dark:text-gray-400';
-        id.textContent = user.user_id;
-        link.append(name, id);
-        const roles = user.roles || [];
-        if (roles.length > 0) {
-            const chips = document.createElement('span');
-            chips.className = 'mt-2 flex flex-wrap gap-2';
-            roles.forEach((roleId) => {
-                const chip = document.createElement('span');
-                chip.className = 'rounded-full border border-input px-2.5 py-0.5 text-xs';
-                chip.textContent = adminRoleName(adminUsersRoles, roleId);
-                chips.appendChild(chip);
-            });
-            link.appendChild(chips);
-        }
-        item.appendChild(link);
-        list.appendChild(item);
+        const roles = (user.roles || []).map((roleId) => adminRoleName(adminUsersRoles, roleId));
+        list.appendChild(adminCardLink(`/admin/users/${encodeURIComponent(user.user_id)}`, user.username || 'No username', user.user_id, roles));
     });
     document.getElementById('admin-users-empty').hidden = matches.length > 0;
 }
 
 let adminUserId = '';
-let adminUserRolesEditable = false;
-
-function adminUserIdFromPath() {
-    try {
-        return decodeURIComponent(window.location.pathname.slice('/admin/users/'.length));
-    } catch {
-        return '';
-    }
-}
+let adminUser = { username: '', roles: [] };
+let adminUserRoles = null;
 
 function loadAdminUser() {
-    adminUserId = adminUserIdFromPath();
-    document.getElementById('admin-user-id').textContent = adminUserId;
+    adminUserId = adminIdFromPath('/admin/users/');
     const id = encodeURIComponent(adminUserId);
-    Promise.all([adminRequest(`/users/${id}`), adminRequest(`/users/${id}/links`), adminRequest(`/users/${id}/permissions`), loadAdminRoles()])
-        .then(([userRes, linksRes, permissionsRes, roles]) => {
-            if (!userRes.ok) {
-                return showAdminProblem(userRes, 'Failed to load the user');
-            }
-            return Promise.all([
-                userRes.json(),
-                linksRes.ok ? linksRes.json() : [],
-                permissionsRes.ok ? permissionsRes.json() : [],
-            ]).then(([user, links, permissions]) => {
-                renderAdminUser(user, roles);
-                renderAdminUserLinks(links || []);
-                renderAdminUserPermissions(permissions || []);
-                document.getElementById('admin-user-form').hidden = false;
-            });
+    Promise.all([
+        adminGet(`/users/${id}`, 'Failed to load the user'),
+        adminGetSection(`/users/${id}/links`, 'Failed to load the linked accounts'),
+        adminGetSection(`/users/${id}/permissions`, 'Failed to load the permissions'),
+        loadAdminRoles(),
+    ])
+        .then(([user, links, permissions, roles]) => {
+            adminUserRoles = roles;
+            renderAdminUser(user);
+            renderAdminUserLinks(links);
+            renderAdminUserPermissions(permissions);
+            document.getElementById('admin-user-form').hidden = false;
         })
-        .catch((error) => {
-            console.error('Error:', error);
-            showAdminError('Failed to load the user');
-        });
+        .catch(adminFailed('Failed to load the user'));
 }
 
-function renderAdminUser(user, roles) {
-    document.getElementById('admin-user-title').textContent = user.username || 'No username';
-    document.getElementById('admin-user-username').value = user.username || '';
-    adminUserRolesEditable = roles !== null;
-    document.getElementById('admin-user-roles-note').hidden = adminUserRolesEditable;
-    const held = new Set(user.roles || []);
+function renderAdminUser(user) {
+    adminUser = { username: user.username || '', roles: user.roles || [] };
+    document.getElementById('admin-user-title').textContent = adminUser.username || 'No username';
+    document.getElementById('admin-user-id').textContent = user.user_id;
+    document.getElementById('admin-user-username').value = adminUser.username;
+    document.getElementById('admin-user-roles-note').hidden = adminUserRoles !== null;
+    const held = new Set(adminUser.roles);
     const list = document.getElementById('admin-user-roles');
     list.replaceChildren();
-    if (!adminUserRolesEditable) {
-        held.forEach((roleId) => {
+    if (adminUserRoles === null) {
+        adminUser.roles.forEach((roleId) => {
             const item = document.createElement('li');
             item.className = 'rounded-md border border-input px-3 py-2 text-sm';
             item.textContent = roleId;
@@ -1005,121 +1072,96 @@ function renderAdminUser(user, roles) {
         });
         return;
     }
-    roles.forEach((role) => {
-        const item = document.createElement('li');
-        const label = document.createElement('label');
-        label.className = 'flex cursor-pointer items-start gap-3 rounded-md border border-input px-3 py-2 text-sm';
+    adminUserRoles.forEach((role) => {
         const box = document.createElement('input');
         box.type = 'checkbox';
         box.value = role.id;
         box.checked = held.has(role.id);
         box.className = 'mt-1';
-        const text = document.createElement('span');
-        const name = document.createElement('span');
-        name.className = 'block font-medium';
-        name.textContent = role.name;
-        const description = document.createElement('span');
-        description.className = 'block text-xs text-gray-500 dark:text-gray-400';
-        description.textContent = role.description;
-        text.append(name, description);
-        label.append(box, text);
+        const label = document.createElement('label');
+        label.className = 'flex cursor-pointer items-start gap-3 rounded-md border border-input px-3 py-2 text-sm';
+        label.append(box, adminTextBlock(role.name, role.description));
+        const item = document.createElement('li');
         item.appendChild(label);
         list.appendChild(item);
     });
 }
 
-function renderAdminUserLinks(links) {
+function renderAdminSectionError(id, error) {
+    const message = document.getElementById(`${id}-error`);
+    message.textContent = error || '';
+    message.hidden = !error;
+}
+
+function renderAdminUserLinks({ data, error }) {
     const list = document.getElementById('admin-user-links');
     list.replaceChildren();
-    links.forEach((link) => {
-        const item = document.createElement('li');
-        item.className = 'flex justify-between gap-3 rounded-md border border-input px-3 py-2';
+    renderAdminSectionError('admin-user-links', error);
+    (data || []).forEach((link) => {
         const platform = document.createElement('span');
         platform.className = 'font-medium capitalize';
         platform.textContent = link.platform;
         const username = document.createElement('span');
         username.className = 'min-w-0 truncate text-gray-500 dark:text-gray-400';
         username.textContent = link.platform_username || link.platform_id || '';
+        const item = document.createElement('li');
+        item.className = 'flex justify-between gap-3 rounded-md border border-input px-3 py-2';
         item.append(platform, username);
         list.appendChild(item);
     });
-    document.getElementById('admin-user-links-empty').hidden = links.length > 0;
+    document.getElementById('admin-user-links-empty').hidden = error !== undefined || data.length > 0;
 }
 
-function renderAdminUserPermissions(permissions) {
+function renderAdminUserPermissions({ data, error }) {
     const list = document.getElementById('admin-user-permissions');
     list.replaceChildren();
-    permissions.forEach((permission) => {
-        const chip = document.createElement('li');
-        chip.className = 'rounded-full border border-input px-2.5 py-0.5 text-xs';
-        chip.textContent = permission;
-        list.appendChild(chip);
-    });
-    document.getElementById('admin-user-permissions-empty').hidden = permissions.length > 0;
+    renderAdminSectionError('admin-user-permissions', error);
+    (data || []).forEach((permission) => list.appendChild(adminChip(permission, 'li')));
+    document.getElementById('admin-user-permissions-empty').hidden = error !== undefined || data.length > 0;
 }
 
 function saveAdminUser(event) {
     event.preventDefault();
-    const body = { username: document.getElementById('admin-user-username').value.trim() };
-    if (adminUserRolesEditable) {
-        body.roles = [...document.querySelectorAll('#admin-user-roles input:checked')].map((box) => box.value);
-    }
-    const save = document.getElementById('admin-user-save');
     const status = document.getElementById('admin-user-status');
-    document.getElementById('admin-error').hidden = true;
-    status.hidden = true;
-    save.disabled = true;
-    adminRequest(`/users/${encodeURIComponent(adminUserId)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-    })
-        .then((res) => {
-            if (!res.ok) {
-                return showAdminProblem(res, 'Failed to save the user');
-            }
-            return res.json().then((user) => {
-                document.getElementById('admin-user-title').textContent = user.username || 'No username';
-                status.textContent = 'Saved';
-                status.hidden = false;
-                return adminRequest(`/users/${encodeURIComponent(adminUserId)}/permissions`)
-                    .then((permissionsRes) => (permissionsRes.ok ? permissionsRes.json() : null))
-                    .then((permissions) => {
-                        if (permissions) {
-                            renderAdminUserPermissions(permissions);
-                        }
-                    });
-            });
-        })
-        .catch((error) => {
-            console.error('Error:', error);
-            showAdminError('Failed to save the user');
-        })
-        .finally(() => {
-            save.disabled = false;
-        });
+    status.textContent = '';
+    hideAdminError();
+    const body = {};
+    const username = document.getElementById('admin-user-username').value.trim();
+    if (username !== adminUser.username) {
+        if (username === '') {
+            showAdminError('Enter a username');
+            return;
+        }
+        body.username = username;
+    }
+    if (adminUserRoles !== null) {
+        const roles = [...document.querySelectorAll('#admin-user-roles input:checked')].map((box) => box.value);
+        const held = new Set(adminUser.roles);
+        if (roles.length !== held.size || roles.some((id) => !held.has(id))) {
+            body.roles = roles;
+        }
+    }
+    if (Object.keys(body).length === 0) {
+        status.textContent = 'Nothing to save';
+        return;
+    }
+    const id = encodeURIComponent(adminUserId);
+    runAdminAction(
+        document.getElementById('admin-user-save'),
+        () =>
+            adminSend('PUT', `/users/${id}`, body, 'Failed to save the user')
+                .then((res) => res.json())
+                .then((user) => {
+                    renderAdminUser(user);
+                    return adminGetSection(`/users/${id}/permissions`, 'Failed to refresh the permissions');
+                })
+                .then((permissions) => {
+                    renderAdminUserPermissions(permissions);
+                    status.textContent = permissions.error === undefined ? 'Saved' : 'Saved, but the permissions below are out of date';
+                }),
+        'Failed to save the user'
+    );
 }
-
-function adminJSON(method, path, body) {
-    return adminRequest(path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-}
-
-function runAdminAction(button, action, fallback) {
-    document.getElementById('admin-error').hidden = true;
-    button.disabled = true;
-    return action()
-        .catch((error) => {
-            console.error('Error:', error);
-            showAdminError(fallback);
-        })
-        .finally(() => {
-            button.disabled = false;
-        });
-}
-
-const ADMIN_INPUT_CLASS = 'text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
-const ADMIN_BUTTON_CLASS = 'border border-input hover:bg-accent hover:text-accent-foreground inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50';
-const ADMIN_CHIP_CLASS = 'rounded-full border border-input px-2.5 py-0.5 text-xs';
 
 function adminPermissionLabel(permission) {
     if (permission.value === undefined) {
@@ -1157,11 +1199,13 @@ function adminValueBody(permission, field) {
     if (!field) {
         return undefined;
     }
+    const text = field.value.trim();
     if (permission.value_type === 'int') {
-        if (field.value.trim() === '' || !Number.isInteger(Number(field.value))) {
-            throw new Error('Enter a whole number');
+        const number = Number(text);
+        if (text === '' || !Number.isSafeInteger(number) || String(number) !== text) {
+            throw new Error(`Enter a whole number from -${Number.MAX_SAFE_INTEGER} to ${Number.MAX_SAFE_INTEGER}`);
         }
-        return { value: Number(field.value) };
+        return { value: number };
     }
     if (permission.value_type === 'string_list') {
         const items = field.value.split('\n').map((item) => item.trim()).filter((item) => item !== '');
@@ -1170,57 +1214,27 @@ function adminValueBody(permission, field) {
         }
         return { value: items };
     }
-    if (field.value.trim() === '') {
+    if (text === '') {
         throw new Error('Enter a value');
     }
-    return { value: field.value.trim() };
+    return { value: text };
 }
 
 function loadAdminRolesPage() {
-    adminRequest('/roles')
-        .then((res) => {
-            if (!res.ok) {
-                return showAdminProblem(res, 'Failed to load roles');
-            }
-            return res.json().then(renderAdminRoles);
-        })
-        .catch((error) => {
-            console.error('Error:', error);
-            showAdminError('Failed to load roles');
-        });
+    refreshAdminRoles().catch(adminFailed('Failed to load roles'));
 }
 
-function renderAdminRoles(roles) {
-    const list = document.getElementById('admin-roles');
-    list.replaceChildren();
-    roles.forEach((role) => {
-        const item = document.createElement('li');
-        const link = document.createElement('a');
-        link.href = `/admin/roles/${encodeURIComponent(role.id)}`;
-        link.className = 'block rounded-lg border border-input p-3 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
-        const name = document.createElement('span');
-        name.className = 'block font-medium';
-        name.textContent = role.name;
-        const description = document.createElement('span');
-        description.className = 'block text-xs text-gray-500 dark:text-gray-400';
-        description.textContent = role.description;
-        link.append(name, description);
-        const permissions = role.permissions || [];
-        if (permissions.length > 0) {
-            const chips = document.createElement('span');
-            chips.className = 'mt-2 flex flex-wrap gap-2';
-            permissions.forEach((permission) => {
-                const chip = document.createElement('span');
-                chip.className = ADMIN_CHIP_CLASS;
-                chip.textContent = adminPermissionLabel(permission);
-                chips.appendChild(chip);
-            });
-            link.appendChild(chips);
-        }
-        item.appendChild(link);
-        list.appendChild(item);
+function refreshAdminRoles() {
+    return adminGet('/roles', 'Failed to load roles').then((roles) => {
+        const list = document.getElementById('admin-roles');
+        list.replaceChildren();
+        roles.forEach((role) => {
+            const granted = (role.permissions || []).map(adminPermissionLabel);
+            list.appendChild(adminCardLink(`/admin/roles/${encodeURIComponent(role.id)}`, role.name, role.description, granted));
+        });
+        document.getElementById('admin-roles-empty').hidden = roles.length > 0;
+        document.getElementById('admin-role-create-form').hidden = false;
     });
-    document.getElementById('admin-roles-empty').hidden = roles.length > 0;
 }
 
 function createAdminRole(event) {
@@ -1228,64 +1242,46 @@ function createAdminRole(event) {
     runAdminAction(
         document.getElementById('admin-role-create-submit'),
         () =>
-            adminJSON('POST', '/roles', {
-                name: document.getElementById('admin-role-create-name').value.trim(),
-                description: document.getElementById('admin-role-create-description').value.trim(),
-            }).then((res) => {
-                if (!res.ok) {
-                    return showAdminProblem(res, 'Failed to create the role');
-                }
-                return res.json().then((role) => {
+            adminSend(
+                'POST',
+                '/roles',
+                {
+                    name: document.getElementById('admin-role-create-name').value.trim(),
+                    description: document.getElementById('admin-role-create-description').value.trim(),
+                },
+                'Failed to create the role'
+            )
+                .then((res) => res.json())
+                .then((role) => {
                     window.location.href = `/admin/roles/${encodeURIComponent(role.id)}`;
-                });
-            }),
+                }),
         'Failed to create the role'
     );
 }
 
 let adminRoleId = '';
-let adminRole = null;
+let adminRole = { name: '', description: '' };
 let adminAllPermissions = [];
 
 function loadAdminRole() {
-    try {
-        adminRoleId = decodeURIComponent(window.location.pathname.slice('/admin/roles/'.length));
-    } catch {
-        adminRoleId = '';
-    }
-    document.getElementById('admin-role-id').textContent = adminRoleId;
-    Promise.all([adminRequest(`/roles/${encodeURIComponent(adminRoleId)}`), adminRequest('/permissions')])
-        .then(([roleRes, permissionsRes]) => {
-            if (!roleRes.ok) {
-                return showAdminProblem(roleRes, 'Failed to load the role');
-            }
-            if (!permissionsRes.ok) {
-                return showAdminProblem(permissionsRes, 'Failed to load permissions');
-            }
-            return Promise.all([roleRes.json(), permissionsRes.json()]).then(([role, permissions]) => {
-                adminAllPermissions = permissions;
-                renderAdminRole(role);
-                document.getElementById('admin-role-content').hidden = false;
-            });
+    adminRoleId = adminIdFromPath('/admin/roles/');
+    Promise.all([adminGet(`/roles/${encodeURIComponent(adminRoleId)}`, 'Failed to load the role'), adminGet('/permissions', 'Failed to load permissions')])
+        .then(([role, permissions]) => {
+            adminAllPermissions = permissions;
+            renderAdminRole(role);
+            document.getElementById('admin-role-content').hidden = false;
         })
-        .catch((error) => {
-            console.error('Error:', error);
-            showAdminError('Failed to load the role');
-        });
+        .catch(adminFailed('Failed to load the role'));
 }
 
 function refreshAdminRole() {
-    return adminRequest(`/roles/${encodeURIComponent(adminRoleId)}`).then((res) => {
-        if (!res.ok) {
-            return showAdminProblem(res, 'Failed to load the role');
-        }
-        return res.json().then(renderAdminRole);
-    });
+    return adminGet(`/roles/${encodeURIComponent(adminRoleId)}`, 'Failed to load the role').then(renderAdminRole);
 }
 
 function renderAdminRole(role) {
     adminRole = role;
     document.getElementById('admin-role-title').textContent = role.name;
+    document.getElementById('admin-role-id').textContent = role.id;
     document.getElementById('admin-role-name').value = role.name;
     document.getElementById('admin-role-description').value = role.description;
 
@@ -1295,36 +1291,22 @@ function renderAdminRole(role) {
     granted.forEach((permission) => {
         const item = document.createElement('li');
         item.className = 'space-y-2 rounded-lg border border-input p-3';
-        item.dataset.permission = permission.node;
         const header = document.createElement('div');
         header.className = 'flex items-start justify-between gap-3';
-        const text = document.createElement('span');
-        text.className = 'min-w-0';
-        const node = document.createElement('span');
-        node.className = 'block break-all font-medium';
-        node.textContent = permission.node;
-        const description = document.createElement('span');
-        description.className = 'block text-xs text-gray-500 dark:text-gray-400';
-        description.textContent = permission.description;
-        text.append(node, description);
-        const remove = document.createElement('button');
-        remove.type = 'button';
-        remove.className = ADMIN_BUTTON_CLASS;
-        remove.textContent = 'Remove';
-        remove.onclick = () => removeAdminRolePermission(permission, remove);
-        header.append(text, remove);
+        header.append(
+            adminTextBlock(permission.node, permission.description),
+            adminButton('Remove', (button) => removeAdminRolePermission(permission, button))
+        );
         item.appendChild(header);
         const field = adminValueField(permission, permission.value);
         if (field) {
+            field.setAttribute('aria-label', `Value of ${permission.node}`);
             const row = document.createElement('div');
             row.className = 'flex items-start gap-2';
-            field.setAttribute('aria-label', `Value of ${permission.node}`);
-            const save = document.createElement('button');
-            save.type = 'button';
-            save.className = ADMIN_BUTTON_CLASS;
-            save.textContent = 'Save value';
-            save.onclick = () => putAdminRolePermission(permission, field, save);
-            row.append(field, save);
+            row.append(
+                field,
+                adminButton('Save value', (button) => putAdminRolePermission(permission, field, button, 'admin-role-permissions-title'))
+            );
             item.appendChild(row);
         }
         list.appendChild(item);
@@ -1333,6 +1315,7 @@ function renderAdminRole(role) {
 
     const heldIds = new Set(granted.map((permission) => permission.id));
     const select = document.getElementById('admin-role-grant-permission');
+    const previous = select.value;
     select.replaceChildren();
     adminAllPermissions
         .filter((permission) => !heldIds.has(permission.id))
@@ -1342,10 +1325,16 @@ function renderAdminRole(role) {
             option.textContent = permission.node;
             select.appendChild(option);
         });
+    select.value = previous;
+    if (select.selectedIndex < 0 && select.options.length > 0) {
+        select.selectedIndex = 0;
+    }
     const available = select.options.length > 0;
     document.getElementById('admin-role-grant-form').hidden = !available;
     document.getElementById('admin-role-grant-empty').hidden = available;
-    renderAdminGrantValue();
+    if (select.value !== previous) {
+        renderAdminGrantValue();
+    }
 }
 
 function renderAdminGrantValue() {
@@ -1359,7 +1348,8 @@ function renderAdminGrantValue() {
     }
 }
 
-function putAdminRolePermission(permission, field, button) {
+/** Puts the permission on the role, then moves focus to focusId since the row holding the clicked button is rebuilt. */
+function putAdminRolePermission(permission, field, button, focusId) {
     let body;
     try {
         body = adminValueBody(permission, field);
@@ -1371,12 +1361,9 @@ function putAdminRolePermission(permission, field, button) {
     runAdminAction(
         button,
         () =>
-            (body ? adminJSON('PUT', path, body) : adminRequest(path, { method: 'PUT' })).then((res) => {
-                if (!res.ok) {
-                    return showAdminProblem(res, 'Failed to grant the permission');
-                }
-                return refreshAdminRole();
-            }),
+            adminSend('PUT', path, body, 'Failed to grant the permission')
+                .then(refreshAdminRole)
+                .then(() => focusId && document.getElementById(focusId).focus()),
         'Failed to grant the permission'
     );
 }
@@ -1392,12 +1379,9 @@ function removeAdminRolePermission(permission, button) {
     runAdminAction(
         button,
         () =>
-            adminRequest(`/roles/${encodeURIComponent(adminRoleId)}/permissions/${encodeURIComponent(permission.id)}`, { method: 'DELETE' }).then((res) => {
-                if (!res.ok) {
-                    return showAdminProblem(res, 'Failed to remove the permission');
-                }
-                return refreshAdminRole();
-            }),
+            adminSend('DELETE', `/roles/${encodeURIComponent(adminRoleId)}/permissions/${encodeURIComponent(permission.id)}`, undefined, 'Failed to remove the permission')
+                .then(refreshAdminRole)
+                .then(() => document.getElementById('admin-role-permissions-title').focus()),
         'Failed to remove the permission'
     );
 }
@@ -1405,22 +1389,29 @@ function removeAdminRolePermission(permission, button) {
 function saveAdminRole(event) {
     event.preventDefault();
     const status = document.getElementById('admin-role-status');
-    status.hidden = true;
+    status.textContent = '';
+    hideAdminError();
+    const body = {};
+    const name = document.getElementById('admin-role-name').value.trim();
+    const description = document.getElementById('admin-role-description').value.trim();
+    if (name !== adminRole.name) {
+        body.name = name;
+    }
+    if (description !== adminRole.description) {
+        body.description = description;
+    }
+    if (Object.keys(body).length === 0) {
+        status.textContent = 'Nothing to save';
+        return;
+    }
     runAdminAction(
         document.getElementById('admin-role-save'),
         () =>
-            adminJSON('PATCH', `/roles/${encodeURIComponent(adminRoleId)}`, {
-                name: document.getElementById('admin-role-name').value.trim(),
-                description: document.getElementById('admin-role-description').value.trim(),
-            }).then((res) => {
-                if (!res.ok) {
-                    return showAdminProblem(res, 'Failed to save the role');
-                }
-                return refreshAdminRole().then(() => {
+            adminSend('PATCH', `/roles/${encodeURIComponent(adminRoleId)}`, body, 'Failed to save the role')
+                .then(refreshAdminRole)
+                .then(() => {
                     status.textContent = 'Saved';
-                    status.hidden = false;
-                });
-            }),
+                }),
         'Failed to save the role'
     );
 }
@@ -1432,61 +1423,36 @@ function deleteAdminRole() {
     runAdminAction(
         document.getElementById('admin-role-delete'),
         () =>
-            adminRequest(`/roles/${encodeURIComponent(adminRoleId)}`, { method: 'DELETE' }).then((res) => {
-                if (!res.ok) {
-                    return showAdminProblem(res, 'Failed to delete the role');
-                }
+            adminSend('DELETE', `/roles/${encodeURIComponent(adminRoleId)}`, undefined, 'Failed to delete the role').then(() => {
                 window.location.href = '/admin/roles';
             }),
         'Failed to delete the role'
     );
 }
 
-function loadAdminPermissions() {
-    return adminRequest('/permissions')
-        .then((res) => {
-            if (!res.ok) {
-                return showAdminProblem(res, 'Failed to load permissions');
+function refreshAdminPermissions() {
+    return adminGet('/permissions', 'Failed to load permissions').then((permissions) => {
+        const list = document.getElementById('admin-permissions');
+        list.replaceChildren();
+        permissions.forEach((permission) => {
+            const item = document.createElement('li');
+            item.className = 'flex items-start justify-between gap-3 rounded-lg border border-input p-3';
+            const text = adminTextBlock(permission.node, permission.description);
+            if (permission.value_type) {
+                const type = adminChip(`${permission.value_type}, merge ${permission.merge}`);
+                type.classList.add('mt-2', 'inline-block');
+                text.appendChild(type);
             }
-            return res.json().then(renderAdminPermissions);
-        })
-        .catch((error) => {
-            console.error('Error:', error);
-            showAdminError('Failed to load permissions');
+            item.append(text, adminButton('Delete', (button) => deleteAdminPermission(permission, button)));
+            list.appendChild(item);
         });
+        document.getElementById('admin-permissions-empty').hidden = permissions.length > 0;
+        document.getElementById('admin-permission-create-form').hidden = false;
+    });
 }
 
-function renderAdminPermissions(permissions) {
-    const list = document.getElementById('admin-permissions');
-    list.replaceChildren();
-    permissions.forEach((permission) => {
-        const item = document.createElement('li');
-        item.className = 'flex items-start justify-between gap-3 rounded-lg border border-input p-3';
-        item.dataset.permission = permission.node;
-        const text = document.createElement('span');
-        text.className = 'min-w-0';
-        const node = document.createElement('span');
-        node.className = 'block break-all font-medium';
-        node.textContent = permission.node;
-        const description = document.createElement('span');
-        description.className = 'block text-xs text-gray-500 dark:text-gray-400';
-        description.textContent = permission.description;
-        text.append(node, description);
-        if (permission.value_type) {
-            const type = document.createElement('span');
-            type.className = `${ADMIN_CHIP_CLASS} mt-2 inline-block`;
-            type.textContent = `${permission.value_type}, merge ${permission.merge}`;
-            text.appendChild(type);
-        }
-        const remove = document.createElement('button');
-        remove.type = 'button';
-        remove.className = ADMIN_BUTTON_CLASS;
-        remove.textContent = 'Delete';
-        remove.onclick = () => deleteAdminPermission(permission, remove);
-        item.append(text, remove);
-        list.appendChild(item);
-    });
-    document.getElementById('admin-permissions-empty').hidden = permissions.length > 0;
+function loadAdminPermissions() {
+    refreshAdminPermissions().catch(adminFailed('Failed to load permissions'));
 }
 
 function syncAdminPermissionMerge() {
@@ -1509,13 +1475,10 @@ function createAdminPermission(event) {
     runAdminAction(
         document.getElementById('admin-permission-create-submit'),
         () =>
-            adminJSON('POST', '/permissions', body).then((res) => {
-                if (!res.ok) {
-                    return showAdminProblem(res, 'Failed to create the permission');
-                }
+            adminSend('POST', '/permissions', body, 'Failed to create the permission').then(() => {
                 document.getElementById('admin-permission-create-form').reset();
                 syncAdminPermissionMerge();
-                return loadAdminPermissions();
+                return refreshAdminPermissions();
             }),
         'Failed to create the permission'
     );
@@ -1528,12 +1491,9 @@ function deleteAdminPermission(permission, button) {
     runAdminAction(
         button,
         () =>
-            adminRequest(`/permissions/${encodeURIComponent(permission.id)}`, { method: 'DELETE' }).then((res) => {
-                if (!res.ok) {
-                    return showAdminProblem(res, 'Failed to delete the permission');
-                }
-                return loadAdminPermissions();
-            }),
+            adminSend('DELETE', `/permissions/${encodeURIComponent(permission.id)}`, undefined, 'Failed to delete the permission')
+                .then(refreshAdminPermissions)
+                .then(() => document.getElementById('admin-permissions-title').focus()),
         'Failed to delete the permission'
     );
 }
