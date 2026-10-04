@@ -174,7 +174,7 @@ func renderUserSave(w http.ResponseWriter, r *http.Request, data components.Admi
 func adminUserSaveHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	id := r.PathValue("id")
 	body := map[string]any{}
-	if raw := r.PostForm.Get("username"); raw != r.PostForm.Get("loaded_username") {
+	if raw := r.Form.Get("username"); raw != r.Form.Get("loaded_username") {
 		username := strings.TrimSpace(raw)
 		if username == "" {
 			failFragment(w, r, invalidInput("Enter a username"))
@@ -182,9 +182,9 @@ func adminUserSaveHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 		}
 		body["username"] = username
 	}
-	if r.PostForm.Get("roles_editable") == "1" {
-		roles := append(append([]string{}, r.PostForm["roles"]...), r.PostForm["kept_roles"]...)
-		if !sameSet(roles, r.PostForm["loaded_roles"]) {
+	if r.Form.Get("roles_editable") == "1" {
+		roles := append(append([]string{}, r.Form["roles"]...), r.Form["kept_roles"]...)
+		if !sameSet(roles, r.Form["loaded_roles"]) {
 			body["roles"] = roles
 		}
 	}

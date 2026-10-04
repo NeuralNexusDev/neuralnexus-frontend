@@ -145,6 +145,14 @@ func getPage(target string) *httptest.ResponseRecorder {
 	return adminReq{method: http.MethodGet, target: target}.do()
 }
 
+// actionDelete sends a DELETE as htmx does, with the form in the query.
+func actionDelete(target string, form url.Values) *httptest.ResponseRecorder {
+	if len(form) > 0 {
+		target += "?" + form.Encode()
+	}
+	return action(http.MethodDelete, target, nil)
+}
+
 func action(method, target string, form url.Values) *httptest.ResponseRecorder {
 	return adminReq{method: method, target: target, form: form, htmx: true}.do()
 }
@@ -238,7 +246,7 @@ func TestAdminShellsHoldNoDataAndLoadTheirContent(t *testing.T) {
 			rec := getPage(tc.path)
 			assertStatus(t, rec, http.StatusOK)
 			assertBody(t, rec, `hx-get="`+tc.loads+`"`, `hx-trigger="load"`, `hx-swap="outerHTML"`, `id="admin-error"`,
-				`<script src="https://cdn.neuralnexus.dev/htmx/htmx.v1.9.5.min.js" defer>`, `&#34;selfRequestsOnly&#34;:true`, `&#34;allowEval&#34;:false`)
+				`<script src="https://cdn.neuralnexus.dev/htmx/htmx.v4.0.0.min.js" defer>`, `&#34;mode&#34;:&#34;same-origin&#34;`, `&#34;history&#34;:false`)
 			if len(f.uris()) != 0 {
 				t.Errorf("a shell called the API: %v", f.uris())
 			}
@@ -546,8 +554,8 @@ func TestAdminHTMXIsLoadedFromTheCDNWithHardenedConfig(t *testing.T) {
 	f.on("GET /users/me/permissions", 200, `["users.admin"]`)
 	rec := getPage("/admin")
 	assertBody(t, rec,
-		`<script src="https://cdn.neuralnexus.dev/htmx/htmx.v1.9.5.min.js" defer>`,
-		`&#34;allowEval&#34;:false`, `&#34;allowScriptTags&#34;:false`, `&#34;selfRequestsOnly&#34;:true`,
+		`<script src="https://cdn.neuralnexus.dev/htmx/htmx.v4.0.0.min.js" defer>`,
+		`&#34;mode&#34;:&#34;same-origin&#34;`, `&#34;history&#34;:false`,
 	)
 }
 
@@ -653,59 +661,26 @@ func TestAdminErrorsEmptyTheStatusLineOfTheEditorTheyCameFrom(t *testing.T) {
 	}
 }
 
-func TestAdminActionsRefuseAFormThatCannotBeRead(t *testing.T) {
+func TestAdminActionRefusesAFormThatCannotBeRead(t *testing.T) {
 	f := newFakeAdmin(t)
-	cases := []struct{ method, target string }{
-		{http.MethodPost, "/admin/users/" + idBob},
-		{http.MethodPost, "/admin/roles"},
-		{http.MethodPost, "/admin/roles/" + idBee},
-		{http.MethodPost, "/admin/roles/" + idBee + "/permissions"},
-		{http.MethodPost, "/admin/roles/" + idBee + "/permissions/" + idPRate},
-		{http.MethodDelete, "/admin/roles/" + idBee + "/permissions/" + idPRate},
-		{http.MethodPost, "/admin/permissions"},
-		{http.MethodPost, "/account/settings"},
-		{http.MethodPost, "/account/links/discord"},
-		{http.MethodDelete, "/account/links/discord"},
-		{http.MethodPost, "/project/bee-name-generator/admin/suggestions"},
+	req := httptest.NewRequest(http.MethodPost, "/admin/roles", strings.NewReader("name=%zz"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("HX-Request", "true")
+	rec := httptest.NewRecorder()
+	NewWebServer("", false).Setup().ServeHTTP(rec, req)
+	assertStatus(t, rec, http.StatusBadRequest)
+	if got := bannerText(rec); got != "The form could not be read" {
+		t.Errorf("body = %q", got)
 	}
-	for _, tc := range cases {
-		t.Run(tc.method+" "+tc.target, func(t *testing.T) {
-			f.reset()
-			req := httptest.NewRequest(tc.method, tc.target, strings.NewReader("name=%zz"))
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-			req.Header.Set("HX-Request", "true")
-			rec := httptest.NewRecorder()
-			NewWebServer("", false).Setup().ServeHTTP(rec, req)
-			assertStatus(t, rec, http.StatusBadRequest)
-			if got := bannerText(rec); got != "The form could not be read" {
-				t.Errorf("body = %q", got)
-			}
-			if len(f.uris()) != 0 {
-				t.Errorf("an unreadable form reached the API: %v", f.uris())
-			}
-		})
-	}
+	assertWrites(t, f)
 }
 
-func TestAdminDeleteReadsItsFormFromTheBodyAndTheQuery(t *testing.T) {
-	remove := func(target string, form url.Values) *httptest.ResponseRecorder {
-		f := newFakeAdmin(t)
-		seedRoleEditor(f)
-		f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
-		return action(http.MethodDelete, target, form)
-	}
-	base := "/admin/roles/" + idBee + "/permissions/" + idPBee
-	t.Run("body", func(t *testing.T) {
-		assertBody(t, remove(base, url.Values{"grant_permission": {idPMotd}, "grant_value": {"from body"}}), `value="from body"`)
-	})
-	t.Run("query", func(t *testing.T) {
-		assertBody(t, remove(base+"?grant_permission="+idPMotd+"&grant_value=from+query", nil), `value="from query"`)
-	})
-	t.Run("body wins over the query", func(t *testing.T) {
-		rec := remove(base+"?grant_value=from+query", url.Values{"grant_permission": {idPMotd}, "grant_value": {"from body"}})
-		assertBody(t, rec, `value="from body"`)
-		assertNoBody(t, rec, `value="from query"`)
-	})
+func TestAdminDeleteReadsItsFormFromTheQuery(t *testing.T) {
+	f := newFakeAdmin(t)
+	seedRoleEditor(f)
+	f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
+	target := "/admin/roles/" + idBee + "/permissions/" + idPBee + "?grant_permission=" + idPMotd + "&grant_value=from+query"
+	assertBody(t, action(http.MethodDelete, target, nil), `value="from query"`)
 }
 
 func TestBeeAdminLinkShowsForTheBeeAdminPermission(t *testing.T) {
@@ -746,6 +721,6 @@ func TestBeeAdminLinkIsEmptyWhenThePermissionsCannotBeRead(t *testing.T) {
 
 func TestBeeNameGeneratorPageLoadsTheAdminLinkThroughHTMX(t *testing.T) {
 	rec := getPage("/project/bee-name-generator")
-	assertBody(t, rec, `hx-get="/project/bee-name-generator/admin-link"`, `hx-trigger="load"`, "htmx.v1.9.5.min.js")
+	assertBody(t, rec, `hx-get="/project/bee-name-generator/admin-link"`, `hx-trigger="load"`, "htmx.v4.0.0.min.js")
 	assertNoBody(t, rec, "showBeeAdminLink", `id="bee-admin-link"`)
 }

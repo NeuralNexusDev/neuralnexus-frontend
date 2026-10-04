@@ -193,8 +193,8 @@ func (d AdminRoleData) Draft(p RolePermission) string {
 }
 
 const (
-	adminHTMXURL      = "https://cdn.neuralnexus.dev/htmx/htmx.v1.9.5.min.js"
-	adminHTMXConfig   = `{"allowEval":false,"allowScriptTags":false,"selfRequestsOnly":true,"historyCacheSize":0,"refreshOnHistoryMiss":true}`
+	adminHTMXURL      = "https://cdn.neuralnexus.dev/htmx/htmx.v4.0.0.min.js"
+	adminHTMXConfig   = `{"mode":"same-origin","history":false}`
 	adminInputClass   = "text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
 	adminSelectClass  = "text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
 	adminSubmitClass  = "border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
@@ -443,7 +443,7 @@ templ adminUser(id string) {
 
 // AdminUserContent renders the user editor, which the user page loads.
 templ AdminUserContent(d AdminUserData) {
-	<div id="admin-user" class="space-y-6" hx-sync="this:drop">
+	<div id="admin-user" class="space-y-6" hx-sync:inherited="this:drop">
 		@AdminUserHeader(d, false)
 		@AdminUserForm(d)
 		@adminUserLinks(d)
@@ -681,7 +681,7 @@ templ adminRole(id string) {
 
 // AdminRoleContent renders the role editor, which the role page loads.
 templ AdminRoleContent(d AdminRoleData) {
-	<div id="admin-role" class="space-y-6" hx-sync="this:drop">
+	<div id="admin-role" class="space-y-6" hx-sync:inherited="this:drop">
 		@AdminRoleHeader(d, false)
 		@AdminRoleForm(d)
 		@AdminRoleGrants(d)
@@ -752,7 +752,7 @@ templ AdminRoleDelete(d AdminRoleData, oob bool) {
 
 // AdminRoleGrants renders the granted permissions and the grant form, which a change swaps by region.
 templ AdminRoleGrants(d AdminRoleData) {
-	<div id="admin-role-grants" class="space-y-6" hx-target="#admin-role-granted" hx-swap="outerHTML">
+	<div id="admin-role-grants" class="space-y-6" hx-target:inherited="#admin-role-granted" hx-swap:inherited="outerHTML">
 		@AdminRoleGranted(d)
 		@AdminRoleGrantForm(d, false)
 	</div>
@@ -862,7 +862,7 @@ templ adminPermissions() {
 
 // AdminPermissionsContent renders the permission list and the form that creates one.
 templ AdminPermissionsContent(d AdminPermissionsData) {
-	<div id="admin-permissions-root" class="space-y-6" hx-sync="this:drop" hx-target="#admin-permissions-list" hx-swap="outerHTML">
+	<div id="admin-permissions-root" class="space-y-6" hx-sync:inherited="this:drop" hx-target:inherited="#admin-permissions-list" hx-swap:inherited="outerHTML">
 		@AdminPermissionList(d)
 		@AdminPermissionForm(false)
 	</div>

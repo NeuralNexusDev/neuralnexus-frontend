@@ -453,16 +453,12 @@ function loadMcStatusFromUrl() {
     checkMcStatus();
 }
 
-/** The server sends its refusals as error responses aimed at the banner, which htmx would not swap by default. */
-document.addEventListener('htmx:beforeSwap', (event) => {
-    if (event.detail.xhr.getResponseHeader('HX-Retarget')) {
-        event.detail.shouldSwap = true;
-    }
-});
-
-document.addEventListener('htmx:sendError', () => {
-    const banner = document.getElementById('admin-error');
-    if (banner) {
-        banner.textContent = 'The server could not be reached. Try again in a moment.';
+/** htmx reports a request that got no response, such as a server that is down, as an error without one. */
+document.addEventListener('htmx:error', (event) => {
+    if (event.detail.ctx && !event.detail.ctx.response) {
+        const banner = document.getElementById('admin-error');
+        if (banner) {
+            banner.textContent = 'The server could not be reached. Try again in a moment.';
+        }
     }
 });

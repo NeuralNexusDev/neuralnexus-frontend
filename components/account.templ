@@ -109,9 +109,9 @@ templ AccountPasswordLogin(d AccountSettingsData, oob bool) {
 		if oob {
 			hx-swap-oob="true"
 		}
-		hx-sync="this:drop"
-		hx-target="this"
-		hx-swap="outerHTML"
+		hx-sync:inherited="this:drop"
+		hx-target:inherited="this"
+		hx-swap:inherited="outerHTML"
 		class="space-y-2"
 	>
 		<div class="rounded-lg border border-input p-3 flex items-center justify-between">
@@ -146,9 +146,9 @@ templ AccountLinkRow(platform AccountPlatform, link LinkedAccount, linked bool, 
 		if oob {
 			hx-swap-oob="true"
 		}
-		hx-sync="this:drop"
-		hx-target="this"
-		hx-swap="outerHTML"
+		hx-sync:inherited="this:drop"
+		hx-target:inherited="this"
+		hx-swap:inherited="outerHTML"
 		class="rounded-lg border border-input p-3 space-y-2"
 	>
 		<div class="flex items-center gap-2">

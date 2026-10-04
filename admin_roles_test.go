@@ -252,7 +252,7 @@ func TestAdminRoleRemoveDropsATypedValueForAPermissionNoLongerAvailable(t *testi
 	f := newFakeAdmin(t)
 	seedRoleEditor(f)
 	f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
-	rec := action(http.MethodDelete, "/admin/roles/"+idBee+"/permissions/"+idPBee, url.Values{"grant_permission": {idPRate}, "grant_value": {"stale"}})
+	rec := actionDelete("/admin/roles/"+idBee+"/permissions/"+idPBee, url.Values{"grant_permission": {idPRate}, "grant_value": {"stale"}})
 	assertNoBody(t, rec, `value="stale"`)
 	assertBody(t, rec, `<option value="`+idPPets+`" selected>`)
 }
@@ -261,7 +261,7 @@ func TestAdminRoleRemoveDeletesTheGrantAndKeepsTheGrantForm(t *testing.T) {
 	f := newFakeAdmin(t)
 	seedRoleEditor(f)
 	f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
-	rec := action(http.MethodDelete, "/admin/roles/"+idBee+"/permissions/"+idPBee, url.Values{"grant_permission": {idPMotd}, "grant_value": {"half typed"}})
+	rec := actionDelete("/admin/roles/"+idBee+"/permissions/"+idPBee, url.Values{"grant_permission": {idPMotd}, "grant_value": {"half typed"}})
 	assertStatus(t, rec, http.StatusOK)
 	assertWrites(t, f, `DELETE /roles/`+idBee+`/permissions/`+idPBee+` `)
 	assertBody(t, rec, `id="admin-role-granted"`, `id="admin-role-grant" hx-swap-oob="true"`,
@@ -272,7 +272,7 @@ func TestAdminRoleRemoveRefusedShowsTheAPIMessage(t *testing.T) {
 	f := newFakeAdmin(t)
 	seedRoleEditor(f)
 	f.problem("DELETE /roles/"+idBee+"/permissions/"+idPBee, 409, "system and owner keep roles.admin")
-	rec := action(http.MethodDelete, "/admin/roles/"+idBee+"/permissions/"+idPBee, nil)
+	rec := actionDelete("/admin/roles/"+idBee+"/permissions/"+idPBee, nil)
 	assertStatus(t, rec, http.StatusConflict)
 	if got := bannerText(rec); got != "system and owner keep roles.admin" {
 		t.Errorf("body = %q", got)
@@ -423,7 +423,7 @@ func TestAdminRoleChangesKeepTheValuesTypedInOtherRows(t *testing.T) {
 		f := newFakeAdmin(t)
 		seedRoleEditor(f)
 		f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
-		rec := action(http.MethodDelete, "/admin/roles/"+idBee+"/permissions/"+idPBee, typed(nil))
+		rec := actionDelete("/admin/roles/"+idBee+"/permissions/"+idPBee, typed(nil))
 		assertBody(t, rec, `value="777"`, `value="half typed"`)
 	})
 }
@@ -450,7 +450,7 @@ func TestAdminRoleChangesEmptyTheStatusLine(t *testing.T) {
 	f := newFakeAdmin(t)
 	seedRoleEditor(f)
 	f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
-	rec := action(http.MethodDelete, "/admin/roles/"+idBee+"/permissions/"+idPBee, nil)
+	rec := actionDelete("/admin/roles/"+idBee+"/permissions/"+idPBee, nil)
 	assertBody(t, rec, `<p id="admin-role-status" hx-swap-oob="innerHTML"></p>`)
 }
 
@@ -459,11 +459,11 @@ func TestAdminRoleEditorQueuesActionsOnTheEditor(t *testing.T) {
 	seedRoleEditor(f)
 	rec := getPage("/admin/roles/" + idBee + "/editor")
 	assertBody(t, rec,
-		`id="admin-role" class="space-y-6" hx-sync="this:drop"`,
-		`id="admin-role-grants" class="space-y-6" hx-target="#admin-role-granted" hx-swap="outerHTML"`,
+		`id="admin-role" class="space-y-6" hx-sync:inherited="this:drop"`,
+		`id="admin-role-grants" class="space-y-6" hx-target:inherited="#admin-role-granted" hx-swap:inherited="outerHTML"`,
 		`hx-sync="this:replace"`,
 	)
-	if got := strings.Count(rec.Body.String(), "hx-sync="); got != 2 {
+	if got := strings.Count(rec.Body.String(), "hx-sync"); got != 2 {
 		t.Errorf("hx-sync appears %d times, want the editor and the grant select", got)
 	}
 	assertNoBody(t, rec, "closest")

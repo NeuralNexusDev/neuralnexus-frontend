@@ -27,15 +27,15 @@ func loadPermissions(a adminAPI, focusList bool) (components.AdminPermissionsDat
 
 func adminPermissionCreateHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	body := map[string]string{
-		"node":        strings.TrimSpace(r.PostForm.Get("node")),
-		"description": strings.TrimSpace(r.PostForm.Get("description")),
+		"node":        strings.TrimSpace(r.Form.Get("node")),
+		"description": strings.TrimSpace(r.Form.Get("description")),
 	}
-	valueType := r.PostForm.Get("value_type")
+	valueType := r.Form.Get("value_type")
 	if valueType != "" {
 		body["value_type"] = valueType
 	}
 	if valueType == "int" {
-		body["merge"] = r.PostForm.Get("merge")
+		body["merge"] = r.Form.Get("merge")
 	}
 	if _, err := adminSend[components.Permission](a, http.MethodPost, "/permissions", body, "Failed to create the permission"); err != nil {
 		failFragment(w, r, err)

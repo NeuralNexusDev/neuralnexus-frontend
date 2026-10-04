@@ -37,10 +37,10 @@ func beeSuggestionsHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 }
 
 func beeReviewHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
-	name := r.PostForm.Get("name")
+	name := r.Form.Get("name")
 	method := http.MethodDelete
 	fallback := "Failed to reject the suggestion"
-	switch r.PostForm.Get("action") {
+	switch r.Form.Get("action") {
 	case "accept":
 		method = http.MethodPut
 		fallback = "Failed to accept the suggestion"

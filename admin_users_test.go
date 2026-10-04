@@ -578,6 +578,6 @@ func TestAdminUserPageShowsEveryRegion(t *testing.T) {
 	seedUserEditor(f)
 	rec := getPage("/admin/users/" + idBob + "/editor")
 	assertBody(t, rec, `id="admin-user"`, `id="admin-user-header"`, `id="admin-user-form"`, `id="admin-user-permissions-section"`,
-		`hx-target="#admin-user-form"`, `id="admin-user" class="space-y-6" hx-sync="this:drop"`)
+		`hx-target="#admin-user-form"`, `id="admin-user" class="space-y-6" hx-sync:inherited="this:drop"`)
 	assertNoBody(t, rec, `hx-swap-oob="true"`)
 }

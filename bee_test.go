@@ -14,7 +14,7 @@ func TestBeeSuggestionsListThePendingNames(t *testing.T) {
 	rec := getPage("/project/bee-name-generator/admin/suggestions")
 	assertStatus(t, rec, http.StatusOK)
 	assertBody(t, rec, ">buzz<", ">honey<", `value="accept"`, `value="reject"`, `aria-label="Accept buzz"`, `aria-label="Reject honey"`,
-		`hx-post="/project/bee-name-generator/admin/suggestions"`, `id="bee-suggestions-root" class="space-y-6" hx-sync="this:drop"`)
+		`hx-post="/project/bee-name-generator/admin/suggestions"`, `id="bee-suggestions-root" class="space-y-6" hx-sync:inherited="this:drop"`)
 	assertNoBody(t, rec, `id="bee-suggestions-empty"`, "autofocus", "<html")
 	if got := f.uris(); len(got) != 1 || got[0] != "GET /bee-name-generator/suggestion/100" {
 		t.Errorf("calls = %v", got)
@@ -141,7 +141,7 @@ func TestBeeAdminPageIsAShell(t *testing.T) {
 	f := newFakeAdmin(t)
 	rec := getPage("/project/bee-name-generator/admin")
 	assertStatus(t, rec, http.StatusOK)
-	assertBody(t, rec, `hx-get="/project/bee-name-generator/admin/suggestions"`, `hx-trigger="load"`, "htmx.v1.9.5.min.js", `id="admin-error"`)
+	assertBody(t, rec, `hx-get="/project/bee-name-generator/admin/suggestions"`, `hx-trigger="load"`, "htmx.v4.0.0.min.js", `id="admin-error"`)
 	assertNoBody(t, rec, "loadBeeSuggestions")
 	if len(f.uris()) != 0 {
 		t.Errorf("the shell called the API: %v", f.uris())

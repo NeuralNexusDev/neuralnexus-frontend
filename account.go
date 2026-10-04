@@ -67,7 +67,7 @@ func failSettings(w http.ResponseWriter, r *http.Request, a adminAPI, err error)
 }
 
 func accountSettingsHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
-	body := map[string]bool{"password_auth": r.PostForm.Get("password_auth") == "true"}
+	body := map[string]bool{"password_auth": r.Form.Get("password_auth") == "true"}
 	if _, err := adminSend[struct{}](a, http.MethodPatch, "/users/me/settings", body, "Failed to update account settings"); err != nil {
 		failSettings(w, r, a, err)
 		return
@@ -108,7 +108,7 @@ func accountLinkHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 		failFragment(w, r, &adminError{Status: http.StatusNotFound, Message: "Unknown platform"})
 		return
 	}
-	body := map[string]bool{"login_enabled": r.PostForm.Get("login_enabled") == "true"}
+	body := map[string]bool{"login_enabled": r.Form.Get("login_enabled") == "true"}
 	if _, err := adminSend[struct{}](a, http.MethodPatch, "/users/me/link/"+url.PathEscape(platform.ID), body, "Failed to update platform"); err != nil {
 		failLink(w, r, a, platform, err)
 		return

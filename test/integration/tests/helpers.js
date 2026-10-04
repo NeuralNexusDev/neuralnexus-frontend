@@ -6,7 +6,7 @@ export { expect };
 
 export const STUB = process.env.NN_API_URL;
 export const APP = process.env.BASE_URL || 'http://localhost:8099';
-const HTMX_CDN = 'https://cdn.neuralnexus.dev/htmx/htmx.v1.9.5.min.js';
+const HTMX_CDN = 'https://cdn.neuralnexus.dev/htmx/htmx.v4.0.0.min.js';
 const HTMX_FILE = fileURLToPath(new URL('../node_modules/htmx.org/dist/htmx.min.js', import.meta.url));
 
 // Snowflake-sized IDs, above 2^53, matching the ones stub-admin.mjs seeds.

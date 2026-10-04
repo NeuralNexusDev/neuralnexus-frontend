@@ -24,8 +24,8 @@ func adminRolesListHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 
 func adminRoleCreateHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	body := map[string]string{
-		"name":        strings.TrimSpace(r.PostForm.Get("name")),
-		"description": strings.TrimSpace(r.PostForm.Get("description")),
+		"name":        strings.TrimSpace(r.Form.Get("name")),
+		"description": strings.TrimSpace(r.Form.Get("description")),
 	}
 	role, err := adminSend[components.Role](a, http.MethodPost, "/roles", body, "Failed to create the role")
 	if err != nil {
@@ -67,7 +67,7 @@ func adminRoleEditorHandler(w http.ResponseWriter, r *http.Request, a adminAPI) 
 func adminRoleSaveHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	id := r.PathValue("id")
 	body := map[string]string{}
-	if raw := r.PostForm.Get("name"); raw != r.PostForm.Get("loaded_name") {
+	if raw := r.Form.Get("name"); raw != r.Form.Get("loaded_name") {
 		name := strings.TrimSpace(raw)
 		if name == "" {
 			failFragment(w, r, invalidInput("Enter a name"))
@@ -75,7 +75,7 @@ func adminRoleSaveHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 		}
 		body["name"] = name
 	}
-	if raw := r.PostForm.Get("description"); raw != r.PostForm.Get("loaded_description") {
+	if raw := r.Form.Get("description"); raw != r.Form.Get("loaded_description") {
 		body["description"] = strings.TrimSpace(raw)
 	}
 	status := "Nothing to save"
@@ -213,15 +213,15 @@ func putGrant(w http.ResponseWriter, r *http.Request, a adminAPI, permissionID s
 }
 
 func adminRoleGrantHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
-	if putGrant(w, r, a, r.PostForm.Get("grant_permission"), r.PostForm.Get("grant_value")) {
-		renderGrantsChanged(w, r, a, roleDrafts(r.PostForm, ""), "", "", false)
+	if putGrant(w, r, a, r.Form.Get("grant_permission"), r.Form.Get("grant_value")) {
+		renderGrantsChanged(w, r, a, roleDrafts(r.Form, ""), "", "", false)
 	}
 }
 
 func adminRoleValueHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	permissionID := r.PathValue("permission")
-	if putGrant(w, r, a, permissionID, r.PostForm.Get("value_"+permissionID)) {
-		renderValueSaved(w, r, a, roleDrafts(r.PostForm, permissionID))
+	if putGrant(w, r, a, permissionID, r.Form.Get("value_"+permissionID)) {
+		renderValueSaved(w, r, a, roleDrafts(r.Form, permissionID))
 	}
 }
 
@@ -232,7 +232,7 @@ func adminRoleRemoveHandler(w http.ResponseWriter, r *http.Request, a adminAPI) 
 		failFragment(w, r, err)
 		return
 	}
-	renderGrantsChanged(w, r, a, roleDrafts(r.PostForm, permissionID), r.PostForm.Get("grant_permission"), r.PostForm.Get("grant_value"), true)
+	renderGrantsChanged(w, r, a, roleDrafts(r.Form, permissionID), r.Form.Get("grant_permission"), r.Form.Get("grant_value"), true)
 }
 
 func adminRoleGrantValueHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
