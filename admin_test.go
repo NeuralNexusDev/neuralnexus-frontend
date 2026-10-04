@@ -157,11 +157,13 @@ func action(method, target string, form url.Values) *httptest.ResponseRecorder {
 	return adminReq{method: method, target: target, form: form, htmx: true}.do()
 }
 
-// bannerText is the text of an error response without the status line it empties out of band.
+// bannerText is the text of an error response without the out-of-band fragments that follow it.
 func bannerText(rec *httptest.ResponseRecorder) string {
-	body, _, _ := strings.Cut(rec.Body.String(), "<p id=")
+	body, _, _ := strings.Cut(rec.Body.String(), "<")
 	return body
 }
+
+const busyClasses = "[&amp;.htmx-request]:pointer-events-none [&amp;.htmx-request]:opacity-60"
 
 func short(body string) string {
 	if start := strings.Index(body, `class="relative isolate`); start >= 0 {
@@ -475,9 +477,6 @@ func TestAdminReloadFailureAfterAWriteIsNotReportedAsAFailedWrite(t *testing.T) 
 		req    func() *httptest.ResponseRecorder
 		seed   func(f *fakeAdmin)
 	}{
-		{"role save", "GET /roles/" + idBee, func() *httptest.ResponseRecorder {
-			return action(http.MethodPost, "/admin/roles/"+idBee, url.Values{"loaded_name": {"bee_admin"}, "name": {"renamed"}})
-		}, func(f *fakeAdmin) { f.on("PATCH /roles/"+idBee, 200, `{}`) }},
 		{"grant", "GET /roles/" + idBee, func() *httptest.ResponseRecorder {
 			return action(http.MethodPost, "/admin/roles/"+idBee+"/permissions", url.Values{"grant_permission": {idPStore}})
 		}, func(f *fakeAdmin) {

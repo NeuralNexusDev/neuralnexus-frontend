@@ -116,6 +116,7 @@ test.describe('account page - login-enabled toggle', () => {
     await page.locator('#link-discord-login-enabled').uncheck({ force: true });
     await expect.poll(writes).toEqual([{ method: 'PATCH', path: '/users/me/link/discord', body: { login_enabled: false } }]);
     await expect(page.locator('#link-discord-login-enabled')).not.toBeChecked();
+    await expect(page.locator('#link-discord.htmx-request')).toHaveCount(0);
 
     await page.locator('#link-discord-login-enabled').check({ force: true });
     await expect.poll(async () => (await writes()).length).toBe(2);
@@ -138,9 +139,9 @@ test.describe('account page - login-enabled toggle', () => {
     const { writes } = await signIn(page, { myLinks: LINKS, delays: { 'PATCH /users/me/link/discord': 600 } });
     await page.goto('/account');
     await page.locator('#link-discord-login-enabled').uncheck({ force: true });
-    await page.locator('#link-discord-login-enabled').check({ force: true });
-    await expect.poll(async () => (await writes()).length).toBe(1);
-    await page.waitForTimeout(800);
+    await expect(page.locator('#link-discord.htmx-request')).toHaveCount(1);
+    await page.locator('#link-discord-login-enabled').dispatchEvent('click');
+    await expect(page.locator('#link-discord.htmx-request')).toHaveCount(0);
     expect(await writes()).toEqual([{ method: 'PATCH', path: '/users/me/link/discord', body: { login_enabled: false } }]);
     await expect(page.locator('#link-discord-login-enabled')).not.toBeChecked();
   });
@@ -155,6 +156,7 @@ test.describe('account page - password login toggle', () => {
     await page.locator('#password-auth-enabled').uncheck({ force: true });
     await expect.poll(writes).toEqual([{ method: 'PATCH', path: '/users/me/settings', body: { password_auth: false } }]);
     await expect(page.locator('#password-auth-enabled')).not.toBeChecked();
+    await expect(page.locator('#account-password.htmx-request')).toHaveCount(0);
 
     await page.locator('#password-auth-enabled').check({ force: true });
     await expect.poll(async () => (await writes()).length).toBe(2);

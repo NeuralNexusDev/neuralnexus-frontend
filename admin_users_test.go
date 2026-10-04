@@ -246,26 +246,30 @@ func userForm(extra url.Values) url.Values {
 
 func TestAdminUserSaveSendsOnlyWhatChanged(t *testing.T) {
 	cases := []struct {
-		name  string
-		extra url.Values
-		want  string
+		name string
+		form func() url.Values
+		want string
 	}{
-		{"username", url.Values{"username": {"  robert  "}}, `PUT /users/` + idBob + ` {"username":"robert"}`},
-		{"roles", url.Values{"roles": {idSystem, idBee}}, `PUT /users/` + idBob + ` {"roles":["` + idSystem + `","` + idBee + `"]}`},
-		{"both", url.Values{"username": {"robert"}, "roles": {idSystem}}, `PUT /users/` + idBob + ` {"roles":["` + idSystem + `"],"username":"robert"}`},
-		{"no roles at all", url.Values{"roles": nil}, `PUT /users/` + idBob + ` {"roles":[]}`},
-		{"swapping a role", url.Values{"roles": {idSystem}}, `PUT /users/` + idBob + ` {"roles":["` + idSystem + `"]}`},
+		{"username", func() url.Values { return userForm(url.Values{"username": {"  robert  "}}) },
+			`PUT /users/` + idBob + ` {"username":"robert"}`},
+		{"roles", func() url.Values { return userForm(url.Values{"roles": {idSystem, idBee}}) },
+			`PUT /users/` + idBob + ` {"roles":["` + idSystem + `","` + idBee + `"]}`},
+		{"both", func() url.Values { return userForm(url.Values{"username": {"robert"}, "roles": {idSystem}}) },
+			`PUT /users/` + idBob + ` {"roles":["` + idSystem + `"],"username":"robert"}`},
+		{"no roles at all", func() url.Values {
+			form := userForm(nil)
+			form.Del("roles")
+			return form
+		}, `PUT /users/` + idBob + ` {"roles":[]}`},
+		{"swapping a role", func() url.Values { return userForm(url.Values{"roles": {idSystem}}) },
+			`PUT /users/` + idBob + ` {"roles":["` + idSystem + `"]}`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFakeAdmin(t)
 			seedUserEditor(f)
 			f.on("PUT /users/"+idBob, 200, bobJSON)
-			form := userForm(tc.extra)
-			if tc.name == "no roles at all" {
-				form.Del("roles")
-			}
-			rec := saveUser(form)
+			rec := saveUser(tc.form())
 			assertStatus(t, rec, http.StatusOK)
 			assertWrites(t, f, tc.want)
 			assertBody(t, rec, `id="admin-user-form"`, `id="admin-user-status" hx-swap-oob="innerHTML">Saved<`,
@@ -389,13 +393,19 @@ func TestAdminUserEditorKeepsRolesWithoutACheckbox(t *testing.T) {
 
 func TestAdminUserSaveKeepsRolesWithoutACheckbox(t *testing.T) {
 	cases := []struct {
-		name  string
-		extra url.Values
-		want  string
+		name string
+		form func() url.Values
+		want string
 	}{
-		{"username only", url.Values{"username": {"robert"}}, `PUT /users/` + idBob + ` {"username":"robert"}`},
-		{"roles changed", url.Values{"roles": {idSystem}}, `PUT /users/` + idBob + ` {"roles":["` + idSystem + `","` + idUnlisted + `"]}`},
-		{"every checkbox cleared", url.Values{"roles": nil}, `PUT /users/` + idBob + ` {"roles":["` + idUnlisted + `"]}`},
+		{"username only", func() url.Values { return userForm(url.Values{"username": {"robert"}}) },
+			`PUT /users/` + idBob + ` {"username":"robert"}`},
+		{"roles changed", func() url.Values { return userForm(url.Values{"roles": {idSystem}}) },
+			`PUT /users/` + idBob + ` {"roles":["` + idSystem + `","` + idUnlisted + `"]}`},
+		{"every checkbox cleared", func() url.Values {
+			form := userForm(nil)
+			form.Del("roles")
+			return form
+		}, `PUT /users/` + idBob + ` {"roles":["` + idUnlisted + `"]}`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -404,12 +414,9 @@ func TestAdminUserSaveKeepsRolesWithoutACheckbox(t *testing.T) {
 			f.on("GET /users/"+idBob+"/links", 200, `[]`)
 			f.on("GET /users/"+idBob+"/permissions", 200, `[]`)
 			f.on("GET /roles", 200, rolesJSON)
-			form := userForm(tc.extra)
+			form := tc.form()
 			form["loaded_roles"] = []string{idBee, idUnlisted}
 			form["kept_roles"] = []string{idUnlisted}
-			if tc.name == "every checkbox cleared" {
-				form.Del("roles")
-			}
 			saveUser(form)
 			assertWrites(t, f, tc.want)
 		})
@@ -578,6 +585,31 @@ func TestAdminUserPageShowsEveryRegion(t *testing.T) {
 	seedUserEditor(f)
 	rec := getPage("/admin/users/" + idBob + "/editor")
 	assertBody(t, rec, `id="admin-user"`, `id="admin-user-header"`, `id="admin-user-form"`, `id="admin-user-permissions-section"`,
-		`hx-target="#admin-user-form"`, `id="admin-user" class="space-y-6" hx-sync:inherited="this:drop"`)
+		`hx-target="#admin-user-form"`, `id="admin-user" class="space-y-6 `+busyClasses+`" hx-sync:inherited="this:drop" hx-indicator:inherited="this"`)
 	assertNoBody(t, rec, `hx-swap-oob="true"`)
+}
+
+func TestAdminUserRowsFocusSomethingWhenAPageHasNoRows(t *testing.T) {
+	f := newFakeAdmin(t)
+	f.on("GET /roles", 200, `[]`)
+	f.on("GET /users", 200, `[]`)
+	rec := adminReq{method: http.MethodGet, target: "/admin/users/rows?offset=200", htmx: true}.do()
+	assertBody(t, rec, `id="admin-users-end" tabindex="-1" autofocus`, "No more users")
+
+	f.on("GET /users", 200, fullPage(200))
+	rec = adminReq{method: http.MethodGet, target: "/admin/users/rows?offset=1000&search=zzz", htmx: true}.do()
+	assertBody(t, rec, `id="admin-users-more-button" type="button" autofocus`)
+	assertNoBody(t, rec, `id="admin-users-end"`)
+}
+
+func TestAdminUserSaveReloadFailureRefreshesWhatTheNextSaveComparesWith(t *testing.T) {
+	f := newFakeAdmin(t)
+	seedUserEditor(f)
+	f.on("PUT /users/"+idBob, 200, `{"user_id":"`+idBob+`","username":"robert","roles":["`+idSystem+`"]}`)
+	f.problem("GET /roles", 500, "roles are down")
+	rec := saveUser(userForm(url.Values{"username": {"robert"}}))
+	assertStatus(t, rec, http.StatusInternalServerError)
+	assertBody(t, rec,
+		`id="admin-user-loaded" hx-swap-oob="true"`, `name="loaded_username" value="robert"`, `name="loaded_roles" value="`+idSystem+`"`,
+		`id="admin-user-header" hx-swap-oob="true"`, ">robert<")
 }

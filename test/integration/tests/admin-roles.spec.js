@@ -242,12 +242,15 @@ test.describe('admin - role changes while other edits are open', () => {
     expect(await writes()).toEqual([{ method: 'PATCH', path: `/roles/${ID.bee}`, body: { name: 'bee_manager' } }]);
   });
 
-  test('a second action while another is in flight is dropped', async ({ page }) => {
+  test('the editor looks busy while a change is in flight and drops a second one', async ({ page }) => {
     const { writes } = await signIn(page, { delays: { [`DELETE /roles/${ID.bee}/permissions/${ID.pBee}`]: 600 } });
     await page.goto(roleEditor);
     await grantedRows(page).nth(0).getByRole('button', { name: 'Remove beenamegenerator.admin' }).click();
-    await grantedRows(page).nth(1).getByRole('button', { name: 'Remove ratelimit' }).click();
+    await expect(page.locator('#admin-role.htmx-request')).toHaveCount(1);
+    await expect(page.locator('#admin-role')).toHaveCSS('pointer-events', 'none');
+    await grantedRows(page).nth(1).getByRole('button', { name: 'Remove ratelimit' }).dispatchEvent('click');
     await expect(grantedRows(page)).toHaveCount(1);
+    await expect(page.locator('#admin-role.htmx-request')).toHaveCount(0);
     expect(await writes()).toEqual([{ method: 'DELETE', path: `/roles/${ID.bee}/permissions/${ID.pBee}`, body: null }]);
   });
 

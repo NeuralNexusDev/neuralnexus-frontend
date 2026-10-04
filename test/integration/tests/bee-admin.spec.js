@@ -49,7 +49,8 @@ test.describe('bee name generator - suggestion review', () => {
     });
     await page.goto(page_);
     await page.getByRole('button', { name: 'Accept buzz' }).click();
-    await page.getByRole('button', { name: 'Reject honey' }).click();
+    await expect(page.locator('#bee-suggestions-root.htmx-request')).toHaveCount(1);
+    await page.getByRole('button', { name: 'Reject honey' }).dispatchEvent('click');
     await expect(rows(page)).toHaveText([/honey/, /wax/]);
     expect(await writes()).toEqual([{ method: 'PUT', path: '/bee-name-generator/suggestion/buzz', body: null }]);
   });

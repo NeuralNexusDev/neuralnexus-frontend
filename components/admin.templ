@@ -193,18 +193,21 @@ func (d AdminRoleData) Draft(p RolePermission) string {
 }
 
 const (
-	adminHTMXURL       = "https://s3.neuralnexus.dev/cdn/htmx/v4.0.0/htmx.min.js"
-	adminHTMXIntegrity = "sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc"
-	adminHTMXConfig    = `{"mode":"same-origin","history":false,"allowEmptySwapAfterOOB":true}`
-	adminInputClass    = "text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-	adminSelectClass   = "text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-	adminSubmitClass   = "border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
-	adminButtonClass   = "border border-input hover:bg-accent hover:text-accent-foreground inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-	adminDangerClass   = "border border-red-600 text-red-600 hover:bg-red-600/10 dark:border-red-400 dark:text-red-400 dark:hover:bg-red-400/10 inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-	adminCardClass     = "block rounded-lg border border-input p-3 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-	adminChipClass     = "rounded-full border border-input px-2.5 py-0.5 text-xs"
-	adminMutedClass    = "text-sm text-gray-500 dark:text-gray-400"
-	adminSectionError  = "text-sm text-red-600 dark:text-red-400"
+	adminHTMXURL         = "https://s3.neuralnexus.dev/cdn/htmx/v4.0.0/htmx.min.js"
+	adminHTMXIntegrity   = "sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc"
+	adminHTMXConfig      = `{"mode":"same-origin","history":false,"allowEmptySwapAfterOOB":true}`
+	adminInputClass      = "text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+	adminSelectClass     = "text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+	adminSubmitClass     = "border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
+	adminButtonClass     = "border border-input hover:bg-accent hover:text-accent-foreground inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+	adminDangerClass     = "border border-red-600 text-red-600 hover:bg-red-600/10 dark:border-red-400 dark:text-red-400 dark:hover:bg-red-400/10 inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+	adminCardClass       = "block rounded-lg border border-input p-3 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+	adminChipClass       = "rounded-full border border-input px-2.5 py-0.5 text-xs"
+	adminLinkButtonClass = "border border-input hover:bg-accent hover:text-accent-foreground inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 h-10 px-4 py-2 w-full"
+	adminEmptyClass      = "text-center text-sm text-gray-500 dark:text-gray-400"
+	adminBusyClass       = "[&.htmx-request]:pointer-events-none [&.htmx-request]:opacity-60"
+	adminMutedClass      = "text-sm text-gray-500 dark:text-gray-400"
+	adminSectionError    = "text-sm text-red-600 dark:text-red-400"
 )
 
 func adminUserRowsPath(offset int, search string) string {
@@ -271,7 +274,7 @@ templ adminLoad(path string) {
 }
 
 templ adminStatus(id string) {
-	<p id={ id } role="status" class="text-center text-sm text-gray-500 dark:text-gray-400"></p>
+	<p id={ id } role="status" class={ adminEmptyClass }></p>
 }
 
 // AdminErrorClear empties the error banner out of band, so a change that works removes the message of one that did not.
@@ -284,7 +287,7 @@ templ AdminDashboardLink() {
 	<a
 		id="admin-dashboard-link"
 		href="/admin"
-		class="border border-input hover:bg-accent hover:text-accent-foreground inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 h-10 px-4 py-2 w-full"
+		class={ adminLinkButtonClass }
 	>
 		Admin dashboard
 	</a>
@@ -340,7 +343,7 @@ templ AdminCards(d AdminDashboardData) {
 			@adminCard("admin-permissions-link", "/admin/permissions", "Permissions", "Create and delete the permissions roles can grant")
 		}
 		if !d.Users && !d.Roles {
-			<p id="admin-denied" class="text-center text-sm text-gray-500 dark:text-gray-400">Your account has no admin permissions</p>
+			<p id="admin-denied" class={ adminEmptyClass }>Your account has no admin permissions</p>
 		}
 	</div>
 }
@@ -399,8 +402,11 @@ templ AdminUserRows(d AdminUsersData) {
 			</a>
 		</li>
 	}
+	if len(d.Users) == 0 && d.Start > 0 && !d.More {
+		<li id="admin-users-end" tabindex="-1" autofocus?={ d.FocusFirst } class={ adminEmptyClass }>No more users</li>
+	}
 	if len(d.Users) == 0 && d.Start == 0 {
-		<li id="admin-users-empty" class="text-center text-sm text-gray-500 dark:text-gray-400">
+		<li id="admin-users-empty" class={ adminEmptyClass }>
 			if d.More {
 				No matches in the first { strconv.Itoa(d.NextOffset) } users
 			} else {
@@ -413,6 +419,7 @@ templ AdminUserRows(d AdminUsersData) {
 			<button
 				id="admin-users-more-button"
 				type="button"
+				autofocus?={ d.FocusFirst && len(d.Users) == 0 }
 				hx-get={ adminUserRowsPath(d.NextOffset, d.Search) }
 				hx-target="#admin-users-more"
 				hx-swap="outerHTML"
@@ -444,7 +451,7 @@ templ adminUser(id string) {
 
 // AdminUserContent renders the user editor, which the user page loads.
 templ AdminUserContent(d AdminUserData) {
-	<div id="admin-user" class="space-y-6" hx-sync:inherited="this:drop">
+	<div id="admin-user" class={ "space-y-6 " + adminBusyClass } hx-sync:inherited="this:drop" hx-indicator:inherited="this">
 		@AdminUserHeader(d, false)
 		@AdminUserForm(d)
 		@adminUserLinks(d)
@@ -466,6 +473,27 @@ templ AdminUserHeader(d AdminUserData, oob bool) {
 	</div>
 }
 
+// AdminUserLoaded holds the values the form was loaded with, which a save compares against, or the out-of-band copy of them a save sends.
+templ AdminUserLoaded(d AdminUserData, oob bool) {
+	<div
+		id="admin-user-loaded"
+		if oob {
+			hx-swap-oob="true"
+		}
+		hidden
+	>
+		<input type="hidden" name="loaded_username" value={ d.User.Username }/>
+		for _, roleID := range d.User.Roles {
+			<input type="hidden" name="loaded_roles" value={ roleID }/>
+		}
+	</div>
+}
+
+// AdminRowGone removes a row out of band, for a row whose removal succeeded when the page could not be refreshed.
+templ AdminRowGone(id string) {
+	<div hx-swap-oob={ "delete:#" + id }></div>
+}
+
 // AdminUserForm renders the form that edits the username and roles, which htmx swaps in after a save.
 templ AdminUserForm(d AdminUserData) {
 	<form
@@ -475,10 +503,7 @@ templ AdminUserForm(d AdminUserData) {
 		hx-target="#admin-user-form"
 		hx-swap="outerHTML"
 	>
-		<input type="hidden" name="loaded_username" value={ d.User.Username }/>
-		for _, roleID := range d.User.Roles {
-			<input type="hidden" name="loaded_roles" value={ roleID }/>
-		}
+		@AdminUserLoaded(d, false)
 		if d.RolesReadable {
 			<input type="hidden" name="roles_editable" value="1"/>
 			for _, roleID := range d.UnlistedRoles() {
@@ -605,7 +630,7 @@ templ AdminRolesContent(d AdminRolesData) {
 				</li>
 			}
 		</ul>
-		<p id="admin-roles-empty" hidden?={ len(d.Roles) > 0 } class="text-center text-sm text-gray-500 dark:text-gray-400">No roles</p>
+		<p id="admin-roles-empty" hidden?={ len(d.Roles) > 0 } class={ adminEmptyClass }>No roles</p>
 		<form id="admin-role-create-form" class="space-y-4 rounded-lg border border-input p-4" hx-post="/admin/roles" hx-sync="this:drop">
 			<h2 class="text-lg font-semibold">New role</h2>
 			@adminField("admin-role-create-name", "Name", "Lower-case letters, digits and underscores, starting with a letter") {
@@ -682,7 +707,7 @@ templ adminRole(id string) {
 
 // AdminRoleContent renders the role editor, which the role page loads.
 templ AdminRoleContent(d AdminRoleData) {
-	<div id="admin-role" class="space-y-6" hx-sync:inherited="this:drop">
+	<div id="admin-role" class={ "space-y-6 " + adminBusyClass } hx-sync:inherited="this:drop" hx-indicator:inherited="this">
 		@AdminRoleHeader(d, false)
 		@AdminRoleForm(d)
 		@AdminRoleGrants(d)
@@ -768,7 +793,7 @@ templ AdminRoleGranted(d AdminRoleData) {
 		} else {
 			<ul id="admin-role-permissions" class="space-y-2">
 				for _, permission := range d.Role.Permissions {
-					<li class="space-y-2 rounded-lg border border-input p-3">
+					<li id={ "granted-" + permission.ID } class="space-y-2 rounded-lg border border-input p-3">
 						<div class="flex items-start justify-between gap-3">
 							@adminTextBlock(permission.Node, permission.Description)
 							<button
@@ -863,7 +888,7 @@ templ adminPermissions() {
 
 // AdminPermissionsContent renders the permission list and the form that creates one.
 templ AdminPermissionsContent(d AdminPermissionsData) {
-	<div id="admin-permissions-root" class="space-y-6" hx-sync:inherited="this:drop" hx-target:inherited="#admin-permissions-list" hx-swap:inherited="outerHTML">
+	<div id="admin-permissions-root" class={ "space-y-6 " + adminBusyClass } hx-indicator:inherited="this" hx-sync:inherited="this:drop" hx-target:inherited="#admin-permissions-list" hx-swap:inherited="outerHTML">
 		@AdminPermissionList(d)
 		@AdminPermissionForm(false)
 	</div>
@@ -874,11 +899,11 @@ templ AdminPermissionList(d AdminPermissionsData) {
 	<div id="admin-permissions-list" class="space-y-6">
 		<h2 id="admin-permissions-title" tabindex="-1" autofocus?={ d.FocusList } class="sr-only">Permission list</h2>
 		if len(d.Permissions) == 0 {
-			<p id="admin-permissions-empty" class="text-center text-sm text-gray-500 dark:text-gray-400">No permissions</p>
+			<p id="admin-permissions-empty" class={ adminEmptyClass }>No permissions</p>
 		} else {
 			<ul id="admin-permissions" class="space-y-2">
 				for _, permission := range d.Permissions {
-					<li class="flex items-start justify-between gap-3 rounded-lg border border-input p-3">
+					<li id={ "permission-" + permission.ID } class="flex items-start justify-between gap-3 rounded-lg border border-input p-3">
 						<span class="min-w-0">
 							@adminTextBlock(permission.Node, permission.Description)
 							if permission.ValueType != "" {

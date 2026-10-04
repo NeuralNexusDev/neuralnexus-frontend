@@ -40,8 +40,9 @@ test.describe('admin - user list', () => {
     await signIn(page, { delays: { 'GET /users': 500 } });
     await page.goto('/admin/users');
     await expect(rows(page)).toHaveCount(3);
+    const first = page.waitForRequest((request) => request.url().includes('/admin/users/rows') && request.url().includes('search=bo'));
     await search(page).fill('bo');
-    await page.waitForTimeout(350);
+    await first;
     await search(page).fill('alice');
     await expect(rows(page)).toHaveCount(1);
     await expect(rows(page)).toContainText('alice');
@@ -77,6 +78,15 @@ test.describe('admin - user list', () => {
     await page.locator('#admin-users-more-button').click();
     await expect(page.locator('#admin-users-more-button')).toHaveCount(0);
     await expect(rows(page)).toHaveCount(0);
+  });
+
+  test('Load more that finds no more users moves focus to a notice', async ({ page }) => {
+    await signIn(page, { generateUsers: 197 });
+    await page.goto('/admin/users');
+    await expect(rows(page)).toHaveCount(200);
+    await page.locator('#admin-users-more-button').click();
+    await expect(page.locator('#admin-users-end')).toBeFocused();
+    await expect(page.locator('#admin-users-more-button')).toHaveCount(0);
   });
 
   test('Load more adds the next page and the button goes when the list ends', async ({ page }) => {
@@ -225,6 +235,23 @@ test.describe('admin - user changes', () => {
     await page.locator('#admin-user-save').click();
     await expect(page.locator('#admin-user-status')).toHaveText('Saved');
     expect(await writes()).toEqual([{ method: 'PUT', path: `/users/${ID.bob}`, body: { username: 'robert' } }]);
+  });
+
+  test('a save whose page could not be refreshed still compares the next save with what was stored', async ({ page }) => {
+    const { writes } = await signIn(page, { failures: { 'GET /roles': { status: 500, detail: 'roles are down', skip: 1, times: 1 } } });
+    await page.goto(`/admin/users/${ID.bob}`);
+    await page.locator('#admin-user-username').fill('robert');
+    await page.locator('#admin-user-save').click();
+    await expect(error(page)).toHaveText('The change was made, but the page could not be refreshed: roles are down');
+    await expect(page.locator('#admin-user-title')).toHaveText('robert');
+
+    await page.locator('#admin-user-username').fill('bob');
+    await page.locator('#admin-user-save').click();
+    await expect(page.locator('#admin-user-status')).toHaveText('Saved');
+    expect(await writes()).toEqual([
+      { method: 'PUT', path: `/users/${ID.bob}`, body: { username: 'robert' } },
+      { method: 'PUT', path: `/users/${ID.bob}`, body: { username: 'bob' } },
+    ]);
   });
 
   test('a failed save empties the status line of the save before it', async ({ page }) => {

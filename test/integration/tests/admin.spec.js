@@ -1,4 +1,4 @@
-import { test, expect, signIn, APP, error } from './helpers.js';
+import { test, expect, signIn, ID, APP, error } from './helpers.js';
 
 test.describe('admin - access', () => {
   test('a signed-out visitor is sent to the login page', async ({ page }) => {
@@ -34,12 +34,25 @@ test.describe('admin - access', () => {
     await expect(error(page)).toHaveText('The server could not be reached. Try again in a moment.');
   });
 
+  test('a request that takes too long shows a message in the banner', async ({ page }) => {
+    await signIn(page, { delays: { [`PATCH /roles/${ID.bee}`]: 1500 } });
+    await page.goto(`/admin/roles/${ID.bee}`);
+    await expect(page.locator('#admin-role-name')).toBeVisible();
+    await page.evaluate(() => {
+      htmx.config.defaultTimeout = 300;
+    });
+    await page.locator('#admin-role-name').fill('bee_manager');
+    await page.locator('#admin-role-save').click();
+    await expect(error(page)).toHaveText('The server could not be reached. Try again in a moment.');
+  });
+
   test('going back after the session ends does not show the page again', async ({ page }) => {
     await signIn(page);
     await page.route('**/login', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: 'login' }));
     await page.goto('/admin/roles');
     await expect(page.locator('#admin-roles li').first()).toBeVisible();
     await page.goto('/admin');
+    await expect(page.locator('#admin-users-link')).toBeVisible();
     await page.context().clearCookies();
     await page.goBack();
     await expect(page).toHaveURL(/\/login$/);

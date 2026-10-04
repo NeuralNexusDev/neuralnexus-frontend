@@ -21,7 +21,13 @@ var adminClient = &http.Client{Timeout: adminAPITimeout}
 
 var errUnauthorized = errors.New("not signed in")
 
-// adminError is a failed call with the status and the message to show for it.
+const (
+	loadRolesFailed       = "Failed to load roles"
+	loadPermissionsFailed = "Failed to load permissions"
+	loadYourPermsFailed   = "Failed to load your permissions"
+	unknownPlatform       = "Unknown platform"
+)
+
 type adminError struct {
 	Status  int
 	Message string
@@ -35,7 +41,6 @@ func invalidInput(message string) error {
 	return &adminError{Status: http.StatusBadRequest, Message: message}
 }
 
-// adminAPI calls nn-api as the signed-in user by forwarding the session cookie of the request.
 type adminAPI struct {
 	r *http.Request
 }

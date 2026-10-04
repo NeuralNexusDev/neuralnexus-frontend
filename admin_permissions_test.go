@@ -100,9 +100,25 @@ func TestAdminPermissionsRootQueuesActionsAndNamesTheTarget(t *testing.T) {
 	f := newFakeAdmin(t)
 	f.on("GET /permissions", 200, permissionsJSON)
 	rec := getPage("/admin/permissions/list")
-	assertBody(t, rec, `id="admin-permissions-root" class="space-y-6" hx-sync:inherited="this:drop" hx-target:inherited="#admin-permissions-list" hx-swap:inherited="outerHTML"`)
+	assertBody(t, rec, `id="admin-permissions-root" class="space-y-6 `+busyClasses+`" hx-indicator:inherited="this" hx-sync:inherited="this:drop" hx-target:inherited="#admin-permissions-list" hx-swap:inherited="outerHTML"`)
 	if got := strings.Count(rec.Body.String(), "hx-sync"); got != 1 {
 		t.Errorf("hx-sync appears %d times, want only the root", got)
 	}
 	assertNoBody(t, rec, "closest")
+}
+
+func TestAdminPermissionDeleteReloadFailureRemovesTheRow(t *testing.T) {
+	f := newFakeAdmin(t)
+	f.on("DELETE /permissions/"+idPStore, 204, ``)
+	f.problem("GET /permissions", 500, "down")
+	rec := action(http.MethodDelete, "/admin/permissions/"+idPStore, nil)
+	assertBody(t, rec, `hx-swap-oob="delete:#permission-`+idPStore+`"`)
+}
+
+func TestAdminPermissionCreateReloadFailureClearsTheForm(t *testing.T) {
+	f := newFakeAdmin(t)
+	f.on("POST /permissions", 201, `{}`)
+	f.problem("GET /permissions", 500, "down")
+	rec := action(http.MethodPost, "/admin/permissions", url.Values{"node": {"pets.write"}})
+	assertBody(t, rec, `id="admin-permission-create-form" hx-swap-oob="true"`)
 }

@@ -194,18 +194,6 @@ func TestAccountSettingsToggleRefusedShowsTheMessageAndPutsTheCheckboxBack(t *te
 	}
 }
 
-func TestAccountSettingsToggleRefusedWithoutAReloadStillShowsTheMessage(t *testing.T) {
-	f := newFakeAdmin(t)
-	f.problem("PATCH /users/me/settings", 409, "Keep one way to sign in")
-	f.problem("GET /users/me/settings", 500, "down")
-	rec := action(http.MethodPost, "/account/settings", url.Values{})
-	assertStatus(t, rec, http.StatusConflict)
-	if got := bannerText(rec); got != "Keep one way to sign in" {
-		t.Errorf("body = %q", got)
-	}
-	assertNoBody(t, rec, "hx-swap-oob=\"true\"")
-}
-
 func TestAccountSettingsToggleReloadFailureIsNotReportedAsAFailedChange(t *testing.T) {
 	f := newFakeAdmin(t)
 	f.on("PATCH /users/me/settings", 204, ``)
@@ -260,19 +248,30 @@ func TestAccountUnlinkDeletesTheLinkAndAnswersWithTheUnlinkedRow(t *testing.T) {
 	assertNoBody(t, rec, "Unlink")
 }
 
-func TestAccountLinkChangesRefusedShowTheMessageAndPutTheRowBack(t *testing.T) {
-	for _, tc := range []struct{ name, method, target, route string }{
-		{"toggle", http.MethodPost, "/account/links/discord", "PATCH /users/me/link/discord"},
-		{"unlink", http.MethodDelete, "/account/links/discord", "DELETE /users/me/link/discord"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			f := newFakeAdmin(t)
-			seedAccount(f)
-			f.problem(tc.route, 409, "Keep one way to sign in")
-			rec := action(tc.method, tc.target, url.Values{})
-			assertStatus(t, rec, http.StatusConflict)
-			assertBody(t, rec, "Keep one way to sign in", `id="link-discord" hx-swap-oob="true"`, ">someone#1234<")
-		})
+func TestAccountLinkToggleRefusedShowsTheMessageAndPutsTheCheckboxBack(t *testing.T) {
+	f := newFakeAdmin(t)
+	f.problem("PATCH /users/me/link/discord", 409, "Keep one way to sign in")
+	for _, form := range []url.Values{{}, {"login_enabled": {"true"}}} {
+		rec := action(http.MethodPost, "/account/links/discord", form)
+		assertStatus(t, rec, http.StatusConflict)
+		assertBody(t, rec, "Keep one way to sign in", `id="link-discord-login-enabled" hx-swap-oob="true"`)
+		wantChecked := len(form) == 0
+		if got := strings.Contains(rec.Body.String(), `value="true" checked`); got != wantChecked {
+			t.Errorf("checked = %v after submitting %v, want %v", got, form, wantChecked)
+		}
+	}
+	if len(f.uris()) != 2 {
+		t.Errorf("a refused toggle read the API again: %v", f.uris())
+	}
+}
+
+func TestAccountUnlinkRefusedShowsTheMessage(t *testing.T) {
+	f := newFakeAdmin(t)
+	f.problem("DELETE /users/me/link/discord", 409, "Keep one way to sign in")
+	rec := action(http.MethodDelete, "/account/links/discord", nil)
+	assertStatus(t, rec, http.StatusConflict)
+	if got := rec.Body.String(); got != "Keep one way to sign in" {
+		t.Errorf("body = %q", got)
 	}
 }
 
@@ -305,4 +304,11 @@ func TestAccountUnlinkRefusesAnUnknownPlatform(t *testing.T) {
 	rec := action(http.MethodDelete, "/account/links/minecraft", nil)
 	assertStatus(t, rec, http.StatusNotFound)
 	assertWrites(t, f)
+}
+
+func TestAccountControlsNameTheirPlatform(t *testing.T) {
+	f := newFakeAdmin(t)
+	seedAccount(f)
+	assertBody(t, getPage("/account/content"),
+		`aria-label="Unlink Discord"`, `aria-label="Link Microsoft"`, `aria-label="Allow logins for Discord"`, `aria-label="Allow logins for Xbox Live"`)
 }

@@ -14,7 +14,7 @@ func TestBeeSuggestionsListThePendingNames(t *testing.T) {
 	rec := getPage("/project/bee-name-generator/admin/suggestions")
 	assertStatus(t, rec, http.StatusOK)
 	assertBody(t, rec, ">buzz<", ">honey<", `value="accept"`, `value="reject"`, `aria-label="Accept buzz"`, `aria-label="Reject honey"`,
-		`hx-post="/project/bee-name-generator/admin/suggestions"`, `id="bee-suggestions-root" class="space-y-6" hx-sync:inherited="this:drop"`)
+		`hx-post="/project/bee-name-generator/admin/suggestions"`, `id="bee-suggestions-root" class="space-y-6 `+busyClasses+`" hx-indicator:inherited="this" hx-sync:inherited="this:drop"`)
 	assertNoBody(t, rec, `id="bee-suggestions-empty"`, "autofocus", "<html")
 	if got := f.uris(); len(got) != 1 || got[0] != "GET /bee-name-generator/suggestion/100" {
 		t.Errorf("calls = %v", got)

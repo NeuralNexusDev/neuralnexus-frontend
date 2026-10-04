@@ -34,6 +34,7 @@ type AccountSettingsData struct {
 
 const accountToggleClass = "relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full bg-gray-300 transition-colors has-[:checked]:bg-primary has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 dark:bg-gray-600"
 
+// Account renders the account settings page, which loads its content.
 templ Account() {
 	@ErrorBanner()
 	<div class="mx-auto max-w-sm space-y-6">
@@ -110,9 +111,10 @@ templ AccountPasswordLogin(d AccountSettingsData, oob bool) {
 			hx-swap-oob="true"
 		}
 		hx-sync:inherited="this:drop"
+		hx-indicator:inherited="this"
 		hx-target:inherited="this"
 		hx-swap:inherited="outerHTML"
-		class="space-y-2"
+		class={ "space-y-2 " + adminBusyClass }
 	>
 		<div class="rounded-lg border border-input p-3 flex items-center justify-between">
 			<label for="password-auth-enabled" class="text-sm font-medium">
@@ -147,9 +149,10 @@ templ AccountLinkRow(platform AccountPlatform, link LinkedAccount, linked bool, 
 			hx-swap-oob="true"
 		}
 		hx-sync:inherited="this:drop"
+		hx-indicator:inherited="this"
 		hx-target:inherited="this"
 		hx-swap:inherited="outerHTML"
-		class="rounded-lg border border-input p-3 space-y-2"
+		class={ "rounded-lg border border-input p-3 space-y-2 " + adminBusyClass }
 	>
 		<div class="flex items-center gap-2">
 			@accountPlatformIcon(platform.ID)
@@ -185,6 +188,7 @@ templ AccountLinkRow(platform AccountPlatform, link LinkedAccount, linked bool, 
 				<button
 					id={ "link-" + platform.ID + "-action" }
 					type="button"
+					aria-label={ "Unlink " + platform.Name }
 					hx-delete={ "/account/links/" + platform.ID }
 					hx-confirm={ "Unlink " + platform.Name + " from your account?" }
 					class="shrink-0 text-xs underline"
@@ -195,6 +199,7 @@ templ AccountLinkRow(platform AccountPlatform, link LinkedAccount, linked bool, 
 				<button
 					id={ "link-" + platform.ID + "-action" }
 					type="button"
+					aria-label={ "Link " + platform.Name }
 					data-platform={ platform.ID }
 					onclick="handleLinkAction(this.dataset.platform)"
 					class="shrink-0 text-xs underline"
@@ -208,21 +213,30 @@ templ AccountLinkRow(platform AccountPlatform, link LinkedAccount, linked bool, 
 				Allow logins
 			</label>
 			<label class={ accountToggleClass }>
-				<input
-					type="checkbox"
-					id={ "link-" + platform.ID + "-login-enabled" }
-					name="login_enabled"
-					value="true"
-					checked?={ linked && link.LoginEnabled }
-					disabled?={ !linked || !link.Verified }
-					hx-post={ "/account/links/" + platform.ID }
-					hx-trigger="change"
-					class="peer sr-only"
-				/>
+				@AccountLoginInput(platform, linked && link.LoginEnabled, !linked || !link.Verified, false)
 				<span class="pointer-events-none inline-block h-4 w-4 translate-x-0.5 rounded-full bg-background shadow transition-transform peer-checked:translate-x-4"></span>
 			</label>
 		</div>
 	</div>
+}
+
+// AccountLoginInput renders the checkbox that allows logins through a platform, or the out-of-band copy a refused change sends.
+templ AccountLoginInput(platform AccountPlatform, checked bool, disabled bool, oob bool) {
+	<input
+		type="checkbox"
+		id={ "link-" + platform.ID + "-login-enabled" }
+		if oob {
+			hx-swap-oob="true"
+		}
+		aria-label={ "Allow logins for " + platform.Name }
+		name="login_enabled"
+		value="true"
+		checked?={ checked }
+		disabled?={ disabled }
+		hx-post={ "/account/links/" + platform.ID }
+		hx-trigger="change"
+		class="peer sr-only"
+	/>
 }
 
 templ accountPlatformIcon(platform string) {
@@ -247,6 +261,7 @@ templ accountPlatformIcon(platform string) {
 	}
 }
 
+// AccountPage serves the account settings shell, which loads the profile, the sign-in setting and the connected accounts.
 templ AccountPage() {
 	@WrapContentsWithHead("NeuralNexus", htmxHead(), Account())
 }

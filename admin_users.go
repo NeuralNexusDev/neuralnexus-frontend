@@ -13,8 +13,7 @@ import (
 
 const (
 	usersPageSize = 200
-	// searchPages is how many pages of users one search request reads.
-	searchPages = 5
+	searchPages   = 5
 )
 
 func sameSet(a []string, b []string) bool {
@@ -33,9 +32,8 @@ func sameSet(a []string, b []string) bool {
 	return true
 }
 
-// listRoles returns every role, and false when the caller may not read roles.
 func listRoles(a adminAPI) ([]components.Role, bool, error) {
-	roles, err := adminGet[[]components.Role](a, "/roles", "Failed to load roles")
+	roles, err := adminGet[[]components.Role](a, "/roles", loadRolesFailed)
 	var failure *adminError
 	if errors.As(err, &failure) && failure.Status == http.StatusForbidden {
 		return nil, false, nil
@@ -46,8 +44,7 @@ func listRoles(a adminAPI) ([]components.Role, bool, error) {
 	return roles, true, nil
 }
 
-// loadUsersPage reads the users from the offset, and with a search reads on until it has covered searchPages pages.
-// The API cannot search, so the matching happens here.
+// The API has no search, so a search reads pages of users and matches them here.
 func loadUsersPage(a adminAPI, offset int, search string) (components.AdminUsersData, error) {
 	search = strings.TrimSpace(search)
 	needle := strings.ToLower(search)
@@ -122,7 +119,6 @@ func adminUserRowsHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	renderAll(w, r, components.AdminUserRows(data))
 }
 
-// loadUserEditor loads the user editor's data, with the linked accounts only when the page needs them.
 func loadUserEditor(a adminAPI, id string, user *components.UserAccount, withLinks bool) (components.AdminUserData, error) {
 	path := "/users/" + url.PathEscape(id)
 	if user == nil {
@@ -161,7 +157,6 @@ func adminUserEditorHandler(w http.ResponseWriter, r *http.Request, a adminAPI) 
 	renderAll(w, r, components.AdminUserContent(data))
 }
 
-// renderUserSave answers a save with the form, and with the header and permissions, which the save can change.
 func renderUserSave(w http.ResponseWriter, r *http.Request, data components.AdminUserData, status string) {
 	renderAll(w, r,
 		components.AdminUserForm(data),
@@ -204,7 +199,8 @@ func adminUserSaveHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	}
 	data, err := loadUserEditor(a, id, &saved, false)
 	if err != nil {
-		failFragment(w, r, afterWrite(err))
+		written := components.AdminUserData{User: saved}
+		failFragment(w, r, afterWrite(err), components.AdminUserHeader(written, true), components.AdminUserLoaded(written, true))
 		return
 	}
 	status := "Saved"

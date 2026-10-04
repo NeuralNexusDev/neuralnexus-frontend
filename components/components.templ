@@ -266,7 +266,7 @@ templ BeeNameGenerator() {
 			>
 				Suggest
 			</button>
-			<p id="suggest-bee-status" role="status" hidden class="text-center text-sm text-gray-500 dark:text-gray-400"></p>
+			<p id="suggest-bee-status" role="status" hidden class={ adminEmptyClass }></p>
 		</form>
 		<div hx-get="/project/bee-name-generator/admin-link" hx-trigger="load" hx-swap="outerHTML"></div>
 	</div>
@@ -277,7 +277,7 @@ templ BeeNameGeneratorAdminLink() {
 	<a
 		id="bee-admin-link"
 		href="/project/bee-name-generator/admin"
-		class="border border-input hover:bg-accent hover:text-accent-foreground inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 h-10 px-4 py-2 w-full"
+		class={ adminLinkButtonClass }
 	>
 		Review suggestions
 	</a>
@@ -309,10 +309,10 @@ type BeeSuggestionsData struct {
 
 // BeeSuggestions renders the pending suggestions, which htmx swaps in after one is accepted or rejected.
 templ BeeSuggestions(d BeeSuggestionsData) {
-	<div id="bee-suggestions-root" class="space-y-6" hx-sync:inherited="this:drop" hx-target:inherited="#bee-suggestions-root" hx-swap:inherited="outerHTML">
+	<div id="bee-suggestions-root" class={ "space-y-6 " + adminBusyClass } hx-indicator:inherited="this" hx-sync:inherited="this:drop" hx-target:inherited="#bee-suggestions-root" hx-swap:inherited="outerHTML">
 		<h2 id="bee-suggestions-title" tabindex="-1" autofocus?={ d.FocusList } class="sr-only">Pending suggestions</h2>
 		if len(d.Names) == 0 {
-			<p id="bee-suggestions-empty" class="text-center text-sm text-gray-500 dark:text-gray-400">
+			<p id="bee-suggestions-empty" class={ adminEmptyClass }>
 				No pending suggestions
 			</p>
 		} else {
@@ -440,7 +440,7 @@ templ McStatus() {
 				</div>
 			</div>
 			<ul id="mc-status-players" class="flex flex-wrap gap-2"></ul>
-			<p id="mc-status-players-unavailable" hidden class="text-center text-sm text-gray-500 dark:text-gray-400">
+			<p id="mc-status-players-unavailable" hidden class={ adminEmptyClass }>
 				Player list unavailable
 			</p>
 		</div>

@@ -180,6 +180,8 @@ func TestAdminRoleGrantRefusesUnusableValues(t *testing.T) {
 		{"fraction", idPRate, "1.5", "Enter a whole number from -9007199254740992 to 9007199254740992"},
 		{"exponent", idPRate, "1e3", "Enter a whole number from -9007199254740992 to 9007199254740992"},
 		{"leading zeros", idPRate, "007", "Enter a whole number from -9007199254740992 to 9007199254740992"},
+		{"negative zero", idPRate, "-0", "Enter a whole number from -9007199254740992 to 9007199254740992"},
+		{"trailing zero fraction", idPRate, "1.0", "Enter a whole number from -9007199254740992 to 9007199254740992"},
 		{"plus sign", idPRate, "+5", "Enter a whole number from -9007199254740992 to 9007199254740992"},
 		{"2^53 plus one", idPRate, "9007199254740993", "Enter a whole number from -9007199254740992 to 9007199254740992"},
 		{"below -2^53", idPRate, "-9007199254740993", "Enter a whole number from -9007199254740992 to 9007199254740992"},
@@ -320,7 +322,7 @@ func TestAdminRoleSaveSendsOnlyWhatChanged(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFakeAdmin(t)
 			seedRoleEditor(f)
-			f.on("PATCH /roles/"+idBee, 200, `{}`)
+			f.on("PATCH /roles/"+idBee, 200, `{"id":"`+idBee+`","name":"stored_name","description":"Stored description","permissions":[]}`)
 			tc.form.Set("loaded_name", "bee_admin")
 			tc.form.Set("loaded_description", "Bee Name Generator Admin")
 			rec := action(http.MethodPost, "/admin/roles/"+idBee, tc.form)
@@ -328,9 +330,40 @@ func TestAdminRoleSaveSendsOnlyWhatChanged(t *testing.T) {
 			assertWrites(t, f, tc.want)
 			assertBody(t, rec, `id="admin-role-form"`, `id="admin-role-status" hx-swap-oob="innerHTML">Saved<`,
 				`id="admin-role-header" hx-swap-oob="true"`, `id="admin-role-delete" hx-swap-oob="true"`)
+			assertBody(t, rec, `name="loaded_name" value="stored_name"`, `name="loaded_description" value="Stored description"`,
+				`hx-confirm="Delete the role stored_name?"`, ">stored_name<")
 			assertNoBody(t, rec, `id="admin-role-granted"`, `id="admin-role-grant"`)
+			for _, uri := range f.uris() {
+				if uri == "GET /roles/"+idBee {
+					t.Errorf("the save read the role again: %v", f.uris())
+				}
+			}
 		})
 	}
+}
+
+func TestAdminRoleSaveWithoutAChangeFailingToLoadIsNotReportedAsAWrite(t *testing.T) {
+	f := newFakeAdmin(t)
+	f.problem("GET /roles/"+idBee, 500, "roles are down")
+	rec := action(http.MethodPost, "/admin/roles/"+idBee, url.Values{"loaded_name": {"bee_admin"}, "name": {"bee_admin"}})
+	assertStatus(t, rec, http.StatusInternalServerError)
+	if got := bannerText(rec); got != "roles are down" {
+		t.Errorf("body = %q", got)
+	}
+	assertWrites(t, f)
+}
+
+func TestAdminRoleRemoveReloadFailureRemovesTheRow(t *testing.T) {
+	f := newFakeAdmin(t)
+	f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
+	f.problem("GET /roles/"+idBee, 500, "down")
+	rec := actionDelete("/admin/roles/"+idBee+"/permissions/"+idPBee, nil)
+	assertStatus(t, rec, http.StatusInternalServerError)
+	assertBody(t, rec, `hx-swap-oob="delete:#granted-`+idPBee+`"`)
+
+	f.on("DELETE /roles/"+idBee+"/permissions/not-a-number", 204, ``)
+	rec = actionDelete("/admin/roles/"+idBee+"/permissions/not-a-number", nil)
+	assertNoBody(t, rec, "delete:#")
 }
 
 func TestAdminRoleSaveWithoutAChangeSendsNothing(t *testing.T) {
@@ -450,7 +483,7 @@ func TestAdminRoleEditorQueuesActionsOnTheEditor(t *testing.T) {
 	seedRoleEditor(f)
 	rec := getPage("/admin/roles/" + idBee + "/editor")
 	assertBody(t, rec,
-		`id="admin-role" class="space-y-6" hx-sync:inherited="this:drop"`,
+		`id="admin-role" class="space-y-6 `+busyClasses+`" hx-sync:inherited="this:drop" hx-indicator:inherited="this"`,
 		`id="admin-role-grants" class="space-y-6" hx-target:inherited="#admin-role-granted" hx-swap:inherited="outerHTML"`,
 		`hx-sync="this:replace"`,
 	)

@@ -9,7 +9,6 @@ import (
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/components"
 )
 
-// beeSuggestionLimit is how many pending suggestions one review page reads.
 const beeSuggestionLimit = 100
 
 // isDotSegment reports whether the name is "." or "..", which the API's router would collapse out of a path.
@@ -38,13 +37,12 @@ func beeSuggestionsHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 
 func beeReviewHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	name := r.Form.Get("name")
-	method := http.MethodDelete
-	fallback := "Failed to reject the suggestion"
+	var method, fallback string
 	switch r.Form.Get("action") {
 	case "accept":
-		method = http.MethodPut
-		fallback = "Failed to accept the suggestion"
+		method, fallback = http.MethodPut, "Failed to accept the suggestion"
 	case "reject":
+		method, fallback = http.MethodDelete, "Failed to reject the suggestion"
 	default:
 		failFragment(w, r, invalidInput("Choose accept or reject"))
 		return

@@ -9,16 +9,16 @@ import (
 )
 
 func adminPermissionsListHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
-	permissions, err := adminGet[[]components.Permission](a, "/permissions", "Failed to load permissions")
+	data, err := loadPermissions(a, false)
 	if err != nil {
 		failFragment(w, r, err)
 		return
 	}
-	renderAll(w, r, components.AdminPermissionsContent(components.AdminPermissionsData{Permissions: permissions}))
+	renderAll(w, r, components.AdminPermissionsContent(data))
 }
 
 func loadPermissions(a adminAPI, focusList bool) (components.AdminPermissionsData, error) {
-	permissions, err := adminGet[[]components.Permission](a, "/permissions", "Failed to load permissions")
+	permissions, err := adminGet[[]components.Permission](a, "/permissions", loadPermissionsFailed)
 	if err != nil {
 		return components.AdminPermissionsData{}, err
 	}
@@ -43,7 +43,7 @@ func adminPermissionCreateHandler(w http.ResponseWriter, r *http.Request, a admi
 	}
 	data, err := loadPermissions(a, false)
 	if err != nil {
-		failFragment(w, r, afterWrite(err))
+		failFragment(w, r, afterWrite(err), components.AdminPermissionForm(true))
 		return
 	}
 	renderAll(w, r, components.AdminPermissionList(data), components.AdminPermissionForm(true))
@@ -56,7 +56,7 @@ func adminPermissionDeleteHandler(w http.ResponseWriter, r *http.Request, a admi
 	}
 	data, err := loadPermissions(a, true)
 	if err != nil {
-		failFragment(w, r, afterWrite(err))
+		failFragment(w, r, afterWrite(err), rowGone("permission-", r.PathValue("id"))...)
 		return
 	}
 	renderAll(w, r, components.AdminPermissionList(data))
