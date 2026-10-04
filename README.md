@@ -23,8 +23,9 @@ Set `NN_API_URL` and `NN_SITE_URL` before you start the server. Both must be htt
 
 ## Test it
 
-The Makefile has seven targets.
+The Makefile has these targets.
 
+- `make update` updates the templ, templui, air and gotailwind tools to their latest versions.
 - `make generate` builds the CSS and the templates.
 - `make vet` runs `make generate`, then the gofmt check, `templ fmt -fail` and `go vet`.
 - `make dev` runs the site locally, as described above.

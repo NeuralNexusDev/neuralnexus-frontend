@@ -1,4 +1,4 @@
-.PHONY: generate vet dev build test test-go test-js
+.PHONY: update generate vet dev build test test-go test-js
 
 update:
 	go get -tool github.com/a-h/templ/cmd/templ@latest
