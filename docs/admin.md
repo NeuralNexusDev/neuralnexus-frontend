@@ -4,7 +4,7 @@ The admin, account and bee review pages share one pattern. The server renders a 
 
 ## Shell and fragments
 
-A shell route (`shell`, `shellFor`) serves a page with the heading, back links, the error banner `#page-error`, a status region `#page-status` and a placeholder `<div data-page-load hx-trigger="load">`. It holds no API data and is served with `Cache-Control: no-store`. The placeholder fetches its fragment and replaces itself with it.
+A shell route (`shell`, `shellFor`) serves a page with the heading, back links, the error banner `#page-error`, a status region `#page-status` and a placeholder `<div data-page-load hx-trigger="load">`. It holds no API data, and the server sends it with `Cache-Control: no-store`. The placeholder fetches its fragment and replaces itself with it.
 
 - `pageRoute` wraps a read fragment. It gives the request a 30 second context and an `apiSession`, which calls nn-api with the visitor's `session` cookie.
 - `pageAction` wraps a change. It requires `HX-Request: true` and parses the form.
@@ -27,7 +27,7 @@ A shell route (`shell`, `shellFor`) serves a page with the heading, back links, 
 
 ## Errors
 
-`failFragment` answers a failure with the API's status. It sets `HX-Retarget: #page-error` and `HX-Reswap: innerHTML` so the message lands in the banner, and it can add out-of-band fragments that restore a row, a field or a status line. A 401 sends `HX-Redirect: /login` instead. `failEditor` also empties the editor's status line. A 400, 409 or 422 on a role name, permission node or username also redraws that field with `aria-invalid`, the message and focus. A reload that fails after a write goes through `afterWrite`, which says the change was made. Failures with a status of 500 or more are logged with the request ID, the API call and the cause, never the cookie or the form.
+`failFragment` answers a failure with the API's status. It sets `HX-Retarget: #page-error` and `HX-Reswap: innerHTML` so the message appears in the banner, and it can add out-of-band fragments that restore a row, a field or a status line. A 401 sends `HX-Redirect: /login` instead. `failEditor` also empties the editor's status line. A 400, 409 or 422 on a role name, permission node or username also redraws that field with `aria-invalid`, the message and focus. A reload that fails after a write goes through `afterWrite`, which says the change was made. The server logs a failure with a status of 500 or more with the request ID, the API call and the cause. It never logs the cookie or the form.
 
 ## The glue
 
@@ -38,7 +38,7 @@ A shell route (`shell`, `shellFor`) serves a page with the heading, back links, 
 - `data-page-load` marks a shell placeholder. Its request writes `Loading…` and `Loaded` into `#page-status`.
 - `#page-error` is the banner that the glue and `failFragment` write to.
 
-While a request runs, the glue sets `aria-busy="true"` on the requesting element and its region, and the base CSS rule in `assets/css/input.css` dims them. A submit or button click in a busy region is dropped and reported in the banner. A checkbox or select change in a `replaced` region is undone. In the other regions, text and ticks typed during the request are put back after the redraw with the focus and caret, and the status line says they are not saved yet. A grant form whose select changed is dropped as a whole.
+While a request runs, the glue sets `aria-busy="true"` on the requesting element and its region, and the base CSS rule in `assets/css/input.css` dims them. The glue drops a submit or button click in a busy region and reports it in the banner. It undoes a checkbox or select change in a `replaced` region. In the other regions it puts back the text and ticks typed during the request after the redraw, with the focus and caret, and the status line says they are not saved yet. It drops a grant form as a whole when its select changed.
 
 ## Where things live
 

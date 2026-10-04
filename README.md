@@ -30,4 +30,4 @@ The server needs `NN_API_URL` and `NN_SITE_URL`, both http or https URLs. These 
 
 The stub API lives in `test/integration`. `stub-api.mjs` answers the mc-status routes and passes `/api/v1` to `stub-state.mjs`, which serves users, roles, permissions, the account and the bee suggestions from state kept per session. A test seeds that state with `signIn(page, state)`, which also returns `writes()` to read what the app changed. The seed can include failures that answer with a status, delays for the htmx timeout specs, and gates. `const held = await gate('PATCH /roles/1')` holds that request, `await held.arrived()` waits until it is in flight, and `await held.release()` lets it finish, optionally with a status and detail.
 
-CI runs gofmt, `templ fmt -fail`, go vet, `go test`, `go test -race` and the Playwright suite, and uploads the Playwright report and traces when a step fails. The admin pages are described in `docs/admin.md`.
+CI runs gofmt, `templ fmt -fail`, go vet, `go test`, `go test -race` and the Playwright suite, and uploads the Playwright report and traces when a step fails. `docs/admin.md` describes the admin pages.
