@@ -273,7 +273,7 @@ test.describe('admin - role changes while other edits are open', () => {
     await expect(grantedRows(page)).toHaveCount(1);
     await expect(page.locator('#admin-role.htmx-request')).toHaveCount(0);
     await expect(page.locator('#admin-role')).not.toHaveAttribute('aria-busy', 'true');
-    await expect(error(page)).toHaveText('');
+    await expect(error(page)).toHaveText('The change made while saving was not sent. Make it again.');
     expect(await writes()).toEqual([{ method: 'DELETE', path: `/roles/${ID.bee}/permissions/${ID.pBee}`, body: null }]);
   });
 
@@ -286,7 +286,20 @@ test.describe('admin - role changes while other edits are open', () => {
     await page.getByRole('spinbutton', { name: 'Value of ratelimit' }).press('Enter');
     await expect(error(page)).toHaveText('The last change is still being saved. Try again in a moment.');
     await expect(grantedRows(page)).toHaveCount(1);
+    await expect(page.getByRole('spinbutton', { name: 'Value of ratelimit' })).toHaveValue('250');
+    await expect(error(page)).toHaveText('The change made while saving was not sent. Make it again.');
     expect(await writes()).toEqual([{ method: 'DELETE', path: `/roles/${ID.bee}/permissions/${ID.pBee}`, body: null }]);
+  });
+
+  test('a grant value select that times out shows the banner message', async ({ page }) => {
+    await signIn(page, { delays: { 'GET /permissions': 1500 } });
+    await page.goto(roleEditor);
+    await expect(page.locator('#admin-role-grant-permission')).toBeVisible();
+    await page.evaluate(() => {
+      htmx.config.defaultTimeout = 300;
+    });
+    await page.locator('#admin-role-grant-permission').selectOption({ label: 'motd' });
+    await expect(error(page)).toHaveText('The server could not be reached. Try again in a moment.');
   });
 
   test('granting an int value puts the whole number once its permission is free', async ({ page }) => {

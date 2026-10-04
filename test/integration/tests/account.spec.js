@@ -113,12 +113,12 @@ test.describe('account page - login-enabled toggle', () => {
   test('toggling off then on round-trips and refreshes the row', async ({ page }) => {
     const { writes } = await signIn(page, { myLinks: LINKS });
     await page.goto('/account');
-    await page.locator('#link-discord-login-enabled').uncheck({ force: true });
+    await page.locator('label[for="link-discord-login-enabled"]').click();
     await expect.poll(writes).toEqual([{ method: 'PATCH', path: '/users/me/link/discord', body: { login_enabled: false } }]);
     await expect(page.locator('#link-discord-login-enabled')).not.toBeChecked();
     await expect(page.locator('#link-discord.htmx-request')).toHaveCount(0);
 
-    await page.locator('#link-discord-login-enabled').check({ force: true });
+    await page.locator('label[for="link-discord-login-enabled"]').click();
     await expect.poll(async () => (await writes()).length).toBe(2);
     expect((await writes())[1]).toEqual({ method: 'PATCH', path: '/users/me/link/discord', body: { login_enabled: true } });
     await expect(page.locator('#link-discord-login-enabled')).toBeChecked();
@@ -130,7 +130,7 @@ test.describe('account page - login-enabled toggle', () => {
       failures: { 'PATCH /users/me/link/discord': { status: 409, detail: 'Keep one way to sign in', times: 1 } },
     });
     await page.goto('/account');
-    await page.locator('#link-discord-login-enabled').uncheck({ force: true });
+    await page.locator('label[for="link-discord-login-enabled"]').click();
     await expect(error(page)).toHaveText('Keep one way to sign in');
     await expect(page.locator('#link-discord-login-enabled')).toBeChecked();
   });
@@ -138,7 +138,7 @@ test.describe('account page - login-enabled toggle', () => {
   test('a second change to a row while one is in flight is dropped', async ({ page }) => {
     const { writes } = await signIn(page, { myLinks: LINKS, delays: { 'PATCH /users/me/link/discord': 600 } });
     await page.goto('/account');
-    await page.locator('#link-discord-login-enabled').uncheck({ force: true });
+    await page.locator('label[for="link-discord-login-enabled"]').click();
     await expect(page.locator('#link-discord.htmx-request')).toHaveCount(1);
     await page.locator('#link-discord-login-enabled').dispatchEvent('click');
     await expect(page.locator('#link-discord.htmx-request')).toHaveCount(0);
@@ -153,12 +153,12 @@ test.describe('account page - password login toggle', () => {
     await page.goto('/account');
     await expect(page.locator('#password-auth-enabled')).toBeChecked();
 
-    await page.locator('#password-auth-enabled').uncheck({ force: true });
+    await page.locator('label[for="password-auth-enabled"]').click();
     await expect.poll(writes).toEqual([{ method: 'PATCH', path: '/users/me/settings', body: { password_auth: false } }]);
     await expect(page.locator('#password-auth-enabled')).not.toBeChecked();
     await expect(page.locator('#account-password.htmx-request')).toHaveCount(0);
 
-    await page.locator('#password-auth-enabled').check({ force: true });
+    await page.locator('label[for="password-auth-enabled"]').click();
     await expect.poll(async () => (await writes()).length).toBe(2);
     expect((await writes())[1].body).toEqual({ password_auth: true });
     await expect(page.locator('#password-auth-enabled')).toBeChecked();
@@ -170,7 +170,7 @@ test.describe('account page - password login toggle', () => {
       failures: { 'PATCH /users/me/settings': { status: 409, detail: 'Link another sign-in method first', times: 1 } },
     });
     await page.goto('/account');
-    await page.locator('#password-auth-enabled').uncheck({ force: true });
+    await page.locator('label[for="password-auth-enabled"]').click();
     await expect(error(page)).toHaveText('Link another sign-in method first');
     await expect(page.locator('#password-auth-enabled')).toBeChecked();
   });

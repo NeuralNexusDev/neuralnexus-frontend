@@ -862,6 +862,13 @@ templ AdminRoleGrantForm(d AdminRoleData, oob bool) {
 	</div>
 }
 
+// AdminRoleGrantUnavailable replaces the grant form when the permissions it offers could not be loaded.
+templ AdminRoleGrantUnavailable() {
+	<div id="admin-role-grant" hx-swap-oob="true">
+		<p id="admin-role-grant-unavailable" class={ mutedSmallClass }>The permissions to grant could not be loaded. Reload the page to grant one.</p>
+	</div>
+}
+
 // AdminRolePage serves the shell for the editor of one role, which loads the editor.
 templ AdminRolePage(id string) {
 	@adminPage(adminRole(id))

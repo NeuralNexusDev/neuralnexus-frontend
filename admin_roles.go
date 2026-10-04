@@ -233,7 +233,7 @@ func adminRoleRemoveHandler(w http.ResponseWriter, r *http.Request, a adminAPI) 
 func grantFormWithout(a adminAPI, r *http.Request, removed string) []templ.Component {
 	catalogue, err := adminGet[[]components.Permission](a, "/permissions", loadPermissionsFailed)
 	if err != nil {
-		return nil
+		return []templ.Component{components.AdminRoleGrantUnavailable()}
 	}
 	role := components.Role{ID: r.PathValue("id")}
 	for _, id := range r.Form["granted"] {

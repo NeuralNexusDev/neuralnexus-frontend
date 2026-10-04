@@ -453,22 +453,69 @@ function loadMcStatusFromUrl() {
     checkMcStatus();
 }
 
+const typedFields = 'input:not([type=hidden], [type=checkbox], [type=radio], [type=file], [type=submit]), textarea';
 const requests = new WeakMap();
+const pending = new WeakMap();
+
+const showBanner = (text) => {
+    const banner = document.getElementById('admin-error');
+    if (banner) {
+        banner.textContent = text;
+        banner.scrollIntoView({ block: 'nearest' });
+    }
+};
+
+const fieldValues = (region) => new Map([...region.querySelectorAll(typedFields)].filter((field) => field.name).map((field) => [field.name, field.value]));
 
 document.addEventListener('htmx:before:request', (event) => {
     const region = event.target.closest?.('[hx-indicator\\:inherited]');
-    region?.setAttribute('aria-busy', 'true');
-    requests.set(event.detail.ctx, { start: performance.now(), region });
+    const request = { start: performance.now(), region, values: region && fieldValues(region), typed: new Map(), dropped: false };
+    requests.set(event.detail.ctx, request);
+    if (region) {
+        region.setAttribute('aria-busy', 'true');
+        pending.set(region, request);
+    }
+});
+
+document.addEventListener('htmx:before:swap', (event) => {
+    const request = requests.get(event.detail.ctx);
+    if (!request?.region) {
+        return;
+    }
+    for (const [name, value] of fieldValues(request.region)) {
+        if (request.values.get(name) !== value) {
+            request.typed.set(name, value);
+        }
+    }
 });
 
 document.addEventListener('htmx:finally:request', (event) => {
-    requests.get(event.detail.ctx)?.region?.removeAttribute('aria-busy');
+    const request = requests.get(event.detail.ctx);
+    const region = request?.region;
+    if (!region) {
+        return;
+    }
+    region.removeAttribute('aria-busy');
+    pending.delete(region);
+    if (!region.isConnected) {
+        return;
+    }
+    for (const [name, value] of request.typed) {
+        const field = [...region.querySelectorAll(typedFields)].find((candidate) => candidate.name === name);
+        if (field && field.value !== value) {
+            field.value = value;
+        }
+    }
+    if (request.dropped && !document.getElementById('admin-error')?.textContent) {
+        showBanner('The change made while saving was not sent. Make it again.');
+    }
 });
 
 const reportDropped = (event) => {
-    const banner = document.getElementById('admin-error');
-    if (banner && event.target.closest?.('[aria-busy="true"]')) {
-        banner.textContent = 'The last change is still being saved. Try again in a moment.';
+    const region = event.target.closest?.('[aria-busy="true"]');
+    if (region) {
+        pending.get(region).dropped = true;
+        showBanner('The last change is still being saved. Try again in a moment.');
     }
 };
 document.addEventListener('submit', reportDropped, true);
@@ -484,9 +531,6 @@ document.addEventListener('htmx:error', (event) => {
     const timedOut = performance.now() - requests.get(ctx)?.start >= htmx.config.defaultTimeout - 100;
     const failed = error instanceof TypeError || (error?.name === 'AbortError' && timedOut);
     if (ctx && !ctx.response && failed) {
-        const banner = document.getElementById('admin-error');
-        if (banner) {
-            banner.textContent = 'The server could not be reached. Try again in a moment.';
-        }
+        showBanner('The server could not be reached. Try again in a moment.');
     }
 });

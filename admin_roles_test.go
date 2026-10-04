@@ -365,6 +365,16 @@ func TestAdminRoleRemoveReloadFailureOffersTheRemovedPermissionAgain(t *testing.
 	assertNoBody(t, rec, `<option value="`+idPRate+`"`)
 }
 
+func TestAdminRoleRemoveReloadFailureWithoutTheCatalogueReplacesTheGrantForm(t *testing.T) {
+	f := newFakeAdmin(t)
+	f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
+	f.problem("GET /roles/"+idBee, 500, "down")
+	f.problem("GET /permissions", 500, "down")
+	rec := actionDelete("/admin/roles/"+idBee+"/permissions/"+idPBee, url.Values{"granted": {idPBee, idPRate}})
+	assertBody(t, rec, `id="admin-role-grant" hx-swap-oob="true"`, `id="admin-role-grant-unavailable"`, `hx-swap-oob="delete:#granted-`+idPBee+`"`)
+	assertNoBody(t, rec, "<option")
+}
+
 func TestAdminRoleSaveWithoutAChangeSendsNothing(t *testing.T) {
 	f := newFakeAdmin(t)
 	seedRoleEditor(f)

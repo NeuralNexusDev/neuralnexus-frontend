@@ -38,6 +38,13 @@ test.describe('admin - user list', () => {
 
   test('a search that a newer search replaces shows no error', async ({ page }) => {
     await signIn(page, { delays: { 'GET /users': 500 } });
+    await page.addInitScript(() => {
+      window.__banner = [];
+      new MutationObserver(() => {
+        const text = document.getElementById('admin-error')?.textContent;
+        if (text) window.__banner.push(text);
+      }).observe(document, { subtree: true, childList: true, characterData: true });
+    });
     await page.goto('/admin/users');
     await expect(rows(page)).toHaveCount(3);
     const first = page.waitForRequest((request) => request.url().includes('/admin/users/rows') && request.url().includes('search=bo'));
@@ -47,6 +54,7 @@ test.describe('admin - user list', () => {
     await expect(rows(page)).toHaveCount(1);
     await expect(rows(page)).toContainText('alice');
     await expect(error(page)).toHaveText('');
+    expect(await page.evaluate(() => window.__banner)).toEqual([]);
   });
 
   test('a search that times out shows the banner message and keeps the list', async ({ page }) => {
@@ -181,10 +189,13 @@ test.describe('admin - user editor', () => {
     await username(page).fill('robert');
     await username(page).press('Enter');
     await expect(page.locator('#admin-user')).toHaveAttribute('aria-busy', 'true');
+    await username(page).press('End');
+    await username(page).pressSequentially('X');
     await username(page).press('Enter');
     await expect(error(page)).toHaveText('The last change is still being saved. Try again in a moment.');
     await expect(status(page)).toHaveText('Saved');
-    await expect(error(page)).toHaveText('');
+    await expect(error(page)).toHaveText('The change made while saving was not sent. Make it again.');
+    await expect(username(page)).toHaveValue('robertX');
     expect(await writes()).toEqual([{ method: 'PUT', path: `/users/${ID.bob}`, body: { username: 'robert' } }]);
   });
 
