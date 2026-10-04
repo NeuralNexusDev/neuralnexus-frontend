@@ -26,9 +26,9 @@ Set `NN_API_URL` and `NN_SITE_URL` before you start the server. Both must be htt
 - `make test-go` generates the templates and runs the Go tests against a fake API.
 - `make test-race` runs the same tests with the race detector.
 - `make fmt-check`, `make vet` and `make templ-check` run gofmt, go vet and `templ fmt -fail`.
-- `make test` starts the stub API, the server and Playwright in Docker, then shuts them down. Without Docker, run `cd test/integration && npm ci && npx playwright install chromium && npx playwright test`. That command starts the server and the stub itself, on port 8099 for the site and port 8098 for the stub API. Outside CI it reuses anything that already answers on those ports, so stop an old server or another program that holds them first.
+- `make test` starts the stub API, the server and Playwright in Docker, then shuts them down. Without Docker, run `cd test/js && npm ci && npx playwright install chromium && npx playwright test`. That command starts the server and the stub itself, on port 8099 for the site and port 8098 for the stub API. Outside CI it reuses anything that already answers on those ports, so stop an old server or another program that holds them first.
 
-The stub API is in `test/integration`. `stub-api.mjs` answers the mc-status routes and passes `/api/v1` to `stub-state.mjs`. That file serves users, roles, permissions, the account and the bee suggestions from state it keeps for each session.
+The stub API is in `test/js`. `stub-api.mjs` answers the mc-status routes and passes `/api/v1` to `stub-state.mjs`. That file serves users, roles, permissions, the account and the bee suggestions from state it keeps for each session.
 
 A test seeds that state with `signIn(page, state)`. The same call returns `writes()`, which lists what the app changed. The seed can include failures that answer with a status, delays for the htmx timeout specs, and gates.
 

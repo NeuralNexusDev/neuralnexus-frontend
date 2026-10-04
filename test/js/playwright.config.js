@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 
-// BASE_URL is set by docker-compose.test.yml, pointing at the containerized
+// BASE_URL is set by docker-compose.yml, pointing at the containerized
 // "frontend" service - in that mode the server is already running as its
 // own container, so we skip webServer below. With no BASE_URL (a plain
 // `npx playwright test` on a host with Go + Node installed), we fall back

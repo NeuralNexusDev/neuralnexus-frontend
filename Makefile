@@ -64,14 +64,14 @@ templ-check:
 # Containerized test environment
 
 test-env-up:
-	docker compose -f test/docker-compose.test.yml up -d --build --wait frontend
+	docker compose -f test/js/docker-compose.yml up -d --build --wait frontend
 
 test-env-down:
-	docker compose -f test/docker-compose.test.yml down -v
+	docker compose -f test/js/docker-compose.yml down -v
 
 test-env-logs:
-	docker compose -f test/docker-compose.test.yml logs -f
+	docker compose -f test/js/docker-compose.yml logs -f
 
 # Runs the Playwright suite in Docker, tearing the environment down afterwards
 test: test-env-up
-	docker compose -f test/docker-compose.test.yml run --rm playwright; status=$$?; $(MAKE) test-env-down; exit $$status
+	docker compose -f test/js/docker-compose.yml run --rm playwright; status=$$?; $(MAKE) test-env-down; exit $$status
