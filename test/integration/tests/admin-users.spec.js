@@ -199,6 +199,36 @@ test.describe('admin - user editor', () => {
     expect(await writes()).toEqual([{ method: 'PUT', path: `/users/${ID.bob}`, body: { username: 'robert' } }]);
   });
 
+  test('a role ticked while a save is in flight stays ticked and unsaved', async ({ page }) => {
+    const { writes } = await signIn(page, { delays: { [`PUT /users/${ID.bob}`]: 600 } });
+    await page.goto(editor);
+    await username(page).fill('robert');
+    await username(page).press('Enter');
+    await expect(page.locator('#admin-user')).toHaveAttribute('aria-busy', 'true');
+    await page.locator(`#admin-user-roles input[value="${ID.owner}"]`).focus();
+    await page.keyboard.press('Space');
+    await expect(status(page)).toHaveText('Saved');
+    await expect(page.locator(`#admin-user-roles input[value="${ID.owner}"]`)).toBeChecked();
+    await expect(error(page)).toHaveText('');
+    expect(await writes()).toEqual([{ method: 'PUT', path: `/users/${ID.bob}`, body: { username: 'robert' } }]);
+  });
+
+  test('the caret stays where it was in a field typed in while a save is in flight', async ({ page }) => {
+    await signIn(page, { delays: { [`PUT /users/${ID.bob}`]: 600 } });
+    await page.goto(editor);
+    await username(page).fill('robert');
+    await username(page).press('Enter');
+    await expect(page.locator('#admin-user')).toHaveAttribute('aria-busy', 'true');
+    await username(page).press('End');
+    await username(page).pressSequentially('XY');
+    await username(page).press('ArrowLeft');
+    await username(page).press('ArrowLeft');
+    await expect(status(page)).toHaveText('Saved');
+    await expect(username(page)).toHaveValue('robertXY');
+    await expect(username(page)).toBeFocused();
+    expect(await username(page).evaluate((input) => input.selectionStart)).toBe(6);
+  });
+
   test('saving roles sends only the roles', async ({ page }) => {
     const { writes } = await signIn(page);
     await page.goto(editor);

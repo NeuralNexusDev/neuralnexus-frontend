@@ -453,9 +453,9 @@ function loadMcStatusFromUrl() {
     checkMcStatus();
 }
 
-const typedFields = 'input:not([type=hidden], [type=checkbox], [type=radio], [type=file], [type=submit]), textarea';
+const fieldSelector = 'input:not([type=hidden], [type=file], [type=submit]), textarea, select';
 const requests = new WeakMap();
-const pending = new WeakMap();
+const regions = new WeakMap();
 
 const showBanner = (text) => {
     const banner = document.getElementById('admin-error');
@@ -465,15 +465,25 @@ const showBanner = (text) => {
     }
 };
 
-const fieldValues = (region) => new Map([...region.querySelectorAll(typedFields)].filter((field) => field.name).map((field) => [field.name, field.value]));
+const isChoice = (field) => field.type === 'checkbox' || field.type === 'radio';
+const fieldKey = (field) => (isChoice(field) ? `${field.name}=${field.value}` : field.name);
+const fieldState = (field) => (isChoice(field) ? field.checked : field.value);
+const fieldsIn = (region) => [...region.querySelectorAll(fieldSelector)].filter((field) => field.name);
+const regionState = (region) => {
+    if (!regions.has(region)) {
+        regions.set(region, { active: new Set(), dropped: false });
+    }
+    return regions.get(region);
+};
 
 document.addEventListener('htmx:before:request', (event) => {
     const region = event.target.closest?.('[hx-indicator\\:inherited]');
-    const request = { start: performance.now(), region, values: region && fieldValues(region), typed: new Map(), dropped: false };
+    const request = { start: performance.now(), region, values: null, typed: new Map(), active: null, dropped: false };
     requests.set(event.detail.ctx, request);
     if (region) {
+        request.values = new Map(fieldsIn(region).map((field) => [fieldKey(field), fieldState(field)]));
+        regionState(region).active.add(request);
         region.setAttribute('aria-busy', 'true');
-        pending.set(region, request);
     }
 });
 
@@ -482,12 +492,52 @@ document.addEventListener('htmx:before:swap', (event) => {
     if (!request?.region) {
         return;
     }
-    for (const [name, value] of fieldValues(request.region)) {
-        if (request.values.get(name) !== value) {
-            request.typed.set(name, value);
+    for (const field of fieldsIn(request.region)) {
+        const key = fieldKey(field);
+        if (request.values.get(key) === fieldState(field)) {
+            continue;
+        }
+        request.typed.set(key, { state: fieldState(field), form: field.form?.id ?? '', select: field.tagName === 'SELECT' });
+        if (field === document.activeElement) {
+            let start = null;
+            let end = null;
+            try {
+                ({ selectionStart: start, selectionEnd: end } = field);
+            } catch {
+                // the field has no caret
+            }
+            request.active = { key, start, end };
         }
     }
 });
+
+const restoreTyped = (request) => {
+    const blocked = new Set([...request.typed.values()].filter((entry) => entry.select).map((entry) => entry.form));
+    const fields = fieldsIn(request.region);
+    for (const [key, entry] of request.typed) {
+        if (blocked.has(entry.form)) {
+            request.dropped = true;
+            continue;
+        }
+        const field = fields.find((candidate) => fieldKey(candidate) === key);
+        if (!field) {
+            continue;
+        }
+        if (isChoice(field)) {
+            field.checked = entry.state;
+        } else if (field.value !== entry.state) {
+            field.value = entry.state;
+        }
+        if (request.active?.key === key) {
+            field.focus({ preventScroll: true });
+            try {
+                field.setSelectionRange(request.active.start, request.active.end);
+            } catch {
+                // the field has no caret
+            }
+        }
+    }
+};
 
 document.addEventListener('htmx:finally:request', (event) => {
     const request = requests.get(event.detail.ctx);
@@ -495,26 +545,26 @@ document.addEventListener('htmx:finally:request', (event) => {
     if (!region) {
         return;
     }
-    region.removeAttribute('aria-busy');
-    pending.delete(region);
-    if (!region.isConnected) {
+    const state = regionState(region);
+    state.active.delete(request);
+    if (region.isConnected) {
+        restoreTyped(request);
+    }
+    state.dropped ||= request.dropped;
+    if (state.active.size > 0) {
         return;
     }
-    for (const [name, value] of request.typed) {
-        const field = [...region.querySelectorAll(typedFields)].find((candidate) => candidate.name === name);
-        if (field && field.value !== value) {
-            field.value = value;
-        }
-    }
-    if (request.dropped && !document.getElementById('admin-error')?.textContent) {
+    region.removeAttribute('aria-busy');
+    if (state.dropped && !document.getElementById('admin-error')?.textContent) {
         showBanner('The change made while saving was not sent. Make it again.');
     }
+    state.dropped = false;
 });
 
 const reportDropped = (event) => {
     const region = event.target.closest?.('[aria-busy="true"]');
     if (region) {
-        pending.get(region).dropped = true;
+        regionState(region).dropped = true;
         showBanner('The last change is still being saved. Try again in a moment.');
     }
 };

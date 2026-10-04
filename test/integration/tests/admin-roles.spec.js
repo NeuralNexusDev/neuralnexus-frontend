@@ -291,6 +291,46 @@ test.describe('admin - role changes while other edits are open', () => {
     expect(await writes()).toEqual([{ method: 'DELETE', path: `/roles/${ID.bee}/permissions/${ID.pBee}`, body: null }]);
   });
 
+  test('a grant form changed while a removal is in flight is dropped as a whole and says so', async ({ page }) => {
+    const { writes } = await signIn(page, { delays: { [`DELETE /roles/${ID.bee}/permissions/${ID.pBee}`]: 800 } });
+    await page.goto(roleEditor);
+    await grantedRows(page).nth(0).getByRole('button', { name: 'Remove beenamegenerator.admin' }).click();
+    await expect(page.locator('#admin-role')).toHaveAttribute('aria-busy', 'true');
+    await page.locator('#admin-role-grant-permission').selectOption({ label: 'motd' });
+    await page.locator('#admin-role-grant-value input[type="text"]').fill('hello');
+    await expect(grantedRows(page)).toHaveCount(1);
+    await expect(page.locator('#admin-role-grant-permission option:checked')).toHaveText('petpictures.pets');
+    await expect(page.locator('#admin-role-grant-value textarea')).toHaveValue('');
+    await expect(error(page)).toHaveText('The change made while saving was not sent. Make it again.');
+    expect(await writes()).toEqual([{ method: 'DELETE', path: `/roles/${ID.bee}/permissions/${ID.pBee}`, body: null }]);
+  });
+
+  test('a grant select that finishes while a removal is in flight leaves the editor busy', async ({ page }) => {
+    await signIn(page, { delays: { [`DELETE /roles/${ID.bee}/permissions/${ID.pBee}`]: 1200 } });
+    await page.goto(roleEditor);
+    await grantedRows(page).nth(0).getByRole('button', { name: 'Remove beenamegenerator.admin' }).click();
+    await expect(page.locator('#admin-role')).toHaveAttribute('aria-busy', 'true');
+    await page.locator('#admin-role-grant-permission').selectOption({ label: 'motd' });
+    await expect(page.locator('#admin-role-grant-value input[type="text"]')).toBeVisible();
+    await expect(page.locator('#admin-role')).toHaveAttribute('aria-busy', 'true');
+    await page.getByRole('spinbutton', { name: 'Value of ratelimit' }).fill('88');
+    await page.getByRole('spinbutton', { name: 'Value of ratelimit' }).press('Enter');
+    await expect(error(page)).toHaveText('The last change is still being saved. Try again in a moment.');
+  });
+
+  test('a value typed while a removal is in flight keeps focus and its caret', async ({ page }) => {
+    await signIn(page, { delays: { [`DELETE /roles/${ID.bee}/permissions/${ID.pBee}`]: 600 } });
+    await page.goto(roleEditor);
+    await grantedRows(page).nth(0).getByRole('button', { name: 'Remove beenamegenerator.admin' }).click();
+    await expect(page.locator('#admin-role')).toHaveAttribute('aria-busy', 'true');
+    const value = page.getByRole('spinbutton', { name: 'Value of ratelimit' });
+    await value.fill('7712');
+    await value.press('ArrowLeft');
+    await expect(grantedRows(page)).toHaveCount(1);
+    await expect(value).toHaveValue('7712');
+    await expect(value).toBeFocused();
+  });
+
   test('a grant value select that times out shows the banner message', async ({ page }) => {
     await signIn(page, { delays: { 'GET /permissions': 1500 } });
     await page.goto(roleEditor);
