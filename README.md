@@ -1,45 +1,33 @@
 # neuralnexus-frontend
 
-This template should help get you started developing with Vue 3 in Vite.
+The frontend for neuralnexus.dev. A Go server renders pages with templ and calls nn-api with the visitor's session cookie.
 
-## Recommended IDE Setup
+## Stack
 
-[VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+- Go net/http with the 1.22 route patterns
+- templ for pages and fragments
+- htmx 4, loaded from the S3 CDN with a subresource integrity hash
+- Tailwind CSS v4
+- Playwright for browser tests, against a stub API
 
-## Type Support for `.vue` Imports in TS
+## Run it
 
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
+The server needs `NN_API_URL` and `NN_SITE_URL`, both http or https URLs. These are optional.
 
-## Customize configuration
+- `ADDRESS` is the listen address and defaults to `0.0.0.0:8090`. `USE_UDS=true` listens on a Unix socket instead.
+- `JWT_SECRET` verifies the session token.
+- `DISCORD_CLIENT_ID`, `TWITCH_CLIENT_ID`, `MICROSOFT_CLIENT_ID` and their `*_REDIRECT_URI` variables build the sign-in links.
+- `STEAM_OPENID_LOGIN_URL` overrides Steam's OpenID endpoint.
 
-See [Vite Configuration Reference](https://vitejs.dev/config/).
+`make dev` sets defaults for these, then runs the Tailwind watcher, the templ watcher and the server with air. `make generate` builds the CSS and the templates once.
 
-## Project Setup
+## Test it
 
-```sh
-bun install
-```
+- `make test-go` generates the templates and runs the Go tests against a fake API.
+- `make test-race` runs the same tests with the race detector.
+- `make fmt-check`, `make vet` and `make templ-check` run gofmt, go vet and `templ fmt -fail`.
+- `make test` starts the stub API, the server and Playwright in Docker, then tears them down. Without Docker, `cd test/integration && npm ci && npx playwright test` starts the server and the stub itself.
 
-### Compile and Hot-Reload for Development
+The stub API lives in `test/integration`. `stub-api.mjs` answers the mc-status routes and passes `/api/v1` to `stub-state.mjs`, which serves users, roles, permissions, the account and the bee suggestions from state kept per session. A test seeds that state with `signIn(page, state)`, which also returns `writes()` to read what the app changed. The seed can include failures that answer with a status, delays for the htmx timeout specs, and gates. `const held = await gate('PATCH /roles/1')` holds that request, `await held.arrived()` waits until it is in flight, and `await held.release()` lets it finish, optionally with a status and detail.
 
-```sh
-bun dev
-```
-
-### Type-Check, Compile and Minify for Production
-
-```sh
-bun build
-```
-
-### Run Unit Tests with [Vitest](https://vitest.dev/)
-
-```sh
-bun test:unit
-```
-
-### Lint with [ESLint](https://eslint.org/)
-
-```sh
-bun lint
-```
+CI runs gofmt, `templ fmt -fail`, go vet, `go test`, `go test -race` and the Playwright suite, and uploads the Playwright report and traces when a step fails. The admin pages are described in `docs/admin.md`.

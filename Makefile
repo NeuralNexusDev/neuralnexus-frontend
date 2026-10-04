@@ -44,6 +44,23 @@ test-go:
 	go tool templ generate
 	go test ./...
 
+test-race: export NN_API_URL = http://api.test
+test-race: export NN_SITE_URL = http://site.test
+test-race:
+	go tool templ generate
+	go test -race ./...
+
+# gofmt -l prints the files it would change, so the target fails when it prints anything
+fmt-check:
+	@files="$$(gofmt -l .)"; if [ -n "$$files" ]; then echo "$$files"; exit 1; fi
+
+vet:
+	go tool templ generate
+	go vet ./...
+
+templ-check:
+	go tool templ fmt -fail components
+
 # Containerized test environment
 
 test-env-up:

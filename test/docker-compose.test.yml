@@ -37,6 +37,7 @@ services:
     environment:
       BASE_URL: http://frontend:8090
       NN_API_URL: http://stub-api:8098
+      CI: ${CI:-}
     depends_on:
       frontend:
         condition: service_healthy
