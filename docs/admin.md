@@ -10,20 +10,7 @@ A shell route (`shell`, `shellFor`) serves a page with the heading, back links, 
 - `pageAction` wraps a change. It requires `HX-Request: true` and parses the form.
 - `requireHTMXForWrites` wraps the whole mux. It rejects a request that is not GET, HEAD or OPTIONS unless it has `HX-Request: true`, and rejects a `Sec-Fetch-Site` of `cross-site` or `same-site`. Unmatched paths and the catch-all route keep their normal answer.
 
-## Routes
-
-| Route | Returns |
-|---|---|
-| `GET /admin/cards` | The cards for the admin pages the account may use |
-| `GET /admin/users/list`, `/admin/users/rows` | The search box and the first page of users, then later pages and the count line |
-| `GET /admin/users/{id}/editor`, `POST /admin/users/{id}` | The user editor, then the form, header and permissions after a save |
-| `GET /admin/roles/list`, `POST /admin/roles` | The role list and create form, then a redirect to the new role |
-| `GET /admin/roles/{id}/editor`, `POST`, `DELETE /admin/roles/{id}` | The role editor, then the form after a rename, then a redirect after a delete |
-| `GET /admin/roles/{id}/grant-value` | The value input for the chosen permission |
-| `POST`, `DELETE /admin/roles/{id}/permissions[/{permission}]` | The granted list and grant form after a grant, value change or removal |
-| `GET /admin/permissions/list`, `POST /admin/permissions`, `DELETE /admin/permissions/{id}` | The permission list and create form, then the new list |
-| `GET /account/content`, `POST /account/settings`, `POST`, `DELETE /account/links/{platform}` | The account page, then the redrawn setting or row |
-| `GET /project/bee-name-generator/admin/suggestions`, `POST` | The pending suggestions, then the list after a review |
+`webserver.go` lists the routes.
 
 ## Errors
 
