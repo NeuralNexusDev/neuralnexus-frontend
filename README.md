@@ -26,7 +26,7 @@ Set `NN_API_URL` and `NN_SITE_URL` before you start the server. Both must be htt
 - `make test-go` generates the templates and runs the Go tests against a fake API.
 - `make test-race` runs the same tests with the race detector.
 - `make fmt-check`, `make vet` and `make templ-check` run gofmt, go vet and `templ fmt -fail`.
-- `make test` starts the stub API, the server and Playwright in Docker, then shuts them down. Without Docker, run `cd test/integration && npm ci && npx playwright test`. That command starts the server and the stub itself.
+- `make test` starts the stub API, the server and Playwright in Docker, then shuts them down. Without Docker, run `cd test/integration && npm ci && npx playwright install chromium && npx playwright test`. That command starts the server and the stub itself, on port 8099 for the site and port 8098 for the stub API. Outside CI it reuses anything that already answers on those ports, so stop an old server or another program that holds them first.
 
 The stub API is in `test/integration`. `stub-api.mjs` answers the mc-status routes and passes `/api/v1` to `stub-state.mjs`. That file serves users, roles, permissions, the account and the bee suggestions from state it keeps for each session.
 
@@ -38,4 +38,4 @@ A gate holds one request until the test lets it finish.
 - `await held.arrived()` waits until the request is in flight.
 - `await held.release()` lets it finish. You can pass a status and detail to make it fail.
 
-CI runs gofmt, `templ fmt -fail`, go vet, `go test`, `go test -race` and the Playwright suite. When a step fails, it uploads the Playwright report and traces. `docs/admin.md` explains how the admin pages work.
+CI runs gofmt, `templ fmt -fail`, go vet, `go test`, `go test -race` and the Playwright suite. When a step fails, it uploads the Playwright report and traces. `docs/admin.md` explains how the pages load and change.
