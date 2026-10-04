@@ -6,11 +6,16 @@ const (
 	htmxConfig    = `{"mode":"same-origin","history":false,"allowEmptySwapAfterOOB":true,"defaultSettleDelay":0}`
 
 	mutedClass      = "text-gray-500 dark:text-gray-400"
+	mutedXsClass    = mutedClass + " text-xs"
 	mutedSmallClass = mutedClass + " text-sm"
 	emptyClass      = mutedSmallClass + " text-center"
 	errorTextClass  = "text-sm text-red-600 dark:text-red-400"
 	bannerClass     = "rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive"
 	busyClass       = "[&.htmx-request]:pointer-events-none [&.htmx-request]:opacity-60"
+
+	cardClass   = "block rounded-lg border border-input p-3 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+	chipClass   = "rounded-full border border-input px-2.5 py-0.5 text-xs"
+	toggleClass = "relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full bg-gray-300 transition-colors has-[:checked]:bg-primary has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 dark:bg-gray-600"
 
 	labelClass  = "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
 	inputClass  = "text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -95,7 +100,46 @@ templ formField(id string, label string, help string) {
 		<label class={ labelClass } for={ id }>{ label }</label>
 		{ children... }
 		if help != "" {
-			<p class={ mutedClass + " text-xs" }>{ help }</p>
+			<p class={ mutedXsClass }>{ help }</p>
 		}
+	</div>
+}
+
+templ textInput(id string, name string, value string, placeholder string, required bool) {
+	<input
+		id={ id }
+		name={ name }
+		type="text"
+		required?={ required }
+		if value != "" {
+			value={ value }
+		}
+		if placeholder != "" {
+			placeholder={ placeholder }
+		}
+		autocomplete="off"
+		autocapitalize="off"
+		spellcheck="false"
+		class={ inputClass }
+	/>
+}
+
+templ toggle() {
+	<label class={ toggleClass }>
+		{ children... }
+		<span class="pointer-events-none inline-block h-4 w-4 translate-x-0.5 rounded-full bg-background shadow transition-transform peer-checked:translate-x-4"></span>
+	</label>
+}
+
+templ entityHeader(prefix string, title string, subtitle string, oob bool) {
+	<div
+		id={ prefix + "-header" }
+		if oob {
+			hx-swap-oob="true"
+		}
+		class="space-y-2 text-center"
+	>
+		<h1 id={ prefix + "-title" } class="text-3xl font-bold">{ title }</h1>
+		<p id={ prefix + "-id" } class={ mutedSmallClass + " break-all" }>{ subtitle }</p>
 	</div>
 }

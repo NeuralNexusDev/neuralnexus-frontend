@@ -30,8 +30,6 @@ type AccountSettingsData struct {
 	Error        string
 }
 
-const accountToggleClass = "relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full bg-gray-300 transition-colors has-[:checked]:bg-primary has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 dark:bg-gray-600"
-
 // Account renders the account settings page, which loads its content.
 templ Account() {
 	@ErrorBanner()
@@ -100,7 +98,7 @@ templ AccountPasswordLogin(d AccountSettingsData, oob bool) {
 			<label for="password-auth-enabled" class="text-sm font-medium">
 				Password login
 			</label>
-			<label class={ accountToggleClass }>
+			@toggle() {
 				<input
 					type="checkbox"
 					id="password-auth-enabled"
@@ -112,8 +110,7 @@ templ AccountPasswordLogin(d AccountSettingsData, oob bool) {
 					hx-trigger="change"
 					class="peer sr-only"
 				/>
-				<span class="pointer-events-none inline-block h-4 w-4 translate-x-0.5 rounded-full bg-background shadow transition-transform peer-checked:translate-x-4"></span>
-			</label>
+			}
 		</div>
 		if d.Error != "" {
 			<p id="account-password-error" role="alert" class={ errorTextClass }>{ d.Error }</p>
@@ -121,10 +118,18 @@ templ AccountPasswordLogin(d AccountSettingsData, oob bool) {
 	</div>
 }
 
+func accountActionLabel(linked bool) string {
+	if linked {
+		return "Unlink"
+	}
+	return "Link"
+}
+
 // AccountLinkRow renders one platform, linked or not, which htmx swaps in after a change to it, or the out-of-band copy a failed change sends.
 templ AccountLinkRow(platform AccountPlatform, link LinkedAccount, linked bool, oob bool) {
+	{{ base := "link-" + platform.ID }}
 	<div
-		id={ "link-" + platform.ID }
+		id={ base }
 		if oob {
 			hx-swap-oob="true"
 		}
@@ -135,7 +140,7 @@ templ AccountLinkRow(platform AccountPlatform, link LinkedAccount, linked bool, 
 			@accountPlatformIcon(platform.ID)
 			<div class="min-w-0 flex-1">
 				<div class="flex items-center gap-1">
-					<span id={ "link-" + platform.ID + "-title" } class="text-sm font-medium truncate">
+					<span id={ base + "-title" } class="text-sm font-medium truncate">
 						if linked && link.PlatformUsername != "" {
 							{ link.PlatformUsername }
 						} else {
@@ -143,7 +148,7 @@ templ AccountLinkRow(platform AccountPlatform, link LinkedAccount, linked bool, 
 						}
 					</span>
 					<svg
-						id={ "link-" + platform.ID + "-verified-icon" }
+						id={ base + "-verified-icon" }
 						class={ "w-4 h-4 shrink-0 text-green-600 dark:text-green-500", templ.KV("hidden", !linked || !link.Verified) }
 						xmlns="http://www.w3.org/2000/svg"
 						viewBox="0 0 24 24"
@@ -151,48 +156,39 @@ templ AccountLinkRow(platform AccountPlatform, link LinkedAccount, linked bool, 
 						<title>Verified</title>
 						<path fill="currentColor" d="M9.55 18L3.85 12.3l1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path>
 					</svg>
-					<span id={ "link-" + platform.ID + "-status" } class="text-xs text-muted-foreground">
+					<span id={ base + "-status" } class={ mutedXsClass }>
 						if linked && !link.Verified {
 							Unverified
 						}
 					</span>
 				</div>
-				<span id={ "link-" + platform.ID + "-subtitle" } class={ "text-xs text-muted-foreground", templ.KV("hidden", !linked) }>
+				<span id={ base + "-subtitle" } class={ mutedXsClass, templ.KV("hidden", !linked) }>
 					{ platform.Name }
 				</span>
 			</div>
-			if linked {
-				<button
-					id={ "link-" + platform.ID + "-action" }
-					type="button"
-					aria-label={ "Unlink " + platform.Name }
+			<button
+				id={ base + "-action" }
+				type="button"
+				aria-label={ accountActionLabel(linked) + " " + platform.Name }
+				if linked {
 					hx-delete={ "/account/links/" + platform.ID }
 					hx-confirm={ "Unlink " + platform.Name + " from your account?" }
-					class="shrink-0 text-xs underline"
-				>
-					Unlink
-				</button>
-			} else {
-				<button
-					id={ "link-" + platform.ID + "-action" }
-					type="button"
-					aria-label={ "Link " + platform.Name }
+				} else {
 					data-platform={ platform.ID }
 					onclick="handleLinkAction(this.dataset.platform)"
-					class="shrink-0 text-xs underline"
-				>
-					Link
-				</button>
-			}
+				}
+				class="shrink-0 text-xs underline"
+			>
+				{ accountActionLabel(linked) }
+			</button>
 		</div>
 		<div class="flex items-center justify-between pl-9">
-			<label for={ "link-" + platform.ID + "-login-enabled" } class="text-xs text-muted-foreground">
+			<label for={ base + "-login-enabled" } class={ mutedXsClass }>
 				Allow logins
 			</label>
-			<label class={ accountToggleClass }>
+			@toggle() {
 				@AccountLoginInput(platform, linked && link.LoginEnabled, !linked || !link.Verified, false)
-				<span class="pointer-events-none inline-block h-4 w-4 translate-x-0.5 rounded-full bg-background shadow transition-transform peer-checked:translate-x-4"></span>
-			</label>
+			}
 		</div>
 	</div>
 }

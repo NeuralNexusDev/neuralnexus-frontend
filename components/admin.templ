@@ -188,8 +188,6 @@ const (
 	AdminRoleStatusID        = "admin-role-status"
 	AdminPermissionRowPrefix = "permission-"
 	AdminGrantRowPrefix      = "granted-"
-	adminCardClass           = "block rounded-lg border border-input p-3 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-	adminChipClass           = "rounded-full border border-input px-2.5 py-0.5 text-xs"
 )
 
 func adminUserRowsPath(offset int, search string) string {
@@ -267,7 +265,7 @@ templ adminTextBlock(name string, description string) {
 }
 
 templ adminCard(id string, href string, title string, description string) {
-	<a id={ id } href={ templ.SafeURL(href) } class={ adminCardClass }>
+	<a id={ id } href={ templ.SafeURL(href) } class={ cardClass }>
 		<span class="block font-semibold">{ title }</span>
 		<span class={ mutedClass + " block text-sm" }>{ description }</span>
 	</a>
@@ -335,12 +333,12 @@ templ AdminUsersList(d AdminUsersData) {
 templ AdminUserRows(d AdminUsersData) {
 	for i, user := range d.Users {
 		<li>
-			<a href={ templ.SafeURL(adminUserPath(user.UserID)) } autofocus?={ d.FocusFirst && i == 0 } class={ adminCardClass }>
+			<a href={ templ.SafeURL(adminUserPath(user.UserID)) } autofocus?={ d.FocusFirst && i == 0 } class={ cardClass }>
 				@adminTextBlock(adminUsername(user.Username), user.UserID)
 				if len(user.Roles) > 0 {
 					<span class="mt-2 flex flex-wrap gap-2">
 						for _, roleID := range user.Roles {
-							<span class={ adminChipClass }>{ adminRoleName(d.RoleNames, roleID) }</span>
+							<span class={ chipClass }>{ adminRoleName(d.RoleNames, roleID) }</span>
 						}
 					</span>
 				}
@@ -403,16 +401,7 @@ templ AdminUserContent(d AdminUserData) {
 
 // AdminUserHeader renders the account's name and ID, or the out-of-band copy of them a save sends.
 templ AdminUserHeader(d AdminUserData, oob bool) {
-	<div
-		id="admin-user-header"
-		if oob {
-			hx-swap-oob="true"
-		}
-		class="space-y-2 text-center"
-	>
-		<h1 id="admin-user-title" class="text-3xl font-bold">{ adminUsername(d.User.Username) }</h1>
-		<p id="admin-user-id" class={ mutedClass + " break-all text-sm" }>{ d.User.UserID }</p>
-	</div>
+	@entityHeader("admin-user", adminUsername(d.User.Username), d.User.UserID, oob)
 }
 
 // AdminUserLoaded holds the values the form was loaded with, which a save compares against, or the out-of-band copy of them a save sends.
@@ -453,16 +442,7 @@ templ AdminUserForm(d AdminUserData) {
 			}
 		}
 		@formField("admin-user-username", "Username", "") {
-			<input
-				id="admin-user-username"
-				name="username"
-				type="text"
-				value={ d.User.Username }
-				autocomplete="off"
-				autocapitalize="off"
-				spellcheck="false"
-				class={ inputClass }
-			/>
+			@textInput("admin-user-username", "username", d.User.Username, "", false)
 		}
 		<fieldset class="space-y-2">
 			<legend class="text-sm font-medium leading-none">Roles</legend>
@@ -529,7 +509,7 @@ templ AdminUserPermissions(d AdminUserData, oob bool) {
 		} else {
 			<ul id="admin-user-permissions" class="flex flex-wrap gap-2">
 				for _, permission := range d.Permissions {
-					<li class={ adminChipClass }>{ permission }</li>
+					<li class={ chipClass }>{ permission }</li>
 				}
 			</ul>
 		}
@@ -554,12 +534,12 @@ templ AdminRolesContent(d AdminRolesData) {
 		<ul id="admin-roles" class="space-y-2">
 			for _, role := range d.Roles {
 				<li>
-					<a href={ templ.SafeURL(adminRolePath(role.ID)) } class={ adminCardClass }>
+					<a href={ templ.SafeURL(adminRolePath(role.ID)) } class={ cardClass }>
 						@adminTextBlock(role.Name, role.Description)
 						if len(role.Permissions) > 0 {
 							<span class="mt-2 flex flex-wrap gap-2">
 								for _, permission := range role.Permissions {
-									<span class={ adminChipClass }>{ permission.Label() }</span>
+									<span class={ chipClass }>{ permission.Label() }</span>
 								}
 							</span>
 						}
@@ -573,20 +553,10 @@ templ AdminRolesContent(d AdminRolesData) {
 		<form id="admin-role-create-form" class="space-y-4 rounded-lg border border-input p-4" hx-post="/admin/roles" hx-sync="this:drop">
 			<h2 class="text-lg font-semibold">New role</h2>
 			@formField("admin-role-create-name", "Name", "Lower-case letters, digits and underscores, starting with a letter") {
-				<input
-					id="admin-role-create-name"
-					name="name"
-					type="text"
-					required
-					autocomplete="off"
-					autocapitalize="off"
-					spellcheck="false"
-					placeholder="moderator"
-					class={ inputClass }
-				/>
+				@textInput("admin-role-create-name", "name", "", "moderator", true)
 			}
 			@formField("admin-role-create-description", "Description", "") {
-				<input id="admin-role-create-description" name="description" type="text" autocomplete="off" class={ inputClass }/>
+				@textInput("admin-role-create-description", "description", "", "", false)
 			}
 			<button id="admin-role-create-submit" type="submit" class={ submitClass }>Create role</button>
 		</form>
@@ -598,21 +568,21 @@ templ AdminRolesPage() {
 	@htmxPage(adminRoles())
 }
 
+func valueInputType(valueType string) string {
+	if valueType == "int" {
+		return "number"
+	}
+	return "text"
+}
+
 templ adminValueField(permission Permission, value string, name string) {
 	switch permission.ValueType {
-		case "int":
+		case "int", "string":
 			<input
-				type="number"
-				step="1"
-				name={ name }
-				value={ value }
-				autocomplete="off"
-				aria-label={ "Value of " + permission.Node }
-				class={ inputClass }
-			/>
-		case "string":
-			<input
-				type="text"
+				type={ valueInputType(permission.ValueType) }
+				if permission.ValueType == "int" {
+					step="1"
+				}
 				name={ name }
 				value={ value }
 				autocomplete="off"
@@ -653,16 +623,7 @@ templ AdminRoleContent(d AdminRoleData) {
 
 // AdminRoleHeader renders the role's name and ID, or the out-of-band copy of them a rename sends.
 templ AdminRoleHeader(d AdminRoleData, oob bool) {
-	<div
-		id="admin-role-header"
-		if oob {
-			hx-swap-oob="true"
-		}
-		class="space-y-2 text-center"
-	>
-		<h1 id="admin-role-title" class="text-3xl font-bold">{ d.Role.Name }</h1>
-		<p id="admin-role-id" class={ mutedClass + " break-all text-sm" }>{ d.Role.ID }</p>
-	</div>
+	@entityHeader("admin-role", d.Role.Name, d.Role.ID, oob)
 }
 
 // AdminRoleForm renders the form that renames the role, which htmx swaps in after a save.
@@ -677,20 +638,10 @@ templ AdminRoleForm(d AdminRoleData) {
 		<input type="hidden" name="loaded_name" value={ d.Role.Name }/>
 		<input type="hidden" name="loaded_description" value={ d.Role.Description }/>
 		@formField("admin-role-name", "Name", "") {
-			<input
-				id="admin-role-name"
-				name="name"
-				type="text"
-				required
-				value={ d.Role.Name }
-				autocomplete="off"
-				autocapitalize="off"
-				spellcheck="false"
-				class={ inputClass }
-			/>
+			@textInput("admin-role-name", "name", d.Role.Name, "", true)
 		}
 		@formField("admin-role-description", "Description", "") {
-			<input id="admin-role-description" name="description" type="text" value={ d.Role.Description } autocomplete="off" class={ inputClass }/>
+			@textInput("admin-role-description", "description", d.Role.Description, "", false)
 		}
 		<button id="admin-role-save" type="submit" class={ submitClass }>Save</button>
 	</form>
@@ -855,7 +806,7 @@ templ adminPermissionRow(permission Permission) {
 		<span class="min-w-0">
 			@adminTextBlock(permission.Node, permission.Description)
 			if permission.ValueType != "" {
-				<span class={ adminChipClass + " mt-2 inline-block" }>{ permission.ValueType + ", merge " + permission.Merge }</span>
+				<span class={ chipClass + " mt-2 inline-block" }>{ permission.ValueType + ", merge " + permission.Merge }</span>
 			}
 		</span>
 		<button
@@ -890,20 +841,10 @@ templ AdminPermissionForm(oob bool) {
 	>
 		<h2 class="text-lg font-semibold">New permission</h2>
 		@formField("admin-permission-create-node", "Node", "Lower-case words of letters, digits and underscores joined by dots") {
-			<input
-				id="admin-permission-create-node"
-				name="node"
-				type="text"
-				required
-				autocomplete="off"
-				autocapitalize="off"
-				spellcheck="false"
-				placeholder="petpictures.admin"
-				class={ inputClass }
-			/>
+			@textInput("admin-permission-create-node", "node", "", "petpictures.admin", true)
 		}
 		@formField("admin-permission-create-description", "Description", "") {
-			<input id="admin-permission-create-description" name="description" type="text" autocomplete="off" class={ inputClass }/>
+			@textInput("admin-permission-create-description", "description", "", "", false)
 		}
 		@formField("admin-permission-create-type", "Value", "") {
 			<select id="admin-permission-create-type" name="value_type" class={ selectClass }>
