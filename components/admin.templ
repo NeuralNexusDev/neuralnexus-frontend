@@ -430,106 +430,132 @@ templ adminUser(d AdminUserData) {
 		@adminError(d.Error)
 		@adminStatus("admin-user-status")
 		if d.Loaded {
-			@AdminUserEditor(d)
+			<div id="admin-user" class="space-y-6">
+				@AdminUserHeader(d, false)
+				@AdminUserForm(d)
+				@adminUserLinks(d)
+				@AdminUserPermissions(d, false)
+			</div>
 		}
 	</div>
 }
 
-// AdminUserEditor renders the whole user editor, which htmx swaps in after a save.
-templ AdminUserEditor(d AdminUserData) {
-	<div id="admin-user" class="space-y-6">
-		<div class="space-y-2 text-center">
-			<h1 id="admin-user-title" class="text-3xl font-bold">{ adminUsername(d.User.Username) }</h1>
-			<p id="admin-user-id" class="break-all text-sm text-gray-500 dark:text-gray-400">{ d.User.UserID }</p>
-		</div>
-		<form
-			id="admin-user-form"
-			class="space-y-6"
-			hx-post={ adminUserPath(d.User.UserID) }
-			hx-target="#admin-user"
-			hx-swap="outerHTML"
-			hx-sync="this:drop"
-		>
-			<input type="hidden" name="loaded_username" value={ d.User.Username }/>
-			for _, roleID := range d.User.Roles {
-				<input type="hidden" name="loaded_roles" value={ roleID }/>
+// AdminUserHeader renders the account's name and ID, or the out-of-band copy of them a save sends.
+templ AdminUserHeader(d AdminUserData, oob bool) {
+	<div
+		id="admin-user-header"
+		if oob {
+			hx-swap-oob="true"
+		}
+		class="space-y-2 text-center"
+	>
+		<h1 id="admin-user-title" class="text-3xl font-bold">{ adminUsername(d.User.Username) }</h1>
+		<p id="admin-user-id" class="break-all text-sm text-gray-500 dark:text-gray-400">{ d.User.UserID }</p>
+	</div>
+}
+
+// AdminUserForm renders the form that edits the username and roles, which htmx swaps in after a save.
+templ AdminUserForm(d AdminUserData) {
+	<form
+		id="admin-user-form"
+		class="space-y-6"
+		hx-post={ adminUserPath(d.User.UserID) }
+		hx-target="#admin-user-form"
+		hx-swap="outerHTML"
+		hx-sync="closest #admin-user:drop"
+	>
+		<input type="hidden" name="loaded_username" value={ d.User.Username }/>
+		for _, roleID := range d.User.Roles {
+			<input type="hidden" name="loaded_roles" value={ roleID }/>
+		}
+		if d.RolesReadable {
+			<input type="hidden" name="roles_editable" value="1"/>
+			for _, roleID := range d.UnlistedRoles() {
+				<input type="hidden" name="kept_roles" value={ roleID }/>
 			}
-			if d.RolesReadable {
-				<input type="hidden" name="roles_editable" value="1"/>
-				for _, roleID := range d.UnlistedRoles() {
-					<input type="hidden" name="kept_roles" value={ roleID }/>
-				}
-			}
-			<div class="space-y-2">
-				<label class="text-sm font-medium leading-none" for="admin-user-username">Username</label>
-				<input
-					id="admin-user-username"
-					name="username"
-					type="text"
-					value={ d.User.Username }
-					autocomplete="off"
-					autocapitalize="off"
-					spellcheck="false"
-					class={ adminInputClass }
-				/>
-			</div>
-			<fieldset class="space-y-2">
-				<legend class="text-sm font-medium leading-none">Roles</legend>
-				<ul id="admin-user-roles" class="space-y-2">
-					if d.RolesReadable {
-						for _, role := range d.Roles {
-							<li>
-								<label class="flex cursor-pointer items-start gap-3 rounded-md border border-input px-3 py-2 text-sm">
-									<input type="checkbox" name="roles" value={ role.ID } checked?={ d.HeldRole(role.ID) } class="mt-1"/>
-									@adminTextBlock(role.Name, role.Description)
-								</label>
-							</li>
-						}
-					} else {
-						for _, roleID := range d.User.Roles {
-							<li class="break-all rounded-md border border-input px-3 py-2 text-sm">{ roleID }</li>
-						}
-					}
-				</ul>
-				if !d.RolesReadable {
-					<p id="admin-user-roles-note" class="text-sm text-gray-500 dark:text-gray-400">
-						Role names and changes need the roles.admin permission, so the roles are shown by ID and left as they are.
-					</p>
-				}
-			</fieldset>
-			<button id="admin-user-save" type="submit" class={ adminSubmitClass }>Save</button>
-		</form>
+		}
 		<div class="space-y-2">
-			<h2 class="text-sm font-medium leading-none">Linked accounts</h2>
-			if d.LinksError != "" {
-				<p id="admin-user-links-error" role="alert" class={ adminSectionError }>{ d.LinksError }</p>
-			} else if len(d.Links) == 0 {
-				<p id="admin-user-links-empty" class={ adminMutedClass }>No linked accounts</p>
-			} else {
-				<ul id="admin-user-links" class="space-y-1 text-sm">
-					for _, link := range d.Links {
-						<li class="flex justify-between gap-3 rounded-md border border-input px-3 py-2">
-							<span class="font-medium capitalize">{ link.Platform }</span>
-							<span class="min-w-0 truncate text-gray-500 dark:text-gray-400">{ adminLinkName(link) }</span>
+			<label class="text-sm font-medium leading-none" for="admin-user-username">Username</label>
+			<input
+				id="admin-user-username"
+				name="username"
+				type="text"
+				value={ d.User.Username }
+				autocomplete="off"
+				autocapitalize="off"
+				spellcheck="false"
+				class={ adminInputClass }
+			/>
+		</div>
+		<fieldset class="space-y-2">
+			<legend class="text-sm font-medium leading-none">Roles</legend>
+			<ul id="admin-user-roles" class="space-y-2">
+				if d.RolesReadable {
+					for _, role := range d.Roles {
+						<li>
+							<label class="flex cursor-pointer items-start gap-3 rounded-md border border-input px-3 py-2 text-sm">
+								<input type="checkbox" name="roles" value={ role.ID } checked?={ d.HeldRole(role.ID) } class="mt-1"/>
+								@adminTextBlock(role.Name, role.Description)
+							</label>
 						</li>
 					}
-				</ul>
-			}
-		</div>
-		<div class="space-y-2">
-			<h2 class="text-sm font-medium leading-none">Effective permissions</h2>
-			if d.PermissionsErr != "" {
-				<p id="admin-user-permissions-error" role="alert" class={ adminSectionError }>{ d.PermissionsErr }</p>
-			} else if len(d.Permissions) == 0 {
-				<p id="admin-user-permissions-empty" class={ adminMutedClass }>No permissions</p>
-			} else {
-				<ul id="admin-user-permissions" class="flex flex-wrap gap-2">
-					for _, permission := range d.Permissions {
-						<li class={ adminChipClass }>{ permission }</li>
+				} else {
+					for _, roleID := range d.User.Roles {
+						<li class="break-all rounded-md border border-input px-3 py-2 text-sm">{ roleID }</li>
 					}
-				</ul>
+				}
+			</ul>
+			if !d.RolesReadable {
+				<p id="admin-user-roles-note" class="text-sm text-gray-500 dark:text-gray-400">
+					Role names and changes need the roles.admin permission, so the roles are shown by ID and left as they are.
+				</p>
 			}
-		</div>
+		</fieldset>
+		<button id="admin-user-save" type="submit" class={ adminSubmitClass }>Save</button>
+	</form>
+}
+
+templ adminUserLinks(d AdminUserData) {
+	<div class="space-y-2">
+		<h2 class="text-sm font-medium leading-none">Linked accounts</h2>
+		if d.LinksError != "" {
+			<p id="admin-user-links-error" role="alert" class={ adminSectionError }>{ d.LinksError }</p>
+		} else if len(d.Links) == 0 {
+			<p id="admin-user-links-empty" class={ adminMutedClass }>No linked accounts</p>
+		} else {
+			<ul id="admin-user-links" class="space-y-1 text-sm">
+				for _, link := range d.Links {
+					<li class="flex justify-between gap-3 rounded-md border border-input px-3 py-2">
+						<span class="font-medium capitalize">{ link.Platform }</span>
+						<span class="min-w-0 truncate text-gray-500 dark:text-gray-400">{ adminLinkName(link) }</span>
+					</li>
+				}
+			</ul>
+		}
+	</div>
+}
+
+// AdminUserPermissions renders the effective permissions, or the out-of-band copy of them a save sends.
+templ AdminUserPermissions(d AdminUserData, oob bool) {
+	<div
+		id="admin-user-permissions-section"
+		if oob {
+			hx-swap-oob="true"
+		}
+		class="space-y-2"
+	>
+		<h2 class="text-sm font-medium leading-none">Effective permissions</h2>
+		if d.PermissionsErr != "" {
+			<p id="admin-user-permissions-error" role="alert" class={ adminSectionError }>{ d.PermissionsErr }</p>
+		} else if len(d.Permissions) == 0 {
+			<p id="admin-user-permissions-empty" class={ adminMutedClass }>No permissions</p>
+		} else {
+			<ul id="admin-user-permissions" class="flex flex-wrap gap-2">
+				for _, permission := range d.Permissions {
+					<li class={ adminChipClass }>{ permission }</li>
+				}
+			</ul>
+		}
 	</div>
 }
 
