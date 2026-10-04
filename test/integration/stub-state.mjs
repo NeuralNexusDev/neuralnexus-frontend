@@ -136,7 +136,7 @@ const ROLE_NAME = /^[a-z][a-z0-9_]*$/;
 const NODE = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$/;
 
 /**
- * Serves /api/v1/users, /roles and /permissions from per-session state; the test seeds it through /__admin/state.
+ * Serves /api/v1/users, /roles and /permissions from per-session state; the test seeds it through /__state/state.
  * A seeded failure answers "METHOD /path" with its status and detail after letting `skip` calls through, `times` times (default always).
  * A seeded delay holds the answer to "METHOD /path" for that many milliseconds, which only the htmx timeout specs need.
  * A gate holds the answer to "METHOD /path" until the test releases it, after letting `skip` calls through.
@@ -381,7 +381,7 @@ export async function handleState(req, res, pathname, searchParams) {
 
 /** Seeds or reads the state of one test's session, which the app forwards to the API as its session cookie. */
 export async function handleControl(req, res, pathname, searchParams) {
-  if (pathname === '/__admin/state' && req.method === 'POST') {
+  if (pathname === '/__state/state' && req.method === 'POST') {
     const { session, state } = await readBody(req);
     const seeded = { ...defaultState(), ...state };
     for (let i = 0; i < (state.generateUsers || 0); i += 1) {
@@ -390,16 +390,16 @@ export async function handleControl(req, res, pathname, searchParams) {
     sessions.set(session, seeded);
     return send(res, 200, {});
   }
-  if (pathname === '/__admin/gate' && req.method === 'POST') {
+  if (pathname === '/__state/gate' && req.method === 'POST') {
     const { session, key, skip } = await readBody(req);
     stateFor(session).gates[key] = { skip: skip || 0, arrived: 0, open: false, held: [] };
     return send(res, 200, {});
   }
-  if (pathname === '/__admin/gate' && req.method === 'GET') {
+  if (pathname === '/__state/gate' && req.method === 'GET') {
     const gate = stateFor(searchParams.get('session')).gates[searchParams.get('key')];
     return send(res, 200, { arrived: gate ? gate.arrived : 0 });
   }
-  if (pathname === '/__admin/gate/release' && req.method === 'POST') {
+  if (pathname === '/__state/gate/release' && req.method === 'POST') {
     const { session, key, status, detail, index } = await readBody(req);
     const gate = stateFor(session).gates[key];
     if (index !== undefined) {
@@ -412,7 +412,7 @@ export async function handleControl(req, res, pathname, searchParams) {
     }
     return send(res, 200, {});
   }
-  if (pathname === '/__admin/calls' && req.method === 'GET') {
+  if (pathname === '/__state/calls' && req.method === 'GET') {
     return send(res, 200, stateFor(searchParams.get('session')).calls);
   }
   return false;

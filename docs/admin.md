@@ -4,7 +4,7 @@ The admin pages, the account page and the bee suggestion review page work the sa
 
 ## The page and its content
 
-The first response is a shell. It has the heading, the back links, the error banner and a placeholder that says "Loading…". `shell` and `shellFor` in `admin.go` serve it. The shell holds no API data, and the server sends it with `Cache-Control: no-store`.
+The first response is a shell. It has the heading, the back links, the error banner and a placeholder that says "Loading…". `shell` and `shellFor` in `page.go` serve it. The shell holds no API data, and the server sends it with `Cache-Control: no-store`.
 
 As soon as the page loads, the placeholder asks the server for the real content, and the answer replaces it. Two wrappers handle those requests.
 
@@ -48,5 +48,6 @@ The templates and the script share a few names. The script finds the page by the
 
 - `components/ui.templ` has the shared classes and components, such as `pageShell`, `pageHeading`, `formField`, `textInput`, `toggle`, `emptyState` and `busyAttrs`.
 - `components/admin.templ` has the admin components, and `components/account.templ` has the account ones.
+- `page.go` has what every page shares: the route wrappers, the shells, the failure helpers and the log line.
 - The handlers are in `admin*.go`, `account.go` and `bee.go`.
 - `api.go` has the API client and `apiError`.

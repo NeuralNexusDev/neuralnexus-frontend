@@ -75,7 +75,7 @@ http
       res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(received));
       return;
     }
-    if (pathname.startsWith('/__admin/')) {
+    if (pathname.startsWith('/__state/')) {
       if ((await handleControl(req, res, pathname, searchParams)) === false) {
         res.writeHead(404).end();
       }

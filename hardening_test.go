@@ -103,7 +103,7 @@ func TestFailedAPICallsLogTheirCauseWithoutTheSession(t *testing.T) {
 		buf := captureLog(t)
 		rec := pageReq{method: http.MethodGet, target: "/admin/roles/list", cookies: []*http.Cookie{cookie}}.do()
 		assertStatus(t, rec, http.StatusBadGateway)
-		for _, want := range []string{"admin request failed", "status=502", `api="GET /roles"`, "request_id=", "connection refused"} {
+		for _, want := range []string{"request failed", "status=502", `api="GET /roles"`, "request_id=", "connection refused"} {
 			if !strings.Contains(buf.String(), want) {
 				t.Errorf("the log is missing %q:\n%s", want, buf.String())
 			}
@@ -118,7 +118,7 @@ func TestFailedAPICallsLogTheirCauseWithoutTheSession(t *testing.T) {
 		buf := captureLog(t)
 		rec := pageReq{method: http.MethodGet, target: "/admin/roles/list", cookies: []*http.Cookie{cookie}}.do()
 		assertStatus(t, rec, http.StatusInternalServerError)
-		for _, want := range []string{"admin request failed", "status=500", `api="GET /roles"`, "request_id="} {
+		for _, want := range []string{"request failed", "status=500", `api="GET /roles"`, "request_id="} {
 			if !strings.Contains(buf.String(), want) {
 				t.Errorf("the log is missing %q:\n%s", want, buf.String())
 			}
@@ -132,7 +132,7 @@ func TestFailedAPICallsLogTheirCauseWithoutTheSession(t *testing.T) {
 		f.problem("GET /roles", 403, "You do not have permission")
 		buf := captureLog(t)
 		pageReq{method: http.MethodGet, target: "/admin/roles/list", cookies: []*http.Cookie{cookie}}.do()
-		if strings.Contains(buf.String(), "admin request failed") {
+		if strings.Contains(buf.String(), "request failed") {
 			t.Errorf("a refusal was logged as a failure:\n%s", buf.String())
 		}
 	})
@@ -145,7 +145,7 @@ func TestAbandonedRequestsAreNotLoggedAsFailures(t *testing.T) {
 	cancel()
 	rec := httptest.NewRecorder()
 	NewWebServer("", false).Setup().ServeHTTP(rec, httptest.NewRequestWithContext(ctx, http.MethodGet, "/admin/roles/list", nil))
-	if strings.Contains(buf.String(), "admin request failed") {
+	if strings.Contains(buf.String(), "request failed") {
 		t.Errorf("a request the client abandoned was logged as a failure:\n%s", buf.String())
 	}
 }

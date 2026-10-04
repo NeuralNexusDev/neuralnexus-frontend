@@ -36,10 +36,10 @@ export const test = base.extend({
 /** Seeds a session on the stub API and signs the page in with it, since the app forwards that cookie to the API. */
 export async function signIn(page, state = {}) {
   const session = randomUUID();
-  const seeded = await page.request.post(`${STUB}/__admin/state`, { data: { session, state } });
+  const seeded = await page.request.post(`${STUB}/__state/state`, { data: { session, state } });
   expect(seeded.ok()).toBe(true);
   await page.context().addCookies([{ name: 'session', value: session, url: APP }]);
-  const calls = async () => (await page.request.get(`${STUB}/__admin/calls?session=${session}`)).json();
+  const calls = async () => (await page.request.get(`${STUB}/__state/calls?session=${session}`)).json();
   const writes = async () =>
     (await calls())
       .filter((call) => call.method !== 'GET')
@@ -48,16 +48,16 @@ export async function signIn(page, state = {}) {
     page.request.fetch(`${STUB}/api/v1${path}`, { method, data, headers: { Cookie: `session=${session}` } });
   /** Holds the stub's answer to `key` ("METHOD /path") once `skip` calls have passed, so a test can act while the request is in flight. */
   const gate = async (key, { skip = 0 } = {}) => {
-    const registered = await page.request.post(`${STUB}/__admin/gate`, { data: { session, key, skip } });
+    const registered = await page.request.post(`${STUB}/__state/gate`, { data: { session, key, skip } });
     expect(registered.ok()).toBe(true);
     return {
       arrived: (count = 1) =>
         expect
-          .poll(async () => (await (await page.request.get(`${STUB}/__admin/gate?session=${session}&key=${encodeURIComponent(key)}`)).json()).arrived)
+          .poll(async () => (await (await page.request.get(`${STUB}/__state/gate?session=${session}&key=${encodeURIComponent(key)}`)).json()).arrived)
           .toBeGreaterThanOrEqual(count),
       /** Answers `outcome.index`, or every held call when it is absent. */
       release: async (outcome = {}) => {
-        const released = await page.request.post(`${STUB}/__admin/gate/release`, { data: { session, key, ...outcome } });
+        const released = await page.request.post(`${STUB}/__state/gate/release`, { data: { session, key, ...outcome } });
         expect(released.ok()).toBe(true);
       },
     };

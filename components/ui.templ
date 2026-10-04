@@ -201,3 +201,23 @@ templ entityHeader(prefix string, title string, subtitle string, oob bool) {
 		<p id={ prefix + "-id" } class={ mutedSmallClass + " break-all" }>{ subtitle }</p>
 	</div>
 }
+
+// ErrorClear empties the error banner out of band, so a change that works removes the message of one that did not.
+templ ErrorClear() {
+	<div id="page-error" hx-swap-oob="innerHTML"></div>
+}
+
+// StatusLine updates a page's status line out of band, so the line keeps announcing what it says.
+templ StatusLine(id string, message string) {
+	<p id={ id } hx-swap-oob="innerHTML">{ message }</p>
+}
+
+// ErrorText is the body of an error response that htmx swaps into the error banner.
+templ ErrorText(message string) {
+	{ message }
+}
+
+// RowGone removes a row out of band, for a row whose removal succeeded when the page could not be refreshed.
+templ RowGone(id string) {
+	<div hx-swap-oob={ "delete:#" + id }></div>
+}
