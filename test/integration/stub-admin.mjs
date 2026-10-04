@@ -40,6 +40,7 @@ function defaultState() {
         { platform: 'steam', platform_id: '76561198000000000' },
       ],
     },
+    suggestions: ['buzz', 'honey', 'wax'],
     failures: {},
     delays: {},
     nextId: '3541025163146800000',
@@ -164,6 +165,20 @@ export async function handleAdmin(req, res, pathname, searchParams) {
   const [kind, id, sub, subId] = parts;
   const can = (node) => state.me.some((permission) => permission === node || permission.startsWith(`${node}:`));
 
+  if (kind === 'bee-name-generator') {
+    if (!can('beenamegenerator.admin')) {
+      return problem(res, 403, 'You do not have permission to review suggestions');
+    }
+    if (req.method === 'GET') {
+      return send(res, 200, { suggestions: state.suggestions.slice(0, Number(sub)) });
+    }
+    if (req.method === 'POST') {
+      state.suggestions.push(sub);
+      return send(res, 200);
+    }
+    state.suggestions = state.suggestions.filter((name) => name !== sub);
+    return req.method === 'DELETE' ? send(res, 204) : send(res, 200);
+  }
   if (path === '/users/me/permissions') {
     return send(res, 200, state.me);
   }

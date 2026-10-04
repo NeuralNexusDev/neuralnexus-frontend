@@ -81,7 +81,7 @@ http
       }
       return;
     }
-    if (/^\/api\/v1\/(users|roles|permissions)(\/|$)/.test(pathname)) {
+    if (/^\/api\/v1\/(users|roles|permissions|bee-name-generator\/suggestion)(\/|$)/.test(pathname)) {
       await handleAdmin(req, res, pathname, searchParams);
       return;
     }

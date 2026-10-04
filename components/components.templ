@@ -295,19 +295,60 @@ templ BeeNameGeneratorAdmin() {
 				Accept a suggestion to add it to the generator, or reject it to discard it
 			</p>
 		</div>
-		<div id="bee-admin-error" role="alert" hidden class="rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive"></div>
-		<ul id="bee-suggestions" class="space-y-2"></ul>
-		<p id="bee-suggestions-empty" hidden class="text-center text-sm text-gray-500 dark:text-gray-400">
-			No pending suggestions
-		</p>
+		@adminError()
+		@adminLoad("/project/bee-name-generator/admin/suggestions")
 	</div>
-	<script>
-		loadBeeSuggestions();
-	</script>
 }
 
+// BeeSuggestionsData is the list of bee name suggestions waiting for review.
+type BeeSuggestionsData struct {
+	Names []string
+	// FocusList moves focus to the list heading, which replaces the button that was used.
+	FocusList bool
+}
+
+// BeeSuggestions renders the pending suggestions, which htmx swaps in after one is accepted or rejected.
+templ BeeSuggestions(d BeeSuggestionsData) {
+	<div id="bee-suggestions-root" class="space-y-6" hx-sync="this:drop" hx-target="#bee-suggestions-root" hx-swap="outerHTML">
+		<h2 id="bee-suggestions-title" tabindex="-1" autofocus?={ d.FocusList } class="sr-only">Pending suggestions</h2>
+		if len(d.Names) == 0 {
+			<p id="bee-suggestions-empty" class="text-center text-sm text-gray-500 dark:text-gray-400">
+				No pending suggestions
+			</p>
+		} else {
+			<ul id="bee-suggestions" class="space-y-2">
+				for _, name := range d.Names {
+					<li class="flex items-center justify-between gap-3 rounded-lg border border-input p-3">
+						<span class="min-w-0 flex-1 truncate text-sm font-medium">{ name }</span>
+						<form class="flex shrink-0 gap-2" hx-post="/project/bee-name-generator/admin/suggestions">
+							<input type="hidden" name="name" value={ name }/>
+							<button
+								name="action"
+								value="accept"
+								aria-label={ "Accept " + name }
+								class="shrink-0 rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground hover:bg-primary-light"
+							>
+								Accept
+							</button>
+							<button
+								name="action"
+								value="reject"
+								aria-label={ "Reject " + name }
+								class="shrink-0 rounded-md border border-input px-3 py-1 text-xs font-medium hover:bg-accent hover:text-accent-foreground"
+							>
+								Reject
+							</button>
+						</form>
+					</li>
+				}
+			</ul>
+		}
+	</div>
+}
+
+// BeeNameGeneratorAdminPage serves the suggestion review shell, which loads the suggestions.
 templ BeeNameGeneratorAdminPage() {
-	@WrapContents(BeeNameGeneratorAdmin())
+	@WrapContentsWithHead("NeuralNexus", htmxHead(), BeeNameGeneratorAdmin())
 }
 
 templ McStatus() {
