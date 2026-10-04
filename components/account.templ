@@ -17,13 +17,11 @@ var AccountPlatforms = []AccountPlatform{
 
 // AccountData is what the account page shows.
 type AccountData struct {
-	Username     string
-	PasswordAuth bool
-	// SettingsError and LinksError replace the section they name when its lookup failed.
+	Username      string
+	PasswordAuth  bool
 	SettingsError string
 	LinksError    string
-	// Links maps a platform ID to the account's link to it, and lacks the platforms that are not linked.
-	Links map[string]LinkedAccount
+	Links         map[string]LinkedAccount
 }
 
 // AccountSettingsData is the password login setting.

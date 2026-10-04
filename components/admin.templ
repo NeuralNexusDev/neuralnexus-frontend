@@ -80,23 +80,18 @@ type AdminDashboardData struct {
 
 // AdminUsersData is a page of the user list.
 type AdminUsersData struct {
-	Users []UserAccount
-	// RoleNames maps role IDs to names, and is nil when the caller cannot read roles.
-	RoleNames map[string]string
-	// Search is the text the usernames and IDs were matched against, which is empty for the whole list.
-	Search string
-	// Start is the offset the page began at.
+	Users      []UserAccount
+	RoleNames  map[string]string
+	Search     string
 	Start      int
 	NextOffset int
 	More       bool
-	// FocusFirst moves focus to the first row, which replaces the button that loaded the page.
 	FocusFirst bool
 }
 
 // AdminUserData is the user editor.
 type AdminUserData struct {
-	User UserAccount
-	// Roles is the role catalogue to choose from, which only a caller who may read roles gets.
+	User           UserAccount
 	Roles          []Role
 	RolesReadable  bool
 	Links          []LinkedAccount
@@ -112,16 +107,12 @@ type AdminRolesData struct {
 
 // AdminRoleData is the role editor.
 type AdminRoleData struct {
-	Role Role
-	// Catalogue is every permission, granted or not.
-	Catalogue []Permission
-	// Drafts holds what was typed in each granted permission's value field, by permission ID, while another part changes.
-	Drafts map[string]string
-	// GrantPermission and GrantValue keep what was typed in the grant form.
+	Role            Role
+	Catalogue       []Permission
+	Drafts          map[string]string
 	GrantPermission string
 	GrantValue      string
-	// FocusList moves focus to the permission list heading, which replaces the button that was used.
-	FocusList bool
+	FocusList       bool
 }
 
 // AdminPermissionsData is the permission list.
