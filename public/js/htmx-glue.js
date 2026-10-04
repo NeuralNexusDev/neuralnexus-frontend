@@ -171,7 +171,10 @@
         const field = event.target;
         const statusID = field.closest?.('[data-status]')?.dataset.status;
         if (statusID) {
-            document.getElementById(statusID).textContent = '';
+            const status = document.getElementById(statusID);
+            if (status) {
+                status.textContent = '';
+            }
         }
         if (field.getAttribute?.('aria-invalid') !== 'true') {
             return;
