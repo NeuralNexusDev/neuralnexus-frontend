@@ -9,6 +9,11 @@ import (
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/components"
 )
 
+const (
+	userStatusID = "admin-user-status"
+	roleStatusID = "admin-role-status"
+)
+
 func noStoreHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", noStore)
@@ -67,14 +72,17 @@ func failFragment(w http.ResponseWriter, r *http.Request, err error, restore ...
 	w.Header().Set("HX-Reswap", "innerHTML")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	parts := []templ.Component{components.AdminErrorText(message)}
-	switch {
-	case strings.Contains(r.Pattern, "/admin/users/{id}"):
-		parts = append(parts, components.AdminStatus("admin-user-status", ""))
-	case strings.Contains(r.Pattern, "/admin/roles/{id}"):
-		parts = append(parts, components.AdminStatus("admin-role-status", ""))
-	}
-	render(w, r, append(parts, restore...)...)
+	render(w, r, append([]templ.Component{components.AdminErrorText(message)}, restore...)...)
+}
+
+// failEditor also empties the status line of the editor, so a failed change is not shown under the Saved of the one before it.
+func failEditor(w http.ResponseWriter, r *http.Request, statusID string, err error, restore ...templ.Component) {
+	failFragment(w, r, err, append([]templ.Component{components.AdminStatus(statusID, "")}, restore...)...)
+}
+
+func nothingToSave(w http.ResponseWriter, r *http.Request, statusID string) {
+	w.Header().Set("HX-Reswap", "none")
+	renderAll(w, r, components.AdminStatus(statusID, "Nothing to save"))
 }
 
 func render(w http.ResponseWriter, r *http.Request, parts ...templ.Component) {

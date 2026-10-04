@@ -162,7 +162,7 @@ func renderUserSave(w http.ResponseWriter, r *http.Request, data components.Admi
 		components.AdminUserForm(data),
 		components.AdminUserHeader(data, true),
 		components.AdminUserPermissions(data, true),
-		components.AdminStatus("admin-user-status", status),
+		components.AdminStatus(userStatusID, status),
 	)
 }
 
@@ -172,7 +172,7 @@ func adminUserSaveHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	if raw := r.Form.Get("username"); raw != r.Form.Get("loaded_username") {
 		username := strings.TrimSpace(raw)
 		if username == "" {
-			failFragment(w, r, invalidInput("Enter a username"))
+			failEditor(w, r, userStatusID, invalidInput("Enter a username"))
 			return
 		}
 		body["username"] = username
@@ -184,23 +184,18 @@ func adminUserSaveHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 		}
 	}
 	if len(body) == 0 {
-		data, err := loadUserEditor(a, id, nil, false)
-		if err != nil {
-			failFragment(w, r, err)
-			return
-		}
-		renderUserSave(w, r, data, "Nothing to save")
+		nothingToSave(w, r, userStatusID)
 		return
 	}
 	saved, err := adminSend[components.UserAccount](a, http.MethodPut, "/users/"+url.PathEscape(id), body, "Failed to save the user")
 	if err != nil {
-		failFragment(w, r, err)
+		failEditor(w, r, userStatusID, err)
 		return
 	}
 	data, err := loadUserEditor(a, id, &saved, false)
 	if err != nil {
 		written := components.AdminUserData{User: saved}
-		failFragment(w, r, afterWrite(err), components.AdminUserHeader(written, true), components.AdminUserLoaded(written, true))
+		failEditor(w, r, userStatusID, afterWrite(err), components.AdminUserHeader(written, true), components.AdminUserLoaded(written, true))
 		return
 	}
 	status := "Saved"

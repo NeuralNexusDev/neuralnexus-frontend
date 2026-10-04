@@ -195,7 +195,7 @@ func (d AdminRoleData) Draft(p RolePermission) string {
 const (
 	adminHTMXURL         = "https://s3.neuralnexus.dev/cdn/htmx/v4.0.0/htmx.min.js"
 	adminHTMXIntegrity   = "sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc"
-	adminHTMXConfig      = `{"mode":"same-origin","history":false,"allowEmptySwapAfterOOB":true}`
+	adminHTMXConfig      = `{"mode":"same-origin","history":false,"allowEmptySwapAfterOOB":true,"defaultSettleDelay":0}`
 	adminInputClass      = "text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
 	adminSelectClass     = "text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
 	adminSubmitClass     = "border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
@@ -204,9 +204,8 @@ const (
 	adminCardClass       = "block rounded-lg border border-input p-3 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 	adminChipClass       = "rounded-full border border-input px-2.5 py-0.5 text-xs"
 	adminLinkButtonClass = "border border-input hover:bg-accent hover:text-accent-foreground inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 h-10 px-4 py-2 w-full"
-	adminEmptyClass      = "text-center text-sm text-gray-500 dark:text-gray-400"
+	adminEmptyClass      = mutedSmallClass + " text-center"
 	adminBusyClass       = "[&.htmx-request]:pointer-events-none [&.htmx-request]:opacity-60"
-	adminMutedClass      = "text-sm text-gray-500 dark:text-gray-400"
 	adminSectionError    = "text-sm text-red-600 dark:text-red-400"
 )
 
@@ -264,7 +263,7 @@ templ adminField(id string, label string, help string) {
 		<label class="text-sm font-medium leading-none" for={ id }>{ label }</label>
 		{ children... }
 		if help != "" {
-			<p class="text-xs text-gray-500 dark:text-gray-400">{ help }</p>
+			<p class={ mutedClass + " text-xs" }>{ help }</p>
 		}
 	</div>
 }
@@ -306,21 +305,21 @@ templ AdminErrorText(message string) {
 templ adminTextBlock(name string, description string) {
 	<span class="min-w-0">
 		<span class="block break-all font-medium">{ name }</span>
-		<span class="block break-all text-xs text-gray-500 dark:text-gray-400">{ description }</span>
+		<span class={ mutedClass + " block break-all text-xs" }>{ description }</span>
 	</span>
 }
 
 templ adminCard(id string, href string, title string, description string) {
 	<a id={ id } href={ templ.SafeURL(href) } class={ adminCardClass }>
 		<span class="block font-semibold">{ title }</span>
-		<span class="block text-sm text-gray-500 dark:text-gray-400">{ description }</span>
+		<span class={ mutedClass + " block text-sm" }>{ description }</span>
 	</a>
 }
 
 templ adminHeading(title string, description string) {
 	<div class="space-y-2 text-center">
 		<h1 class="text-3xl font-bold">{ title }</h1>
-		<p class="text-balance text-gray-500 dark:text-gray-400">{ description }</p>
+		<p class={ mutedClass + " text-balance" }>{ description }</p>
 	</div>
 }
 
@@ -429,7 +428,7 @@ templ AdminUserRows(d AdminUsersData) {
 				Load more
 			</button>
 			if d.Search != "" {
-				<span class="block text-xs text-gray-500 dark:text-gray-400">Searched the first { strconv.Itoa(d.NextOffset) } users</span>
+				<span class={ mutedClass + " block text-xs" }>Searched the first { strconv.Itoa(d.NextOffset) } users</span>
 			}
 		</li>
 	}
@@ -469,7 +468,7 @@ templ AdminUserHeader(d AdminUserData, oob bool) {
 		class="space-y-2 text-center"
 	>
 		<h1 id="admin-user-title" class="text-3xl font-bold">{ adminUsername(d.User.Username) }</h1>
-		<p id="admin-user-id" class="break-all text-sm text-gray-500 dark:text-gray-400">{ d.User.UserID }</p>
+		<p id="admin-user-id" class={ mutedClass + " break-all text-sm" }>{ d.User.UserID }</p>
 	</div>
 }
 
@@ -541,7 +540,7 @@ templ AdminUserForm(d AdminUserData) {
 				}
 			</ul>
 			if !d.RolesReadable {
-				<p id="admin-user-roles-note" class="text-sm text-gray-500 dark:text-gray-400">
+				<p id="admin-user-roles-note" class={ mutedSmallClass }>
 					Role names and changes need the roles.admin permission, so the roles are shown by ID and left as they are.
 				</p>
 			}
@@ -556,13 +555,13 @@ templ adminUserLinks(d AdminUserData) {
 		if d.LinksError != "" {
 			<p id="admin-user-links-error" role="alert" class={ adminSectionError }>{ d.LinksError }</p>
 		} else if len(d.Links) == 0 {
-			<p id="admin-user-links-empty" class={ adminMutedClass }>No linked accounts</p>
+			<p id="admin-user-links-empty" class={ mutedSmallClass }>No linked accounts</p>
 		} else {
 			<ul id="admin-user-links" class="space-y-1 text-sm">
 				for _, link := range d.Links {
 					<li class="flex justify-between gap-3 rounded-md border border-input px-3 py-2">
 						<span class="font-medium capitalize">{ link.Platform }</span>
-						<span class="min-w-0 truncate text-gray-500 dark:text-gray-400">{ adminLinkName(link) }</span>
+						<span class={ mutedClass + " min-w-0 truncate" }>{ adminLinkName(link) }</span>
 					</li>
 				}
 			</ul>
@@ -583,7 +582,7 @@ templ AdminUserPermissions(d AdminUserData, oob bool) {
 		if d.PermissionsErr != "" {
 			<p id="admin-user-permissions-error" role="alert" class={ adminSectionError }>{ d.PermissionsErr }</p>
 		} else if len(d.Permissions) == 0 {
-			<p id="admin-user-permissions-empty" class={ adminMutedClass }>No permissions</p>
+			<p id="admin-user-permissions-empty" class={ mutedSmallClass }>No permissions</p>
 		} else {
 			<ul id="admin-user-permissions" class="flex flex-wrap gap-2">
 				for _, permission := range d.Permissions {
@@ -602,7 +601,7 @@ templ AdminUserPage(id string) {
 templ adminRoles() {
 	<div class="mx-auto max-w-xl space-y-6">
 		@adminHeading("Roles", "Select a role to edit the permissions it grants")
-		<div class="flex justify-between text-sm text-gray-500 dark:text-gray-400">
+		<div class={ mutedClass + " flex justify-between text-sm" }>
 			<a href="/admin" class="underline">Back to the admin dashboard</a>
 			<a href="/admin/permissions" class="underline">Permissions</a>
 		</div>
@@ -725,7 +724,7 @@ templ AdminRoleHeader(d AdminRoleData, oob bool) {
 		class="space-y-2 text-center"
 	>
 		<h1 id="admin-role-title" class="text-3xl font-bold">{ d.Role.Name }</h1>
-		<p id="admin-role-id" class="break-all text-sm text-gray-500 dark:text-gray-400">{ d.Role.ID }</p>
+		<p id="admin-role-id" class={ mutedClass + " break-all text-sm" }>{ d.Role.ID }</p>
 	</div>
 }
 
@@ -787,9 +786,12 @@ templ AdminRoleGrants(d AdminRoleData) {
 // AdminRoleGranted renders the granted permissions, which htmx swaps in after a change to one of them.
 templ AdminRoleGranted(d AdminRoleData) {
 	<div id="admin-role-granted" class="space-y-2">
+		for _, permission := range d.Role.Permissions {
+			<input type="hidden" name="granted" value={ permission.ID }/>
+		}
 		<h2 id="admin-role-permissions-title" tabindex="-1" autofocus?={ d.FocusList } class="text-lg font-semibold">Granted permissions</h2>
 		if len(d.Role.Permissions) == 0 {
-			<p id="admin-role-permissions-empty" class={ adminMutedClass }>This role grants no permissions</p>
+			<p id="admin-role-permissions-empty" class={ mutedSmallClass }>This role grants no permissions</p>
 		} else {
 			<ul id="admin-role-permissions" class="space-y-2">
 				for _, permission := range d.Role.Permissions {
@@ -864,7 +866,7 @@ templ AdminRoleGrantForm(d AdminRoleData, oob bool) {
 				<button id="admin-role-grant-submit" type="submit" class={ adminSubmitClass }>Grant</button>
 			</form>
 		} else {
-			<p id="admin-role-grant-empty" class={ adminMutedClass }>Every permission is already granted</p>
+			<p id="admin-role-grant-empty" class={ mutedSmallClass }>Every permission is already granted</p>
 		}
 	</div>
 }
@@ -877,7 +879,7 @@ templ AdminRolePage(id string) {
 templ adminPermissions() {
 	<div class="mx-auto max-w-xl space-y-6">
 		@adminHeading("Permissions", "The permissions roles can grant")
-		<div class="flex justify-between text-sm text-gray-500 dark:text-gray-400">
+		<div class={ mutedClass + " flex justify-between text-sm" }>
 			<a href="/admin" class="underline">Back to the admin dashboard</a>
 			<a href="/admin/roles" class="underline">Roles</a>
 		</div>
@@ -900,30 +902,41 @@ templ AdminPermissionList(d AdminPermissionsData) {
 		<h2 id="admin-permissions-title" tabindex="-1" autofocus?={ d.FocusList } class="sr-only">Permission list</h2>
 		if len(d.Permissions) == 0 {
 			<p id="admin-permissions-empty" class={ adminEmptyClass }>No permissions</p>
-		} else {
-			<ul id="admin-permissions" class="space-y-2">
-				for _, permission := range d.Permissions {
-					<li id={ "permission-" + permission.ID } class="flex items-start justify-between gap-3 rounded-lg border border-input p-3">
-						<span class="min-w-0">
-							@adminTextBlock(permission.Node, permission.Description)
-							if permission.ValueType != "" {
-								<span class={ adminChipClass + " mt-2 inline-block" }>{ permission.ValueType + ", merge " + permission.Merge }</span>
-							}
-						</span>
-						<button
-							type="button"
-							aria-label={ "Delete " + permission.Node }
-							hx-delete={ "/admin/permissions/" + url.PathEscape(permission.ID) }
-							hx-confirm={ "Delete the permission " + permission.Node + "?" }
-							class={ adminButtonClass }
-						>
-							Delete
-						</button>
-					</li>
-				}
-			</ul>
 		}
+		<ul id="admin-permissions" class="space-y-2">
+			for _, permission := range d.Permissions {
+				@adminPermissionRow(permission)
+			}
+		</ul>
 	</div>
+}
+
+templ adminPermissionRow(permission Permission) {
+	<li id={ "permission-" + permission.ID } class="flex items-start justify-between gap-3 rounded-lg border border-input p-3">
+		<span class="min-w-0">
+			@adminTextBlock(permission.Node, permission.Description)
+			if permission.ValueType != "" {
+				<span class={ adminChipClass + " mt-2 inline-block" }>{ permission.ValueType + ", merge " + permission.Merge }</span>
+			}
+		</span>
+		<button
+			type="button"
+			aria-label={ "Delete " + permission.Node }
+			hx-delete={ "/admin/permissions/" + url.PathEscape(permission.ID) }
+			hx-confirm={ "Delete the permission " + permission.Node + "?" }
+			class={ adminButtonClass }
+		>
+			Delete
+		</button>
+	</li>
+}
+
+// AdminPermissionAdded appends a created permission to the list, for when the list could not be loaded again.
+templ AdminPermissionAdded(permission Permission) {
+	<ul hx-swap-oob="beforeend:#admin-permissions">
+		@adminPermissionRow(permission)
+	</ul>
+	<div hx-swap-oob="delete:#admin-permissions-empty"></div>
 }
 
 // AdminPermissionForm renders the form that creates a permission, or the out-of-band fresh copy of it a create sends.

@@ -49,6 +49,18 @@ test.describe('admin - user list', () => {
     await expect(error(page)).toHaveText('');
   });
 
+  test('a search that times out shows the banner message and keeps the list', async ({ page }) => {
+    await signIn(page, { delays: { 'GET /users': 1500 } });
+    await page.goto('/admin/users');
+    await expect(rows(page)).toHaveCount(3);
+    await page.evaluate(() => {
+      htmx.config.defaultTimeout = 300;
+    });
+    await search(page).fill('bob');
+    await expect(error(page)).toHaveText('The server could not be reached. Try again in a moment.');
+    await expect(rows(page)).toHaveCount(3);
+  });
+
   test('a search covers users beyond the first page, and stops asking once the list ends', async ({ page }) => {
     await signIn(page, { generateUsers: 247 });
     await page.goto('/admin/users');
@@ -151,6 +163,29 @@ test.describe('admin - user editor', () => {
     expect(await writes()).toEqual([{ method: 'PUT', path: `/users/${ID.bob}`, body: { username: 'robert' } }]);
     await expect(save(page)).toBeFocused();
     await expect(status(page)).toHaveAttribute('role', 'status');
+  });
+
+  test('saving with Enter in the username field leaves the saved name in the field', async ({ page }) => {
+    await signIn(page);
+    await page.goto(editor);
+    await username(page).fill('robert');
+    await username(page).press('Enter');
+    await expect(status(page)).toHaveText('Saved');
+    await expect(username(page)).toHaveValue('robert');
+    await expect(username(page)).toBeFocused();
+  });
+
+  test('pressing Enter in the username field while a save is in flight says it was dropped', async ({ page }) => {
+    const { writes } = await signIn(page, { delays: { [`PUT /users/${ID.bob}`]: 600 } });
+    await page.goto(editor);
+    await username(page).fill('robert');
+    await username(page).press('Enter');
+    await expect(page.locator('#admin-user')).toHaveAttribute('aria-busy', 'true');
+    await username(page).press('Enter');
+    await expect(error(page)).toHaveText('The last change is still being saved. Try again in a moment.');
+    await expect(status(page)).toHaveText('Saved');
+    await expect(error(page)).toHaveText('');
+    expect(await writes()).toEqual([{ method: 'PUT', path: `/users/${ID.bob}`, body: { username: 'robert' } }]);
   });
 
   test('saving roles sends only the roles', async ({ page }) => {

@@ -23,6 +23,17 @@ test.describe('admin - permissions', () => {
     expect(await writes()).toEqual([{ method: 'POST', path: '/permissions', body: { node: 'pets.write', description: 'Write pets' } }]);
   });
 
+  test('a create whose list could not be loaded again still lists the new permission', async ({ page }) => {
+    await signIn(page, { failures: { 'GET /permissions': { status: 500, detail: 'permissions are down', skip: 1, times: 1 } } });
+    await page.goto('/admin/permissions');
+    await expect(rows(page)).toHaveCount(5);
+    await page.locator('#admin-permission-create-node').fill('pets.write');
+    await page.locator('#admin-permission-create-submit').click();
+    await expect(error(page)).toHaveText('The change was made, but the page could not be refreshed: permissions are down');
+    await expect(rows(page)).toHaveCount(6);
+    await expect(rows(page).last()).toContainText('pets.write');
+  });
+
   test('the merge rule only appears for a whole-number permission, and is sent with it', async ({ page }) => {
     const { writes } = await signIn(page);
     await page.goto('/admin/permissions');

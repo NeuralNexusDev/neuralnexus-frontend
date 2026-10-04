@@ -48,6 +48,16 @@ test.describe('admin - roles', () => {
     await expect(page.locator('#admin-role-save')).toBeFocused();
   });
 
+  test('saving with Enter in the name field leaves the saved name in the field', async ({ page }) => {
+    await signIn(page);
+    await page.goto(editor);
+    await page.locator('#admin-role-name').fill('bee_manager');
+    await page.locator('#admin-role-name').press('Enter');
+    await expect(page.locator('#admin-role-status')).toHaveText('Saved');
+    await expect(page.locator('#admin-role-name')).toHaveValue('bee_manager');
+    await expect(page.locator('#admin-role-name')).toBeFocused();
+  });
+
   test("a stale form does not revert another admin's description change", async ({ page }) => {
     const { writes, api } = await signIn(page);
     await page.goto(editor);
@@ -117,6 +127,15 @@ test.describe('admin - roles', () => {
     expect(await writes()).toEqual([{ method: 'DELETE', path: `/roles/${ID.bee}/permissions/${ID.pBee}`, body: null }]);
     await expect(page.locator('#admin-role-grant-permission option')).toContainText(['beenamegenerator.admin']);
     await expect(heading(page)).toBeFocused();
+  });
+
+  test('a removal whose editor could not be loaded again offers the permission to grant again', async ({ page }) => {
+    await signIn(page, { failures: { [`GET /roles/${ID.bee}`]: { status: 500, detail: 'roles are down', skip: 1, times: 1 } } });
+    await page.goto(editor);
+    await page.getByRole('button', { name: 'Remove beenamegenerator.admin' }).click();
+    await expect(error(page)).toHaveText('The change was made, but the page could not be refreshed: roles are down');
+    await expect(granted(page)).toHaveCount(1);
+    await expect(page.locator('#admin-role-grant-permission option')).toHaveText(['beenamegenerator.admin', 'petpictures.pets', 'motd', 'datastore.admin']);
   });
 
   test('a half-typed grant value survives removing another permission', async ({ page }) => {
@@ -248,9 +267,25 @@ test.describe('admin - role changes while other edits are open', () => {
     await grantedRows(page).nth(0).getByRole('button', { name: 'Remove beenamegenerator.admin' }).click();
     await expect(page.locator('#admin-role.htmx-request')).toHaveCount(1);
     await expect(page.locator('#admin-role')).toHaveCSS('pointer-events', 'none');
+    await expect(page.locator('#admin-role')).toHaveAttribute('aria-busy', 'true');
     await grantedRows(page).nth(1).getByRole('button', { name: 'Remove ratelimit' }).dispatchEvent('click');
+    await expect(error(page)).toHaveText('The last change is still being saved. Try again in a moment.');
     await expect(grantedRows(page)).toHaveCount(1);
     await expect(page.locator('#admin-role.htmx-request')).toHaveCount(0);
+    await expect(page.locator('#admin-role')).not.toHaveAttribute('aria-busy', 'true');
+    await expect(error(page)).toHaveText('');
+    expect(await writes()).toEqual([{ method: 'DELETE', path: `/roles/${ID.bee}/permissions/${ID.pBee}`, body: null }]);
+  });
+
+  test('pressing Enter in a value field while another change is in flight says it was dropped', async ({ page }) => {
+    const { writes } = await signIn(page, { delays: { [`DELETE /roles/${ID.bee}/permissions/${ID.pBee}`]: 600 } });
+    await page.goto(roleEditor);
+    await grantedRows(page).nth(0).getByRole('button', { name: 'Remove beenamegenerator.admin' }).click();
+    await expect(page.locator('#admin-role')).toHaveAttribute('aria-busy', 'true');
+    await page.getByRole('spinbutton', { name: 'Value of ratelimit' }).fill('250');
+    await page.getByRole('spinbutton', { name: 'Value of ratelimit' }).press('Enter');
+    await expect(error(page)).toHaveText('The last change is still being saved. Try again in a moment.');
+    await expect(grantedRows(page)).toHaveCount(1);
     expect(await writes()).toEqual([{ method: 'DELETE', path: `/roles/${ID.bee}/permissions/${ID.pBee}`, body: null }]);
   });
 

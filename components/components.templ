@@ -16,6 +16,11 @@ func steamOpenIDLoginURL() string {
 
 var STEAM_OPENID_LOGIN_URL = steamOpenIDLoginURL()
 
+const (
+	mutedClass      = "text-gray-500 dark:text-gray-400"
+	mutedSmallClass = mutedClass + " text-sm"
+)
+
 templ htmxHead() {
 	<meta name="htmx-config" content={ adminHTMXConfig }/>
 	<script src={ adminHTMXURL } integrity={ adminHTMXIntegrity } crossorigin="anonymous" defer></script>
@@ -114,7 +119,7 @@ templ projectCardBody(icon string, title string, description string) {
 	</div>
 	<div class="space-y-1">
 		<h2 class="text-lg font-semibold">{ title }</h2>
-		<p class="text-sm text-gray-500 dark:text-gray-400">{ description }</p>
+		<p class={ mutedSmallClass }>{ description }</p>
 	</div>
 }
 
@@ -133,7 +138,7 @@ templ projectSection(title string, description string) {
 	<section class="space-y-4">
 		<div class="space-y-1">
 			<h2 class="text-2xl font-semibold">{ title }</h2>
-			<p class="text-sm text-gray-500 dark:text-gray-400">{ description }</p>
+			<p class={ mutedSmallClass }>{ description }</p>
 		</div>
 		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 			{ children... }
@@ -145,7 +150,7 @@ templ Projects() {
 	<div class="mx-auto max-w-4xl space-y-10">
 		<div class="space-y-2 text-center">
 			<h1 class="text-3xl font-bold">Projects</h1>
-			<p class="text-balance text-gray-500 dark:text-gray-400">
+			<p class={ mutedClass + " text-balance" }>
 				Things I've built and am still tinkering on
 			</p>
 		</div>
@@ -220,12 +225,12 @@ templ BeeNameGenerator() {
 	<div class="mx-auto max-w-sm space-y-6">
 		<div class="space-y-2 text-center">
 			<h1 class="text-3xl font-bold">Bee Name Generator</h1>
-			<p class="text-balance text-gray-500 dark:text-gray-400">
+			<p class={ mutedClass + " text-balance" }>
 				Generate a random bee name, or suggest one of your own
 			</p>
 		</div>
 		<div class="space-y-4 rounded-lg border border-input p-4 text-center">
-			<p class="text-sm text-gray-500 dark:text-gray-400">Your bee name</p>
+			<p class={ mutedSmallClass }>Your bee name</p>
 			<h2 id="get-bee-name" aria-live="polite" class="min-h-8 text-2xl font-semibold">&mdash;</h2>
 			<button
 				id="get-bee-button"
@@ -234,7 +239,7 @@ templ BeeNameGenerator() {
 			>
 				Generate
 			</button>
-			<p id="get-bee-status" role="status" hidden class="text-sm text-gray-500 dark:text-gray-400"></p>
+			<p id="get-bee-status" role="status" hidden class={ mutedSmallClass }></p>
 		</div>
 		<div
 			data-orientation="horizontal"
@@ -291,7 +296,7 @@ templ BeeNameGeneratorAdmin() {
 	<div class="mx-auto max-w-md space-y-6">
 		<div class="space-y-2 text-center">
 			<h1 class="text-3xl font-bold">Bee Name Suggestions</h1>
-			<p class="text-balance text-gray-500 dark:text-gray-400">
+			<p class={ mutedClass + " text-balance" }>
 				Accept a suggestion to add it to the generator, or reject it to discard it
 			</p>
 		</div>
@@ -355,7 +360,7 @@ templ McStatus() {
 	<div class="mx-auto max-w-md space-y-6">
 		<div class="space-y-2 text-center">
 			<h1 class="text-3xl font-bold">MC Status</h1>
-			<p class="text-balance text-gray-500 dark:text-gray-400">
+			<p class={ mutedClass + " text-balance" }>
 				Check whether a Minecraft server is online and who's playing
 			</p>
 		</div>
@@ -386,7 +391,7 @@ templ McStatus() {
 				</label>
 			</div>
 			<details id="mc-status-advanced" class="text-sm">
-				<summary class="cursor-pointer text-gray-500 dark:text-gray-400">Advanced</summary>
+				<summary class={ mutedClass + " cursor-pointer" }>Advanced</summary>
 				<label class="mt-2 flex items-center gap-2">
 					<input id="mc-status-query" type="checkbox" onchange="mcQueryPreference = this.checked; syncMcStatusQueryOption()" checked/>
 					Use the query protocol (Java only, if the server has it enabled)
@@ -422,7 +427,7 @@ templ McStatus() {
 				<img id="mc-status-icon" hidden alt="" class="h-16 w-16 rounded" style="image-rendering: pixelated"/>
 				<div class="min-w-0 flex-1 space-y-1">
 					<h2 id="mc-status-name" class="truncate text-lg font-semibold"></h2>
-					<div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+					<div class={ mutedClass + " flex flex-wrap items-center gap-2 text-xs" }>
 						<span id="mc-status-pill"></span>
 						<span id="mc-status-type" class="rounded-full border border-input px-2.5 py-0.5"></span>
 						<span id="mc-status-version" class="min-w-0 max-w-full break-words [overflow-wrap:anywhere]"></span>

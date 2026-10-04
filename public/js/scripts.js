@@ -453,11 +453,37 @@ function loadMcStatusFromUrl() {
     checkMcStatus();
 }
 
-/** htmx reports a failed, a timed-out and an aborted request alike as htmx:error, and a search replaced by a newer one is an abort that is not a failure. */
+const requests = new WeakMap();
+
+document.addEventListener('htmx:before:request', (event) => {
+    const region = event.target.closest?.('[hx-indicator\\:inherited]');
+    region?.setAttribute('aria-busy', 'true');
+    requests.set(event.detail.ctx, { start: performance.now(), region });
+});
+
+document.addEventListener('htmx:finally:request', (event) => {
+    requests.get(event.detail.ctx)?.region?.removeAttribute('aria-busy');
+});
+
+/** htmx drops a change made while another is in flight without a word, so say so. */
+const reportDropped = (event) => {
+    const banner = document.getElementById('admin-error');
+    if (banner && event.target.closest?.('[aria-busy="true"]')) {
+        banner.textContent = 'The last change is still being saved. Try again in a moment.';
+    }
+};
+document.addEventListener('submit', reportDropped, true);
+document.addEventListener('click', (event) => {
+    if (event.target.closest?.('button')) {
+        reportDropped(event);
+    }
+}, true);
+
+/** htmx reports a failed, a timed-out and a replaced request alike as htmx:error, and only a request that ran out its timeout was lost. */
 document.addEventListener('htmx:error', (event) => {
     const { ctx, error } = event.detail;
-    const replaced = event.target.getAttribute?.('hx-sync')?.endsWith(':replace');
-    const failed = error instanceof TypeError || (error?.name === 'AbortError' && !replaced);
+    const timedOut = performance.now() - requests.get(ctx)?.start >= htmx.config.defaultTimeout - 100;
+    const failed = error instanceof TypeError || (error?.name === 'AbortError' && timedOut);
     if (ctx && !ctx.response && failed) {
         const banner = document.getElementById('admin-error');
         if (banner) {

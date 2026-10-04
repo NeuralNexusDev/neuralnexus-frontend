@@ -342,17 +342,6 @@ func TestAdminRoleSaveSendsOnlyWhatChanged(t *testing.T) {
 	}
 }
 
-func TestAdminRoleSaveWithoutAChangeFailingToLoadIsNotReportedAsAWrite(t *testing.T) {
-	f := newFakeAdmin(t)
-	f.problem("GET /roles/"+idBee, 500, "roles are down")
-	rec := action(http.MethodPost, "/admin/roles/"+idBee, url.Values{"loaded_name": {"bee_admin"}, "name": {"bee_admin"}})
-	assertStatus(t, rec, http.StatusInternalServerError)
-	if got := bannerText(rec); got != "roles are down" {
-		t.Errorf("body = %q", got)
-	}
-	assertWrites(t, f)
-}
-
 func TestAdminRoleRemoveReloadFailureRemovesTheRow(t *testing.T) {
 	f := newFakeAdmin(t)
 	f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
@@ -366,6 +355,17 @@ func TestAdminRoleRemoveReloadFailureRemovesTheRow(t *testing.T) {
 	assertNoBody(t, rec, "delete:#")
 }
 
+func TestAdminRoleRemoveReloadFailureOffersTheRemovedPermissionAgain(t *testing.T) {
+	f := newFakeAdmin(t)
+	f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
+	f.problem("GET /roles/"+idBee, 500, "down")
+	f.on("GET /permissions", 200, permissionsJSON)
+	rec := actionDelete("/admin/roles/"+idBee+"/permissions/"+idPBee, url.Values{"granted": {idPBee, idPRate}})
+	assertStatus(t, rec, http.StatusInternalServerError)
+	assertBody(t, rec, `id="admin-role-grant" hx-swap-oob="true"`, `<option value="`+idPBee+`"`, `<option value="`+idPStore+`"`)
+	assertNoBody(t, rec, `<option value="`+idPRate+`"`)
+}
+
 func TestAdminRoleSaveWithoutAChangeSendsNothing(t *testing.T) {
 	f := newFakeAdmin(t)
 	seedRoleEditor(f)
@@ -374,7 +374,12 @@ func TestAdminRoleSaveWithoutAChangeSendsNothing(t *testing.T) {
 		"loaded_description": {"Bee Name Generator Admin"}, "description": {"Bee Name Generator Admin"},
 	})
 	assertStatus(t, rec, http.StatusOK)
-	assertWrites(t, f)
+	if uris := f.uris(); len(uris) != 0 {
+		t.Errorf("the save called the API: %v", uris)
+	}
+	if got := rec.Header().Get("HX-Reswap"); got != "none" {
+		t.Errorf("HX-Reswap = %q, want none", got)
+	}
 	assertBody(t, rec, `id="admin-role-status" hx-swap-oob="innerHTML">Nothing to save<`)
 }
 

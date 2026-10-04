@@ -71,7 +71,7 @@ func adminRoleSaveHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	if raw := r.Form.Get("name"); raw != r.Form.Get("loaded_name") {
 		name := strings.TrimSpace(raw)
 		if name == "" {
-			failFragment(w, r, invalidInput("Enter a name"))
+			failEditor(w, r, roleStatusID, invalidInput("Enter a name"))
 			return
 		}
 		body["name"] = name
@@ -79,18 +79,13 @@ func adminRoleSaveHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	if raw := r.Form.Get("description"); raw != r.Form.Get("loaded_description") {
 		body["description"] = strings.TrimSpace(raw)
 	}
-	path := "/roles/" + url.PathEscape(id)
-	var role components.Role
-	var err error
-	status := "Saved"
-	if len(body) > 0 {
-		role, err = adminSend[components.Role](a, http.MethodPatch, path, body, "Failed to save the role")
-	} else {
-		status = "Nothing to save"
-		role, err = adminGet[components.Role](a, path, "Failed to load the role")
+	if len(body) == 0 {
+		nothingToSave(w, r, roleStatusID)
+		return
 	}
+	role, err := adminSend[components.Role](a, http.MethodPatch, "/roles/"+url.PathEscape(id), body, "Failed to save the role")
 	if err != nil {
-		failFragment(w, r, err)
+		failEditor(w, r, roleStatusID, err)
 		return
 	}
 	data := components.AdminRoleData{Role: role}
@@ -98,13 +93,13 @@ func adminRoleSaveHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 		components.AdminRoleForm(data),
 		components.AdminRoleHeader(data, true),
 		components.AdminRoleDelete(data, true),
-		components.AdminStatus("admin-role-status", status),
+		components.AdminStatus(roleStatusID, "Saved"),
 	)
 }
 
 func adminRoleDeleteHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	if _, err := adminSend[struct{}](a, http.MethodDelete, "/roles/"+url.PathEscape(r.PathValue("id")), nil, "Failed to delete the role"); err != nil {
-		failFragment(w, r, err)
+		failEditor(w, r, roleStatusID, err)
 		return
 	}
 	redirectHTMX(w, "/admin/roles")
@@ -166,33 +161,37 @@ func roleDrafts(form url.Values, except string) map[string]string {
 	return drafts
 }
 
-func renderGrantsChanged(w http.ResponseWriter, r *http.Request, a adminAPI, drafts map[string]string, grantPermission string, grantValue string, focusList bool, restore ...templ.Component) {
+func renderGrantsChanged(w http.ResponseWriter, r *http.Request, a adminAPI, drafts map[string]string, grantPermission string, grantValue string, focusList bool, restore func() []templ.Component) {
 	data, err := loadRoleEditor(a, r.PathValue("id"))
 	if err != nil {
-		failFragment(w, r, afterWrite(err), restore...)
+		var parts []templ.Component
+		if restore != nil {
+			parts = restore()
+		}
+		failEditor(w, r, roleStatusID, afterWrite(err), parts...)
 		return
 	}
 	data.Drafts = drafts
 	data.GrantPermission = grantPermission
 	data.GrantValue = grantValue
 	data.FocusList = focusList || len(data.Available()) == 0
-	renderAll(w, r, components.AdminRoleGranted(data), components.AdminRoleGrantForm(data, true), components.AdminStatus("admin-role-status", ""))
+	renderAll(w, r, components.AdminRoleGranted(data), components.AdminRoleGrantForm(data, true), components.AdminStatus(roleStatusID, ""))
 }
 
 func putGrant(w http.ResponseWriter, r *http.Request, a adminAPI, permissionID string, raw string) bool {
 	permission, err := findPermission(a, permissionID)
 	if err != nil {
-		failFragment(w, r, err)
+		failEditor(w, r, roleStatusID, err)
 		return false
 	}
 	body, err := grantBody(permission, raw)
 	if err != nil {
-		failFragment(w, r, err)
+		failEditor(w, r, roleStatusID, err)
 		return false
 	}
 	path := "/roles/" + url.PathEscape(r.PathValue("id")) + "/permissions/" + url.PathEscape(permissionID)
 	if _, err := adminSend[struct{}](a, http.MethodPut, path, body, "Failed to grant the permission"); err != nil {
-		failFragment(w, r, err)
+		failEditor(w, r, roleStatusID, err)
 		return false
 	}
 	return true
@@ -200,7 +199,7 @@ func putGrant(w http.ResponseWriter, r *http.Request, a adminAPI, permissionID s
 
 func adminRoleGrantHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	if putGrant(w, r, a, r.Form.Get("grant_permission"), r.Form.Get("grant_value")) {
-		renderGrantsChanged(w, r, a, roleDrafts(r.Form, ""), "", "", false)
+		renderGrantsChanged(w, r, a, roleDrafts(r.Form, ""), "", "", false, nil)
 	}
 }
 
@@ -211,28 +210,49 @@ func adminRoleValueHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	}
 	data, err := loadRole(a, r.PathValue("id"))
 	if err != nil {
-		failFragment(w, r, afterWrite(err))
+		failEditor(w, r, roleStatusID, afterWrite(err))
 		return
 	}
 	data.Drafts = roleDrafts(r.Form, permissionID)
 	data.FocusList = true
-	renderAll(w, r, components.AdminRoleGranted(data), components.AdminStatus("admin-role-status", ""))
+	renderAll(w, r, components.AdminRoleGranted(data), components.AdminStatus(roleStatusID, ""))
 }
 
 func adminRoleRemoveHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	permissionID := r.PathValue("permission")
 	path := "/roles/" + url.PathEscape(r.PathValue("id")) + "/permissions/" + url.PathEscape(permissionID)
 	if _, err := adminSend[struct{}](a, http.MethodDelete, path, nil, "Failed to remove the permission"); err != nil {
-		failFragment(w, r, err)
+		failEditor(w, r, roleStatusID, err)
 		return
 	}
-	renderGrantsChanged(w, r, a, roleDrafts(r.Form, permissionID), r.Form.Get("grant_permission"), r.Form.Get("grant_value"), true, rowGone("granted-", permissionID)...)
+	renderGrantsChanged(w, r, a, roleDrafts(r.Form, permissionID), r.Form.Get("grant_permission"), r.Form.Get("grant_value"), true, func() []templ.Component {
+		return append(rowGone("granted-", permissionID), grantFormWithout(a, r, permissionID)...)
+	})
+}
+
+func grantFormWithout(a adminAPI, r *http.Request, removed string) []templ.Component {
+	catalogue, err := adminGet[[]components.Permission](a, "/permissions", loadPermissionsFailed)
+	if err != nil {
+		return nil
+	}
+	role := components.Role{ID: r.PathValue("id")}
+	for _, id := range r.Form["granted"] {
+		if id != removed {
+			role.Permissions = append(role.Permissions, components.RolePermission{Permission: components.Permission{ID: id}})
+		}
+	}
+	return []templ.Component{components.AdminRoleGrantForm(components.AdminRoleData{
+		Role:            role,
+		Catalogue:       catalogue,
+		GrantPermission: r.Form.Get("grant_permission"),
+		GrantValue:      r.Form.Get("grant_value"),
+	}, true)}
 }
 
 func adminRoleGrantValueHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	permission, err := findPermission(a, r.URL.Query().Get("grant_permission"))
 	if err != nil {
-		failFragment(w, r, err)
+		failEditor(w, r, roleStatusID, err)
 		return
 	}
 	renderAll(w, r, components.AdminGrantValue(permission, ""))

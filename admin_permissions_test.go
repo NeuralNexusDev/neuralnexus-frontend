@@ -115,6 +115,14 @@ func TestAdminPermissionDeleteReloadFailureRemovesTheRow(t *testing.T) {
 	assertBody(t, rec, `hx-swap-oob="delete:#permission-`+idPStore+`"`)
 }
 
+func TestAdminPermissionCreateReloadFailureListsTheNewPermission(t *testing.T) {
+	f := newFakeAdmin(t)
+	f.on("POST /permissions", 201, `{"id":"`+idPStore+`","node":"pets.write","description":"Write pets"}`)
+	f.problem("GET /permissions", 500, "down")
+	rec := action(http.MethodPost, "/admin/permissions", url.Values{"node": {"pets.write"}})
+	assertBody(t, rec, `hx-swap-oob="beforeend:#admin-permissions"`, `id="permission-`+idPStore+`"`, `hx-swap-oob="delete:#admin-permissions-empty"`, ">pets.write<")
+}
+
 func TestAdminPermissionCreateReloadFailureClearsTheForm(t *testing.T) {
 	f := newFakeAdmin(t)
 	f.on("POST /permissions", 201, `{}`)

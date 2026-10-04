@@ -295,7 +295,12 @@ func TestAdminUserSaveWithoutAChangeSendsNothing(t *testing.T) {
 	seedUserEditor(f)
 	rec := saveUser(userForm(nil))
 	assertStatus(t, rec, http.StatusOK)
-	assertWrites(t, f)
+	if uris := f.uris(); len(uris) != 0 {
+		t.Errorf("the save called the API: %v", uris)
+	}
+	if got := rec.Header().Get("HX-Reswap"); got != "none" {
+		t.Errorf("HX-Reswap = %q, want none", got)
+	}
 	assertBody(t, rec, `id="admin-user-status" hx-swap-oob="innerHTML">Nothing to save<`)
 }
 

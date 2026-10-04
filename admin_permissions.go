@@ -37,13 +37,14 @@ func adminPermissionCreateHandler(w http.ResponseWriter, r *http.Request, a admi
 	if valueType == "int" {
 		body["merge"] = r.Form.Get("merge")
 	}
-	if _, err := adminSend[components.Permission](a, http.MethodPost, "/permissions", body, "Failed to create the permission"); err != nil {
+	created, err := adminSend[components.Permission](a, http.MethodPost, "/permissions", body, "Failed to create the permission")
+	if err != nil {
 		failFragment(w, r, err)
 		return
 	}
 	data, err := loadPermissions(a, false)
 	if err != nil {
-		failFragment(w, r, afterWrite(err), components.AdminPermissionForm(true))
+		failFragment(w, r, afterWrite(err), components.AdminPermissionAdded(created), components.AdminPermissionForm(true))
 		return
 	}
 	renderAll(w, r, components.AdminPermissionList(data), components.AdminPermissionForm(true))

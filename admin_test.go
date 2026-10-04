@@ -248,7 +248,7 @@ func TestAdminShellsHoldNoDataAndLoadTheirContent(t *testing.T) {
 			rec := getPage(tc.path)
 			assertStatus(t, rec, http.StatusOK)
 			assertBody(t, rec, `hx-get="`+tc.loads+`"`, `hx-trigger="load"`, `hx-swap="outerHTML"`, `id="admin-error"`,
-				`<script src="https://s3.neuralnexus.dev/cdn/htmx/v4.0.0/htmx.min.js" integrity="sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc" crossorigin="anonymous" defer>`, `&#34;mode&#34;:&#34;same-origin&#34;`, `&#34;history&#34;:false`, `&#34;allowEmptySwapAfterOOB&#34;:true`)
+				`<script src="https://s3.neuralnexus.dev/cdn/htmx/v4.0.0/htmx.min.js" integrity="sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc" crossorigin="anonymous" defer>`, `&#34;mode&#34;:&#34;same-origin&#34;`, `&#34;history&#34;:false`, `&#34;allowEmptySwapAfterOOB&#34;:true`, `&#34;defaultSettleDelay&#34;:0`)
 			if len(f.uris()) != 0 {
 				t.Errorf("a shell called the API: %v", f.uris())
 			}
@@ -628,8 +628,9 @@ func TestAdminErrorsEmptyTheStatusLineOfTheEditorTheyCameFrom(t *testing.T) {
 	}{
 		{"user", http.MethodPost, "/admin/users/" + idBob, "PUT /users/" + idBob, `<p id="admin-user-status" hx-swap-oob="innerHTML"></p>`},
 		{"role", http.MethodDelete, "/admin/roles/" + idBee, "DELETE /roles/" + idBee, `<p id="admin-role-status" hx-swap-oob="innerHTML"></p>`},
-		{"user editor", http.MethodGet, "/admin/users/" + idBob + "/editor", "GET /users/" + idBob, `<p id="admin-user-status" hx-swap-oob="innerHTML"></p>`},
-		{"role editor", http.MethodGet, "/admin/roles/" + idBee + "/editor", "GET /roles/" + idBee, `<p id="admin-role-status" hx-swap-oob="innerHTML"></p>`},
+		{"role grant removal", http.MethodDelete, "/admin/roles/" + idBee + "/permissions/" + idPBee, "DELETE /roles/" + idBee + "/permissions/" + idPBee, `<p id="admin-role-status" hx-swap-oob="innerHTML"></p>`},
+		{"user editor", http.MethodGet, "/admin/users/" + idBob + "/editor", "GET /users/" + idBob, ""},
+		{"role editor", http.MethodGet, "/admin/roles/" + idBee + "/editor", "GET /roles/" + idBee, ""},
 		{"user list", http.MethodGet, "/admin/users/list", "GET /users", ""},
 		{"role list", http.MethodGet, "/admin/roles/list", "GET /roles", ""},
 		{"user rows", http.MethodGet, "/admin/users/rows", "GET /users", ""},
