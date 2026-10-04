@@ -1,5 +1,11 @@
 .PHONY: generate vet dev build test test-go test-js
 
+update:
+	go get -tool github.com/a-h/templ/cmd/templ@latest
+	go get -tool github.com/templui/templui/cmd/templui@latest
+	go get -tool github.com/air-verse/air@latest
+	go get -tool github.com/hookenz/gotailwind/v4@latest
+
 generate:
 	go tool gotailwind -i ./assets/css/input.css -o ./public/css/styles.css --minify
 	go tool templ generate
