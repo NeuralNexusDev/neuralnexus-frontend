@@ -193,17 +193,18 @@ func (d AdminRoleData) Draft(p RolePermission) string {
 }
 
 const (
-	adminHTMXURL      = "https://cdn.neuralnexus.dev/htmx/htmx.v4.0.0.min.js"
-	adminHTMXConfig   = `{"mode":"same-origin","history":false}`
-	adminInputClass   = "text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-	adminSelectClass  = "text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-	adminSubmitClass  = "border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
-	adminButtonClass  = "border border-input hover:bg-accent hover:text-accent-foreground inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-	adminDangerClass  = "border border-red-600 text-red-600 hover:bg-red-600/10 dark:border-red-400 dark:text-red-400 dark:hover:bg-red-400/10 inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-	adminCardClass    = "block rounded-lg border border-input p-3 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-	adminChipClass    = "rounded-full border border-input px-2.5 py-0.5 text-xs"
-	adminMutedClass   = "text-sm text-gray-500 dark:text-gray-400"
-	adminSectionError = "text-sm text-red-600 dark:text-red-400"
+	adminHTMXURL       = "https://cdn.neuralnexus.dev/htmx/htmx.v4.0.0.min.js"
+	adminHTMXIntegrity = "sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc"
+	adminHTMXConfig    = `{"mode":"same-origin","history":false}`
+	adminInputClass    = "text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+	adminSelectClass   = "text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+	adminSubmitClass   = "border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
+	adminButtonClass   = "border border-input hover:bg-accent hover:text-accent-foreground inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+	adminDangerClass   = "border border-red-600 text-red-600 hover:bg-red-600/10 dark:border-red-400 dark:text-red-400 dark:hover:bg-red-400/10 inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+	adminCardClass     = "block rounded-lg border border-input p-3 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+	adminChipClass     = "rounded-full border border-input px-2.5 py-0.5 text-xs"
+	adminMutedClass    = "text-sm text-gray-500 dark:text-gray-400"
+	adminSectionError  = "text-sm text-red-600 dark:text-red-400"
 )
 
 func adminUserRowsPath(offset int, search string) string {

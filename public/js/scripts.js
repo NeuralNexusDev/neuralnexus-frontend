@@ -453,9 +453,11 @@ function loadMcStatusFromUrl() {
     checkMcStatus();
 }
 
-/** htmx reports a request that got no response, such as a server that is down, as an error without one. */
+/** htmx reports every failed request as htmx:error. A fetch that could not reach the server raises a TypeError and one that timed out a TimeoutError, while an aborted one, such as a search a newer search replaced, is not a failure to show. */
 document.addEventListener('htmx:error', (event) => {
-    if (event.detail.ctx && !event.detail.ctx.response) {
+    const { ctx, error } = event.detail;
+    const unreachable = error instanceof TypeError || error?.name === 'TimeoutError';
+    if (ctx && !ctx.response && unreachable) {
         const banner = document.getElementById('admin-error');
         if (banner) {
             banner.textContent = 'The server could not be reached. Try again in a moment.';

@@ -18,7 +18,7 @@ var STEAM_OPENID_LOGIN_URL = steamOpenIDLoginURL()
 
 templ htmxHead() {
 	<meta name="htmx-config" content={ adminHTMXConfig }/>
-	<script src={ adminHTMXURL } defer></script>
+	<script src={ adminHTMXURL } integrity={ adminHTMXIntegrity } crossorigin="anonymous" defer></script>
 }
 
 templ WrapContents(contents templ.Component) {

@@ -36,6 +36,18 @@ test.describe('admin - user list', () => {
     expect((await calls()).filter((call) => call.path === '/users').length).toBeGreaterThan(1);
   });
 
+  test('a search that a newer search replaces shows no error', async ({ page }) => {
+    await signIn(page, { delays: { 'GET /users': 500 } });
+    await page.goto('/admin/users');
+    await expect(rows(page)).toHaveCount(3);
+    await search(page).fill('bo');
+    await page.waitForTimeout(350);
+    await search(page).fill('alice');
+    await expect(rows(page)).toHaveCount(1);
+    await expect(rows(page)).toContainText('alice');
+    await expect(error(page)).toHaveText('');
+  });
+
   test('a search covers users beyond the first page, and stops asking once the list ends', async ({ page }) => {
     await signIn(page, { generateUsers: 247 });
     await page.goto('/admin/users');

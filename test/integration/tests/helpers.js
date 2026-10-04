@@ -28,7 +28,7 @@ export const HOSTILE = '"><img src=x onerror="window.__xss=1">';
 
 export const test = base.extend({
   page: async ({ page }, use) => {
-    await page.route(HTMX_CDN, (route) => route.fulfill({ contentType: 'application/javascript', path: HTMX_FILE }));
+    await page.route(HTMX_CDN, (route) => route.fulfill({ contentType: 'application/javascript', headers: { 'access-control-allow-origin': '*' }, path: HTMX_FILE }));
     await use(page);
   },
 });
