@@ -1,0 +1,101 @@
+package components
+
+const (
+	htmxURL       = "https://s3.neuralnexus.dev/cdn/htmx/v4.0.0/htmx.min.js"
+	htmxIntegrity = "sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc"
+	htmxConfig    = `{"mode":"same-origin","history":false,"allowEmptySwapAfterOOB":true,"defaultSettleDelay":0}`
+
+	mutedClass      = "text-gray-500 dark:text-gray-400"
+	mutedSmallClass = mutedClass + " text-sm"
+	emptyClass      = mutedSmallClass + " text-center"
+	errorTextClass  = "text-sm text-red-600 dark:text-red-400"
+	bannerClass     = "rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive"
+	busyClass       = "[&.htmx-request]:pointer-events-none [&.htmx-request]:opacity-60"
+
+	labelClass  = "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+	inputClass  = "text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+	selectClass = "text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+
+	buttonBaseClass = "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+	buttonClass     = buttonBaseClass + " border border-input hover:bg-accent hover:text-accent-foreground h-9 px-3"
+	linkButtonClass = buttonBaseClass + " border border-input hover:bg-accent hover:text-accent-foreground ring-offset-background focus-visible:ring-offset-2 h-10 px-4 py-2 w-full"
+	submitClass     = buttonBaseClass + " border hover:bg-primary-light ring-offset-background focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
+	dangerClass     = buttonBaseClass + " border border-red-600 text-red-600 hover:bg-red-600/10 dark:border-red-400 dark:text-red-400 dark:hover:bg-red-400/10 ring-offset-background h-10 w-full px-4 py-2"
+)
+
+var (
+	busyAttrs     = templ.Attributes{"hx-sync:inherited": "this:drop", "hx-indicator:inherited": "this"}
+	selfSwapAttrs = templ.Attributes{"hx-sync:inherited": "this:drop", "hx-indicator:inherited": "this", "hx-target:inherited": "this", "hx-swap:inherited": "outerHTML"}
+)
+
+templ htmxHead() {
+	<meta name="htmx-config" content={ htmxConfig }/>
+	<script src={ htmxURL } integrity={ htmxIntegrity } crossorigin="anonymous" defer></script>
+}
+
+templ htmxPage(contents templ.Component) {
+	@WrapContentsWithHead("NeuralNexus", htmxHead(), contents)
+}
+
+templ pageShell(width string, statusID string, loadPath string) {
+	<div class={ "mx-auto space-y-6 " + width }>
+		{ children... }
+		@pageError()
+		if statusID != "" {
+			@pageStatus(statusID)
+		}
+		@pageLoad(loadPath)
+	</div>
+}
+
+templ pageHeading(title string, description string) {
+	<div class="space-y-2 text-center">
+		<h1 class="text-3xl font-bold">{ title }</h1>
+		<p class={ mutedClass + " text-balance" }>{ description }</p>
+	</div>
+}
+
+templ pageError() {
+	<div id="admin-error" role="alert" class={ bannerClass + " empty:hidden text-center" }></div>
+}
+
+templ pageStatus(id string) {
+	<p id={ id } role="status" class={ emptyClass }></p>
+}
+
+templ pageLoad(path string) {
+	<div hx-get={ path } hx-trigger="load" hx-swap="outerHTML"></div>
+}
+
+templ backLink(href string, text string) {
+	<a href={ templ.SafeURL(href) } class={ mutedSmallClass + " underline" }>{ text }</a>
+}
+
+templ linkPair(leftHref string, leftText string, rightHref string, rightText string) {
+	<div class={ mutedSmallClass + " flex justify-between" }>
+		<a href={ templ.SafeURL(leftHref) } class="underline">{ leftText }</a>
+		<a href={ templ.SafeURL(rightHref) } class="underline">{ rightText }</a>
+	</div>
+}
+
+templ separator() {
+	<div data-orientation="horizontal" role="none" class="shrink-0 bg-gray-100 h-[1px] w-full my-8"></div>
+}
+
+templ emptyState(id string, text string) {
+	<p id={ id } class={ emptyClass }>{ text }</p>
+}
+
+templ mutedNote(id string, text string) {
+	<p id={ id } class={ mutedSmallClass }>{ text }</p>
+}
+
+templ formField(id string, label string, help string) {
+	<div class="space-y-2">
+		<label class={ labelClass } for={ id }>{ label }</label>
+		{ children... }
+		if help != "" {
+			<p class={ mutedClass + " text-xs" }>{ help }</p>
+		}
+	</div>
+}

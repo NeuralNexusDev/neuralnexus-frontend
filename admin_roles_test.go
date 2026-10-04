@@ -22,7 +22,13 @@ func TestAdminRoleListShowsRolesWithTheirPermissions(t *testing.T) {
 	assertBody(t, rec, `href="/admin/roles/`+idBee+`"`, "bee_admin", "Bee Name Generator Admin",
 		">beenamegenerator.admin<", ">ratelimit: 100<", ">petpictures.pets: rex, fido<",
 		`id="admin-role-create-form"`, `hx-post="/admin/roles"`)
-	assertBody(t, rec, `id="admin-roles-empty" hidden`)
+	assertNoBody(t, rec, `id="admin-roles-empty"`)
+}
+
+func TestAdminRoleListWithoutRolesSaysSo(t *testing.T) {
+	f := newFakeAdmin(t)
+	f.on("GET /roles", 200, `[]`)
+	assertBody(t, getPage("/admin/roles/list"), `id="admin-roles-empty"`, ">No roles<", `id="admin-role-create-form"`)
 }
 
 func TestAdminRoleListRefusedHidesTheCreateForm(t *testing.T) {
@@ -497,7 +503,7 @@ func TestAdminRoleEditorQueuesActionsOnTheEditor(t *testing.T) {
 	seedRoleEditor(f)
 	rec := getPage("/admin/roles/" + idBee + "/editor")
 	assertBody(t, rec,
-		`id="admin-role" class="space-y-6 `+busyClasses+`" hx-sync:inherited="this:drop" hx-indicator:inherited="this"`,
+		`id="admin-role" class="space-y-6 `+busyClasses+`" hx-indicator:inherited="this" hx-sync:inherited="this:drop"`,
 		`id="admin-role-grants" class="space-y-6" hx-target:inherited="#admin-role-granted" hx-swap:inherited="outerHTML"`,
 		`hx-sync="this:replace"`,
 	)

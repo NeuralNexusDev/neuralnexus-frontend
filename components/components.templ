@@ -16,16 +16,6 @@ func steamOpenIDLoginURL() string {
 
 var STEAM_OPENID_LOGIN_URL = steamOpenIDLoginURL()
 
-const (
-	mutedClass      = "text-gray-500 dark:text-gray-400"
-	mutedSmallClass = mutedClass + " text-sm"
-)
-
-templ htmxHead() {
-	<meta name="htmx-config" content={ adminHTMXConfig }/>
-	<script src={ adminHTMXURL } integrity={ adminHTMXIntegrity } crossorigin="anonymous" defer></script>
-}
-
 templ WrapContents(contents templ.Component) {
 	@WrapContentsWithHead("NeuralNexus", nil, contents)
 }
@@ -77,7 +67,7 @@ templ Home() {
 // ErrorBanner is revealed by showAuthErrorFromQuery(). OAuth errors land on Home
 // rather than where the flow started, since the API can't trust that redirect_uri yet.
 templ ErrorBanner() {
-	<div id="auth-error" hidden class="mx-auto max-w-sm rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive mb-4"></div>
+	<div id="auth-error" hidden class={ bannerClass + " mx-auto max-w-sm mb-4" }></div>
 }
 
 templ ThemeToggle() {
@@ -148,12 +138,7 @@ templ projectSection(title string, description string) {
 
 templ Projects() {
 	<div class="mx-auto max-w-4xl space-y-10">
-		<div class="space-y-2 text-center">
-			<h1 class="text-3xl font-bold">Projects</h1>
-			<p class={ mutedClass + " text-balance" }>
-				Things I've built and am still tinkering on
-			</p>
-		</div>
+		@pageHeading("Projects", "Things I've built and am still tinkering on")
 		@projectSection("The APIary", "REST APIs, each with a live demo to poke at") {
 			@projectCard("/project/bee-name-generator", "🐝", "Bee Name Generator", "Generate a random bee name, or suggest one of your own")
 			@projectCard("/project/mc-status", "⛏️", "MC Status", "Check whether a Minecraft server is online and who's playing")
@@ -223,39 +208,24 @@ templ BeeNameGenerator() {
 		}
 	</script>
 	<div class="mx-auto max-w-sm space-y-6">
-		<div class="space-y-2 text-center">
-			<h1 class="text-3xl font-bold">Bee Name Generator</h1>
-			<p class={ mutedClass + " text-balance" }>
-				Generate a random bee name, or suggest one of your own
-			</p>
-		</div>
+		@pageHeading("Bee Name Generator", "Generate a random bee name, or suggest one of your own")
 		<div class="space-y-4 rounded-lg border border-input p-4 text-center">
 			<p class={ mutedSmallClass }>Your bee name</p>
 			<h2 id="get-bee-name" aria-live="polite" class="min-h-8 text-2xl font-semibold">&mdash;</h2>
 			<button
 				id="get-bee-button"
-				class="border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
+				class={ submitClass }
 				onClick="getBeeName()"
 			>
 				Generate
 			</button>
 			<p id="get-bee-status" role="status" hidden class={ mutedSmallClass }></p>
 		</div>
-		<div
-			data-orientation="horizontal"
-			role="none"
-			class="shrink-0 bg-gray-100 h-[1px] w-full my-8"
-		></div>
+		@separator()
 		<form class="space-y-4" onsubmit="suggestBeeName(event)">
-			<div class="space-y-2">
-				<label
-					class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-					for="suggest-bee-name"
-				>
-					Suggest a name
-				</label>
+			@formField("suggest-bee-name", "Suggest a name", "") {
 				<input
-					class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+					class={ inputClass }
 					id="suggest-bee-name"
 					name="name"
 					maxlength="64"
@@ -263,17 +233,17 @@ templ BeeNameGenerator() {
 					required
 					type="text"
 				/>
-			</div>
+			}
 			<button
 				id="suggest-bee-button"
-				class="border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
+				class={ submitClass }
 				type="submit"
 			>
 				Suggest
 			</button>
-			<p id="suggest-bee-status" role="status" hidden class={ adminEmptyClass }></p>
+			<p id="suggest-bee-status" role="status" hidden class={ emptyClass }></p>
 		</form>
-		<div hx-get="/project/bee-name-generator/admin-link" hx-trigger="load" hx-swap="outerHTML"></div>
+		@pageLoad("/project/bee-name-generator/admin-link")
 	</div>
 }
 
@@ -282,27 +252,20 @@ templ BeeNameGeneratorAdminLink() {
 	<a
 		id="bee-admin-link"
 		href="/project/bee-name-generator/admin"
-		class={ adminLinkButtonClass }
+		class={ linkButtonClass }
 	>
 		Review suggestions
 	</a>
 }
 
 templ BeeNameGeneratorPage() {
-	@WrapContentsWithHead("NeuralNexus", htmxHead(), BeeNameGenerator())
+	@htmxPage(BeeNameGenerator())
 }
 
 templ BeeNameGeneratorAdmin() {
-	<div class="mx-auto max-w-md space-y-6">
-		<div class="space-y-2 text-center">
-			<h1 class="text-3xl font-bold">Bee Name Suggestions</h1>
-			<p class={ mutedClass + " text-balance" }>
-				Accept a suggestion to add it to the generator, or reject it to discard it
-			</p>
-		</div>
-		@adminError()
-		@adminLoad("/project/bee-name-generator/admin/suggestions")
-	</div>
+	@pageShell("max-w-md", "", "/project/bee-name-generator/admin/suggestions") {
+		@pageHeading("Bee Name Suggestions", "Accept a suggestion to add it to the generator, or reject it to discard it")
+	}
 }
 
 // BeeSuggestionsData is the list of bee name suggestions waiting for review.
@@ -313,12 +276,10 @@ type BeeSuggestionsData struct {
 
 // BeeSuggestions renders the pending suggestions, which htmx swaps in after one is accepted or rejected.
 templ BeeSuggestions(d BeeSuggestionsData) {
-	<div id="bee-suggestions-root" class={ "space-y-6 " + adminBusyClass } hx-indicator:inherited="this" hx-sync:inherited="this:drop" hx-target:inherited="#bee-suggestions-root" hx-swap:inherited="outerHTML">
+	<div id="bee-suggestions-root" class={ "space-y-6 " + busyClass } { selfSwapAttrs... }>
 		<h2 id="bee-suggestions-title" tabindex="-1" autofocus?={ d.FocusList } class="sr-only">Pending suggestions</h2>
 		if len(d.Names) == 0 {
-			<p id="bee-suggestions-empty" class={ adminEmptyClass }>
-				No pending suggestions
-			</p>
+			@emptyState("bee-suggestions-empty", "No pending suggestions")
 		} else {
 			<ul id="bee-suggestions" class="space-y-2">
 				for _, name := range d.Names {
@@ -352,22 +313,16 @@ templ BeeSuggestions(d BeeSuggestionsData) {
 
 // BeeNameGeneratorAdminPage serves the suggestion review shell, which loads the suggestions.
 templ BeeNameGeneratorAdminPage() {
-	@WrapContentsWithHead("NeuralNexus", htmxHead(), BeeNameGeneratorAdmin())
+	@htmxPage(BeeNameGeneratorAdmin())
 }
 
 templ McStatus() {
 	<div class="mx-auto max-w-md space-y-6">
-		<div class="space-y-2 text-center">
-			<h1 class="text-3xl font-bold">MC Status</h1>
-			<p class={ mutedClass + " text-balance" }>
-				Check whether a Minecraft server is online and who's playing
-			</p>
-		</div>
+		@pageHeading("MC Status", "Check whether a Minecraft server is online and who's playing")
 		<form class="space-y-4" onsubmit="checkMcStatus(event)">
-			<div class="space-y-2">
-				<label class="text-sm font-medium leading-none" for="mc-status-host">Server address</label>
+			@formField("mc-status-host", "Server address", "") {
 				<input
-					class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+					class={ inputClass }
 					id="mc-status-host"
 					name="host"
 					maxlength="260"
@@ -378,7 +333,7 @@ templ McStatus() {
 					required
 					type="text"
 				/>
-			</div>
+			}
 			<div class="grid grid-cols-2 gap-1 rounded-md border border-input p-1 text-sm font-medium">
 				<label class="cursor-pointer rounded px-3 py-1.5 text-center has-checked:bg-primary has-checked:text-primary-foreground has-focus-visible:ring-2 has-focus-visible:ring-ring">
 					<input class="sr-only" type="radio" name="mc-edition" value="java" onchange="syncMcStatusQueryOption()" checked/>
@@ -411,13 +366,13 @@ templ McStatus() {
 			</details>
 			<button
 				id="mc-status-submit"
-				class="border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
+				class={ submitClass }
 				type="submit"
 			>
 				Check
 			</button>
 		</form>
-		<div id="mc-status-error" role="alert" hidden class="space-y-1 rounded-md border border-destructive bg-destructive/10 p-3 text-center text-sm text-destructive">
+		<div id="mc-status-error" role="alert" hidden class={ bannerClass + " space-y-1 text-center" }>
 			<p id="mc-status-error-message" class="font-medium"></p>
 			<p id="mc-status-error-detail" hidden class="break-words [overflow-wrap:anywhere]"></p>
 		</div>
@@ -444,7 +399,7 @@ templ McStatus() {
 				</div>
 			</div>
 			<ul id="mc-status-players" class="flex flex-wrap gap-2"></ul>
-			<p id="mc-status-players-unavailable" hidden class={ adminEmptyClass }>
+			<p id="mc-status-players-unavailable" hidden class={ emptyClass }>
 				Player list unavailable
 			</p>
 		</div>

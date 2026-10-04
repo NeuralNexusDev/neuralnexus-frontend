@@ -55,78 +55,56 @@ templ LoginButton() {
 	</script>
 }
 
+type oauthProvider struct {
+	ID         string
+	ElementID  string
+	Label      string
+	Background string
+	Hover      string
+	Icon       string
+	Alt        string
+	URL        templ.SafeURL
+}
+
+var oauthProviders = []oauthProvider{
+	{"discord", "discord-oauth", "Discord", "bg-discord_blurple", "hover:bg-blue-600", "/public/DiscordClydeWhite.svg", "Discord Logo", OAUTH2_DISCORD},
+	{"twitch", "twitch-oauth", "Twitch", "bg-twitch_purple", "hover:bg-purple-800", "/public/TwitchGlitchWhite.svg", "Twitch Logo", OAUTH2_TWITCH},
+	{"microsoft", "microsoft-oauth", "Microsoft", "bg-microsoft_gray", "hover:bg-black", "/public/MicrosoftLogo.svg", "Microsoft Logo", OAUTH2_MICROSOFT},
+	{"xboxlive", "xbox-oauth", "Xbox Live", "bg-xbox_bilbao", "hover:bg-green-800", "/public/XboxSymbolWhite.svg", "Xbox Logo", OAUTH2_XBOX_LIVE},
+}
+
+func oauthProviderFor(id string) (oauthProvider, bool) {
+	for _, provider := range oauthProviders {
+		if provider.ID == id {
+			return provider, true
+		}
+	}
+	return oauthProvider{}, false
+}
+
+templ oauthBases(prefix string) {
+	for _, provider := range oauthProviders {
+		<div hidden id={ prefix + provider.ID + "-oauth-base" }>{ provider.URL }</div>
+	}
+}
+
 templ OAuthButtons(labelPrefix string) {
-	<div hidden id="discord-oauth-base">{ OAUTH2_DISCORD }</div>
-	<div hidden id="twitch-oauth-base">{ OAUTH2_TWITCH }</div>
-	<div hidden id="microsoft-oauth-base">{ OAUTH2_MICROSOFT }</div>
-	<div hidden id="xboxlive-oauth-base">{ OAUTH2_XBOX_LIVE }</div>
-	<a href="" id="discord-oauth" onclick="startOAuthLogin('discord', document.getElementById('discord-oauth-base').innerText); return false;">
-		<button
-			class="bg-discord_blurple hover:bg-blue-600 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
+	@oauthBases("")
+	for _, provider := range oauthProviders {
+		<a
+			href=""
+			id={ provider.ElementID }
+			data-provider={ provider.ID }
+			onclick="startOAuthLogin(this.dataset.provider, document.getElementById(this.dataset.provider + '-oauth-base').innerText); return false;"
 		>
-			<span class="mr-2 text-white">{ labelPrefix + " Discord" }</span>
-			<img
-				src="/public/DiscordClydeWhite.svg"
-				alt="Discord Logo"
-				class="w-6 h-6 mr-2"
-			/>
-		</button>
-	</a>
-	<div class="mt-2"></div>
-	<a href="" id="twitch-oauth" onclick="startOAuthLogin('twitch', document.getElementById('twitch-oauth-base').innerText); return false;">
-		<button
-			class="bg-twitch_purple hover:bg-purple-800 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
-		>
-			<span class="mr-2 text-white">{ labelPrefix + " Twitch" }</span>
-			<img
-				src="/public/TwitchGlitchWhite.svg"
-				alt="Twitch Logo"
-				class="w-6 h-6 mr-2"
-			/>
-		</button>
-	</a>
-	<div class="mt-2"></div>
-	<a href="" id="microsoft-oauth" onclick="startOAuthLogin('microsoft', document.getElementById('microsoft-oauth-base').innerText); return false;">
-		<button
-			class="bg-microsoft_gray hover:bg-black inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
-		>
-			<span class="mr-2 text-white">{ labelPrefix + " Microsoft" }</span>
-			<img
-				src="/public/MicrosoftLogo.svg"
-				alt="Microsoft Logo"
-				class="w-6 h-6 mr-2"
-			/>
-		</button>
-	</a>
-	<div class="mt-2"></div>
-	<a href="" id="xbox-oauth" onclick="startOAuthLogin('xboxlive', document.getElementById('xboxlive-oauth-base').innerText); return false;">
-		<button
-			class="bg-xbox_bilbao hover:bg-green-800 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
-		>
-			<span class="mr-2 text-white">{ labelPrefix + " Xbox Live" }</span>
-			<img
-				src="/public/XboxSymbolWhite.svg"
-				alt="Xbox Logo"
-				class="w-6 h-6 mr-2"
-			/>
-		</button>
-	</a>
-	if false {
-		<div class="mt-2"></div>
-		<a href="" id="minecraft-oauth" class="flex justify-center" onclick="startOAuthLogin('minecraft', document.getElementById('xboxlive-oauth-base').innerText); return false;">
-			<button
-				class="bg-minecraft_apple hover:bg-green-700 rounded-md h-10 px-4 flex items-center justify-center ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 w-full"
-			>
-				<span class="mr-2 text-white">{ labelPrefix }</span>
-				<img
-					src="/public/MinecraftLogo.svg"
-					alt="Minecraft"
-					class="h-6 w-auto"
-				/>
+			<button class={ buttonBaseClass + " " + provider.Background + " " + provider.Hover + " ring-offset-background focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full" }>
+				<span class="mr-2 text-white">{ labelPrefix + " " + provider.Label }</span>
+				<img src={ provider.Icon } alt={ provider.Alt } class="w-6 h-6 mr-2"/>
 			</button>
 		</a>
+		<div class="mt-2"></div>
 	}
-	<div class="mt-2 flex justify-center">
+	<div class="flex justify-center">
 		<a href="" id="steam-oauth" onclick="startOAuthLogin('steam', null); return false;">
 			<img src="/public/SteamSignIn.png" alt="Sign in through Steam"/>
 		</a>
@@ -138,64 +116,40 @@ templ LinkAccountSetup() {
 	<script>
     const linkRedirect = window.location.href;
     </script>
-	<div hidden id="link-discord-oauth-base">{ OAUTH2_DISCORD }</div>
-	<div hidden id="link-twitch-oauth-base">{ OAUTH2_TWITCH }</div>
-	<div hidden id="link-microsoft-oauth-base">{ OAUTH2_MICROSOFT }</div>
-	<div hidden id="link-xboxlive-oauth-base">{ OAUTH2_XBOX_LIVE }</div>
+	@oauthBases("link-")
 }
 
 templ Login() {
 	@ErrorBanner()
 	<div class="mx-auto max-w-sm space-y-6">
-		<div class="space-y-2 text-center">
-			<h1 class="text-3xl font-bold">Login</h1>
-			<p class={ mutedClass }>
-				Enter your username or email below to login
-			</p>
-		</div>
+		@pageHeading("Login", "Enter your username or email below to login")
 		<div>
 			<form class="space-y-4" onSubmit="submitLoginForm()">
-				<div class="space-y-2">
-					<label
-						class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-						for="username"
-					>
-						Username or Email
-					</label>
+				@formField("username", "Username or Email", "") {
 					<input
-						class="text-black flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+						class={ inputClass }
 						id="username"
 						name="username"
 						placeholder="user@example.com"
 						type="text"
 					/>
-				</div>
-				<div class="space-y-2">
-					<label
-						class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-						for="password"
-					>
-						Password
-					</label>
+				}
+				@formField("password", "Password", "") {
 					<input
-						class="text-black flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+						class={ inputClass }
 						id="password"
 						name="password"
 						type="password"
 					/>
-				</div>
+				}
 				<button
-					class="border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
+					class={ submitClass }
 					type="submit"
 				>
 					Login
 				</button>
 			</form>
-			<div
-				data-orientation="horizontal"
-				role="none"
-				class="shrink-0 bg-gray-100 h-[1px] w-full my-8"
-			></div>
+			@separator()
 			<div class="space-y-4">
 				<!-- <button class="w-full">Login with Google</button> -->
 				@OAuthButtons("Login with")
@@ -221,88 +175,55 @@ templ LoginPage() {
 templ Register() {
 	@ErrorBanner()
 	<div class="mx-auto max-w-sm space-y-6">
-		<div class="space-y-2 text-center">
-			<h1 class="text-3xl font-bold">Sign Up</h1>
-			<p class={ mutedClass }>
-				Enter your information to create an account
-			</p>
-		</div>
+		@pageHeading("Sign Up", "Enter your information to create an account")
 		<div>
 			<form class="space-y-4" onSubmit="event.preventDefault()">
-				<div class="space-y-2">
-					<label
-						class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-						for="username"
-					>
-						Username
-					</label>
+				@formField("username", "Username", "") {
 					<input
-						class="text-black flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+						class={ inputClass }
 						id="username"
 						name="username"
 						placeholder="Username"
 						required
 						type="text"
 					/>
-				</div>
-				<div class="space-y-2">
-					<label
-						class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-						for="email"
-					>
-						Email
-					</label>
+				}
+				@formField("email", "Email", "") {
 					<input
-						class="text-black flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+						class={ inputClass }
 						id="email"
 						name="email"
 						placeholder="user@example.com"
 						required
 						type="email"
 					/>
-				</div>
-				<div class="space-y-2">
-					<label
-						class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-						for="password"
-					>
-						Password
-					</label>
+				}
+				@formField("password", "Password", "") {
 					<input
-						class="text-black flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+						class={ inputClass }
 						id="password"
 						name="password"
 						required
 						type="password"
 					/>
-				</div>
-				<div class="space-y-2">
-					<label
-						class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-						for="confirm_password"
-					>
-						Confirm Password
-					</label>
+				}
+				@formField("confirm_password", "Confirm Password", "") {
 					<input
-						class="text-black flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+						class={ inputClass }
 						id="confirm_password"
 						name="confirm_password"
 						required
 						type="password"
 					/>
-				</div>
+				}
 				<button
-					class="border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
+					class={ submitClass }
 					type="submit"
 				>
 					Sign Up
 				</button>
 			</form>
-			<div
-				data-orientation="horizontal"
-				role="none"
-				class="shrink-0 bg-gray-100 h-[1px] w-full my-8"
-			></div>
+			@separator()
 			<div class="space-y-4">
 				@OAuthButtons("Sign up with")
 				<div class="mt-4 text-center text-sm">

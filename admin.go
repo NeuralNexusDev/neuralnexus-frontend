@@ -9,11 +9,6 @@ import (
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/components"
 )
 
-const (
-	userStatusID = "admin-user-status"
-	roleStatusID = "admin-role-status"
-)
-
 func noStoreHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", noStore)

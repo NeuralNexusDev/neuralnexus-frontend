@@ -35,16 +35,9 @@ const accountToggleClass = "relative inline-flex h-5 w-9 shrink-0 cursor-pointer
 // Account renders the account settings page, which loads its content.
 templ Account() {
 	@ErrorBanner()
-	<div class="mx-auto max-w-sm space-y-6">
-		<div class="space-y-2 text-center">
-			<h1 class="text-3xl font-bold">Account Settings</h1>
-			<p class={ mutedClass }>
-				Manage your profile and connected sign-in methods
-			</p>
-		</div>
-		@adminError()
-		@adminLoad("/account/content")
-	</div>
+	@pageShell("max-w-sm", "", "/account/content") {
+		@pageHeading("Account Settings", "Manage your profile and connected sign-in methods")
+	}
 	@LinkAccountSetup()
 	<script>
 		showAuthErrorFromQuery();
@@ -61,21 +54,13 @@ templ AccountContent(d AccountData) {
 				<span id="account-username">{ d.Username }</span>
 			</div>
 		</div>
-		@adminLoad("/account/admin-link")
-		<div
-			data-orientation="horizontal"
-			role="none"
-			class="shrink-0 bg-gray-100 h-[1px] w-full my-8"
-		></div>
+		@pageLoad("/account/admin-link")
+		@separator()
 		<div class="space-y-2">
 			<h2 class="text-lg font-semibold">Sign-in Settings</h2>
 			@AccountPasswordLogin(AccountSettingsData{PasswordAuth: d.PasswordAuth, Error: d.SettingsError}, false)
 		</div>
-		<div
-			data-orientation="horizontal"
-			role="none"
-			class="shrink-0 bg-gray-100 h-[1px] w-full my-8"
-		></div>
+		@separator()
 		<div class="space-y-2">
 			<h2 class="text-lg font-semibold">Connected Accounts</h2>
 			<p class={ mutedSmallClass }>
@@ -83,7 +68,7 @@ templ AccountContent(d AccountData) {
 				Unlink button to manage a method you've already connected.
 			</p>
 			if d.LinksError != "" {
-				<p id="account-links-error" role="alert" class={ adminSectionError }>{ d.LinksError }</p>
+				<p id="account-links-error" role="alert" class={ errorTextClass }>{ d.LinksError }</p>
 			} else {
 				<div id="account-links" class="space-y-2">
 					for _, platform := range AccountPlatforms {
@@ -108,11 +93,8 @@ templ AccountPasswordLogin(d AccountSettingsData, oob bool) {
 		if oob {
 			hx-swap-oob="true"
 		}
-		hx-sync:inherited="this:drop"
-		hx-indicator:inherited="this"
-		hx-target:inherited="this"
-		hx-swap:inherited="outerHTML"
-		class={ "space-y-2 " + adminBusyClass }
+		{ selfSwapAttrs... }
+		class={ "space-y-2 " + busyClass }
 	>
 		<div class="rounded-lg border border-input p-3 flex items-center justify-between">
 			<label for="password-auth-enabled" class="text-sm font-medium">
@@ -134,7 +116,7 @@ templ AccountPasswordLogin(d AccountSettingsData, oob bool) {
 			</label>
 		</div>
 		if d.Error != "" {
-			<p id="account-password-error" role="alert" class={ adminSectionError }>{ d.Error }</p>
+			<p id="account-password-error" role="alert" class={ errorTextClass }>{ d.Error }</p>
 		}
 	</div>
 }
@@ -146,11 +128,8 @@ templ AccountLinkRow(platform AccountPlatform, link LinkedAccount, linked bool, 
 		if oob {
 			hx-swap-oob="true"
 		}
-		hx-sync:inherited="this:drop"
-		hx-indicator:inherited="this"
-		hx-target:inherited="this"
-		hx-swap:inherited="outerHTML"
-		class={ "rounded-lg border border-input p-3 space-y-2 " + adminBusyClass }
+		{ selfSwapAttrs... }
+		class={ "rounded-lg border border-input p-3 space-y-2 " + busyClass }
 	>
 		<div class="flex items-center gap-2">
 			@accountPlatformIcon(platform.ID)
@@ -239,27 +218,21 @@ templ AccountLoginInput(platform AccountPlatform, checked bool, disabled bool, o
 
 templ accountPlatformIcon(platform string) {
 	switch platform {
-		case "discord":
-			<div class="flex items-center justify-center w-7 h-7 rounded-md bg-discord_blurple shrink-0">
-				<img src="/public/DiscordClydeWhite.svg" alt="Discord Logo" class="w-4 h-4"/>
-			</div>
-		case "twitch":
-			<div class="flex items-center justify-center w-7 h-7 rounded-md bg-twitch_purple shrink-0">
-				<img src="/public/TwitchGlitchWhite.svg" alt="Twitch Logo" class="w-4 h-4"/>
-			</div>
 		case "microsoft":
 			<img src="/public/MicrosoftLogo.svg" alt="Microsoft Logo" class="w-5 h-5 shrink-0"/>
-		case "xboxlive":
-			<div class="flex items-center justify-center w-7 h-7 rounded-md bg-xbox_bilbao shrink-0">
-				<img src="/public/XboxSymbolWhite.svg" alt="Xbox Logo" class="w-4 h-4"/>
-			</div>
 		case "steam":
 			<img src="/public/SteamLogo.svg" alt="Steam Logo" class="w-5 h-5 shrink-0 dark:hidden"/>
 			<img src="/public/SteamLogoWhite.svg" alt="Steam Logo" class="w-5 h-5 shrink-0 hidden dark:block"/>
+		default:
+			if provider, ok := oauthProviderFor(platform); ok {
+				<div class={ "flex items-center justify-center w-7 h-7 rounded-md shrink-0 " + provider.Background }>
+					<img src={ provider.Icon } alt={ provider.Alt } class="w-4 h-4"/>
+				</div>
+			}
 	}
 }
 
 // AccountPage serves the account settings shell, which loads the profile, the sign-in setting and the connected accounts.
 templ AccountPage() {
-	@WrapContentsWithHead("NeuralNexus", htmxHead(), Account())
+	@htmxPage(Account())
 }

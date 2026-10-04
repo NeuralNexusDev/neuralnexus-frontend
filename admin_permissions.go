@@ -57,7 +57,7 @@ func adminPermissionDeleteHandler(w http.ResponseWriter, r *http.Request, a admi
 	}
 	data, err := loadPermissions(a, true)
 	if err != nil {
-		failFragment(w, r, afterWrite(err), rowGone("permission-", r.PathValue("id"))...)
+		failFragment(w, r, afterWrite(err), rowGone(components.AdminPermissionRowPrefix, r.PathValue("id"))...)
 		return
 	}
 	renderAll(w, r, components.AdminPermissionList(data))
