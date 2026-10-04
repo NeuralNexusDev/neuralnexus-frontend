@@ -4,8 +4,9 @@ services:
   stub-api:
     image: node:22-alpine
     volumes:
-      - ./integration/stub-api.mjs:/stub-api.mjs:ro
-    command: node /stub-api.mjs
+      - ./stub-api.mjs:/stub/stub-api.mjs:ro
+      - ./stub-state.mjs:/stub/stub-state.mjs:ro
+    command: node /stub/stub-api.mjs
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8098/health"]
       interval: 2s
@@ -14,7 +15,7 @@ services:
 
   frontend:
     build:
-      context: ..
+      context: ../..
       dockerfile: Dockerfile
     environment:
       NN_API_URL: http://stub-api:8098
@@ -32,10 +33,11 @@ services:
     image: mcr.microsoft.com/playwright:v1.56.1-noble
     working_dir: /work
     volumes:
-      - ./integration:/work
+      - .:/work
     environment:
       BASE_URL: http://frontend:8090
       NN_API_URL: http://stub-api:8098
+      CI: ${CI:-}
     depends_on:
       frontend:
         condition: service_healthy

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 
-// BASE_URL is set by docker-compose.test.yml, pointing at the containerized
+// BASE_URL is set by docker-compose.yml, pointing at the containerized
 // "frontend" service - in that mode the server is already running as its
 // own container, so we skip webServer below. With no BASE_URL (a plain
 // `npx playwright test` on a host with Go + Node installed), we fall back
@@ -29,10 +29,10 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  reporter: process.env.CI ? 'github' : 'list',
+  reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL,
-    trace: 'on-first-retry',
+    trace: process.env.CI ? 'retain-on-failure' : 'on-first-retry',
   },
   projects: [
     {

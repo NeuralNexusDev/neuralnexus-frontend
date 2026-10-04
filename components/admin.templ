@@ -1,0 +1,931 @@
+package components
+
+import (
+	"encoding/json"
+	"net/url"
+	"strconv"
+	"strings"
+)
+
+// UserAccount is a user account as the API returns it.
+type UserAccount struct {
+	UserID   string   `json:"user_id"`
+	Username string   `json:"username"`
+	Roles    []string `json:"roles"`
+}
+
+// LinkedAccount is a platform linked to an account.
+type LinkedAccount struct {
+	Platform         string `json:"platform"`
+	PlatformUsername string `json:"platform_username"`
+	PlatformID       string `json:"platform_id"`
+	Verified         bool   `json:"verified"`
+	LoginEnabled     bool   `json:"login_enabled"`
+}
+
+// Permission is a permission node roles can grant.
+type Permission struct {
+	ID          string `json:"id"`
+	Node        string `json:"node"`
+	Description string `json:"description"`
+	ValueType   string `json:"value_type"`
+	Merge       string `json:"merge"`
+}
+
+// RolePermission is a permission as a role grants it.
+type RolePermission struct {
+	Permission
+	Value json.RawMessage `json:"value"`
+}
+
+// Role is a named set of permissions.
+type Role struct {
+	ID          string           `json:"id"`
+	Name        string           `json:"name"`
+	Description string           `json:"description"`
+	Permissions []RolePermission `json:"permissions"`
+}
+
+// ValueText returns the granted value as the text of its input: the number, the text, or one list item per line.
+func (p RolePermission) ValueText() string {
+	switch p.ValueType {
+	case "string":
+		var text string
+		_ = json.Unmarshal(p.Value, &text)
+		return text
+	case "string_list":
+		var items []string
+		_ = json.Unmarshal(p.Value, &items)
+		return strings.Join(items, "\n")
+	case "int":
+		return strings.TrimSpace(string(p.Value))
+	default:
+		return ""
+	}
+}
+
+// Label returns the node, followed by its value when the role grants one.
+func (p RolePermission) Label() string {
+	if p.ValueType == "" {
+		return p.Node
+	}
+	return p.Node + ": " + strings.ReplaceAll(p.ValueText(), "\n", ", ")
+}
+
+// AdminDashboardData is what the admin dashboard shows.
+type AdminDashboardData struct {
+	Users bool
+	Roles bool
+}
+
+// AdminUsersData is a page of the user list.
+type AdminUsersData struct {
+	Users      []UserAccount
+	RoleNames  map[string]string
+	Search     string
+	Start      int
+	NextOffset int
+	More       bool
+	FocusFirst bool
+}
+
+// AdminUserData is the user editor.
+type AdminUserData struct {
+	User           UserAccount
+	Roles          []Role
+	RolesReadable  bool
+	Links          []LinkedAccount
+	LinksError     string
+	Permissions    []string
+	PermissionsErr string
+}
+
+// AdminRolesData is the role list.
+type AdminRolesData struct {
+	Roles []Role
+}
+
+// AdminRoleData is the role editor.
+type AdminRoleData struct {
+	Role            Role
+	Catalogue       []Permission
+	Drafts          map[string]string
+	GrantPermission string
+	GrantValue      string
+	FocusList       bool
+}
+
+// AdminPermissionsData is the permission list.
+type AdminPermissionsData struct {
+	Permissions []Permission
+	FocusList   bool
+}
+
+// HeldRole reports whether the user holds the role.
+func (d AdminUserData) HeldRole(id string) bool {
+	for _, held := range d.User.Roles {
+		if held == id {
+			return true
+		}
+	}
+	return false
+}
+
+// UnlistedRoles returns the roles the user holds that are not in the catalogue, which have no checkbox.
+func (d AdminUserData) UnlistedRoles() []string {
+	listed := make(map[string]bool, len(d.Roles))
+	for _, role := range d.Roles {
+		listed[role.ID] = true
+	}
+	var unlisted []string
+	for _, held := range d.User.Roles {
+		if !listed[held] {
+			unlisted = append(unlisted, held)
+		}
+	}
+	return unlisted
+}
+
+// Available returns the permissions the role does not grant yet.
+func (d AdminRoleData) Available() []Permission {
+	granted := make(map[string]bool, len(d.Role.Permissions))
+	for _, p := range d.Role.Permissions {
+		granted[p.ID] = true
+	}
+	var available []Permission
+	for _, p := range d.Catalogue {
+		if !granted[p.ID] {
+			available = append(available, p)
+		}
+	}
+	return available
+}
+
+// Selected returns the permission chosen in the grant form, or the first available one.
+func (d AdminRoleData) Selected() (Permission, bool) {
+	available := d.Available()
+	for _, p := range available {
+		if p.ID == d.GrantPermission {
+			return p, true
+		}
+	}
+	if len(available) > 0 {
+		return available[0], true
+	}
+	return Permission{}, false
+}
+
+// Draft returns the text for a granted permission's value field: what was typed, else the granted value.
+func (d AdminRoleData) Draft(p RolePermission) string {
+	if text, ok := d.Drafts[p.ID]; ok {
+		return text
+	}
+	return p.ValueText()
+}
+
+const (
+	// AdminUserStatusID is the id of the user editor's status line.
+	AdminUserStatusID = "admin-user-status"
+	// AdminRoleStatusID is the id of the role editor's status line.
+	AdminRoleStatusID = "admin-role-status"
+	// AdminPermissionRowPrefix starts the id of each row in the permission list.
+	AdminPermissionRowPrefix = "permission-"
+	// AdminGrantRowPrefix starts the id of each row in a role's granted permissions.
+	AdminGrantRowPrefix = "granted-"
+
+	roleNameHelp       = "Lower-case letters, digits and underscores, starting with a letter"
+	permissionNodeHelp = "Lower-case words of letters, digits and underscores joined by dots"
+)
+
+func adminUserRowsPath(offset int, search string) string {
+	query := url.Values{"offset": {strconv.Itoa(offset)}}
+	if search != "" {
+		query.Set("search", search)
+	}
+	return "/admin/users/rows?" + query.Encode()
+}
+
+func adminUserPath(id string) string {
+	return "/admin/users/" + url.PathEscape(id)
+}
+
+func adminRolePath(id string) string {
+	return "/admin/roles/" + url.PathEscape(id)
+}
+
+func adminRolePermissionPath(roleID string, permissionID string) string {
+	return adminRolePath(roleID) + "/permissions/" + url.PathEscape(permissionID)
+}
+
+func adminRoleName(names map[string]string, id string) string {
+	if name, ok := names[id]; ok {
+		return name
+	}
+	return id
+}
+
+func adminUsername(username string) string {
+	if username == "" {
+		return "No username"
+	}
+	return username
+}
+
+func adminLinkName(link LinkedAccount) string {
+	if link.PlatformUsername != "" {
+		return link.PlatformUsername
+	}
+	return link.PlatformID
+}
+
+// AdminDashboardLink is the link from the account page to the admin dashboard.
+templ AdminDashboardLink() {
+	<a
+		id="admin-dashboard-link"
+		href="/admin"
+		class={ linkButtonClass }
+	>
+		Admin dashboard
+	</a>
+}
+
+templ adminTextBlock(name string, description string) {
+	<span class="min-w-0">
+		<span class="block break-all font-medium">{ name }</span>
+		<span class={ mutedClass + " block break-all text-xs" }>{ description }</span>
+	</span>
+}
+
+templ adminCard(id string, href string, title string, description string) {
+	<a id={ id } href={ templ.URL(href) } class={ cardClass }>
+		<span class="block font-semibold">{ title }</span>
+		<span class={ mutedClass + " block text-sm" }>{ description }</span>
+	</a>
+}
+
+templ adminDashboard() {
+	@pageShell("max-w-md", "", "/admin/cards") {
+		@pageHeading("Admin Dashboard", "Manage accounts, roles and permissions")
+	}
+}
+
+// AdminCards renders the cards for the admin pages the account may use.
+templ AdminCards(d AdminDashboardData) {
+	<div class="space-y-3">
+		if d.Users {
+			@adminCard("admin-users-link", "/admin/users", "Users", "Browse accounts and edit their username and roles")
+		}
+		if d.Roles {
+			@adminCard("admin-roles-link", "/admin/roles", "Roles", "Create roles and choose which permissions they grant")
+			@adminCard("admin-permissions-link", "/admin/permissions", "Permissions", "Create and delete the permissions roles can grant")
+		}
+		if !d.Users && !d.Roles {
+			@emptyState("admin-denied", "Your account has no admin permissions")
+		}
+	</div>
+}
+
+// AdminDashboardPage serves the admin dashboard shell, which loads its cards.
+templ AdminDashboardPage() {
+	@htmxPage("Admin - NeuralNexus", adminDashboard())
+}
+
+templ adminUsers() {
+	@pageShell("max-w-xl", "", "/admin/users/list") {
+		@pageHeading("Users", "Select an account to edit it")
+		@backLink("/admin", "Back to the admin dashboard")
+		@usersCountLine("", false)
+	}
+}
+
+// AdminUsersList renders the search box and the first page of users, and fills the shell's count line.
+templ AdminUsersList(d AdminUsersData) {
+	<div class="space-y-6">
+		@formField("admin-users-search", "Search", "") {
+			<input
+				id="admin-users-search"
+				type="search"
+				autocomplete="off"
+				placeholder="Username or user ID"
+				name="search"
+				hx-get="/admin/users/rows"
+				hx-trigger="input changed delay:250ms, search"
+				hx-target="#admin-users"
+				hx-swap="innerHTML"
+				hx-sync="this:replace"
+				class={ inputClass }
+			/>
+		}
+		<ul id="admin-users" class="space-y-2">
+			@AdminUserRows(d)
+		</ul>
+	</div>
+	@AdminUsersCount(d, true)
+}
+
+// AdminUsersCount renders the line that says how many users a response listed, which fills the status element of the shell out of band.
+templ AdminUsersCount(d AdminUsersData, oob bool) {
+	@usersCountLine(usersSummary(d), oob)
+}
+
+// usersCountLine is the status element that announces the count. The shell holds it empty so that it is on the page before its first text.
+templ usersCountLine(text string, oob bool) {
+	<p
+		id="admin-users-count"
+		role="status"
+		if oob {
+			hx-swap-oob="innerHTML"
+		}
+		class={ mutedSmallClass + " empty:m-0" }
+	>{ text }</p>
+}
+
+func usersSummary(d AdminUsersData) string {
+	count := len(d.Users)
+	switch {
+	case count == 0 && d.Start > 0:
+		return "No more users"
+	case count == 0 && d.Search != "" && d.More:
+		return "No matches in the first " + strconv.Itoa(d.NextOffset) + " users"
+	case count == 0 && d.Search != "":
+		return "No matches"
+	case count == 0:
+		return "No users found"
+	}
+	text := strconv.Itoa(count) + " users"
+	if count == 1 {
+		text = "1 user"
+	}
+	if d.Start > 0 {
+		text = strconv.Itoa(count) + " more users"
+		if count == 1 {
+			text = "1 more user"
+		}
+	}
+	if d.Search != "" && d.More {
+		text += ". Searched the first " + strconv.Itoa(d.NextOffset) + " users"
+	}
+	return text
+}
+
+// AdminUserRows renders a page of user rows, followed by the button that loads the next page when there is one.
+templ AdminUserRows(d AdminUsersData) {
+	for i, user := range d.Users {
+		<li>
+			<a href={ templ.URL(adminUserPath(user.UserID)) } autofocus?={ d.FocusFirst && i == 0 } class={ cardClass }>
+				@adminTextBlock(adminUsername(user.Username), user.UserID)
+				if len(user.Roles) > 0 {
+					<span class="mt-2 flex flex-wrap gap-2">
+						for _, roleID := range user.Roles {
+							<span class={ chipClass }>{ adminRoleName(d.RoleNames, roleID) }</span>
+						}
+					</span>
+				}
+			</a>
+		</li>
+	}
+	if len(d.Users) == 0 && d.Start > 0 && !d.More {
+		<li id="admin-users-end" tabindex="-1" autofocus?={ d.FocusFirst } class={ emptyClass }>No more users</li>
+	}
+	if len(d.Users) == 0 && d.Start == 0 {
+		<li id="admin-users-empty" class={ emptyClass }>
+			if d.More {
+				No matches in the first { strconv.Itoa(d.NextOffset) } users
+			} else {
+				No users found
+			}
+		</li>
+	}
+	if d.More {
+		<li id="admin-users-more" class="space-y-2 text-center">
+			<button
+				id="admin-users-more-button"
+				type="button"
+				autofocus?={ d.FocusFirst && len(d.Users) == 0 }
+				hx-get={ adminUserRowsPath(d.NextOffset, d.Search) }
+				hx-target="#admin-users-more"
+				hx-swap="outerHTML"
+				hx-sync="this:drop"
+				class={ buttonClass + " w-full" }
+			>
+				Load more
+			</button>
+			if d.Search != "" {
+				<span class={ mutedClass + " block text-xs" }>Searched the first { strconv.Itoa(d.NextOffset) } users</span>
+			}
+		</li>
+	}
+}
+
+// AdminUsersPage serves the user list shell, which loads the list.
+templ AdminUsersPage() {
+	@htmxPage("Users - NeuralNexus", adminUsers())
+}
+
+templ adminUser(id string) {
+	@pageShell("max-w-md", AdminUserStatusID, adminUserPath(id)+"/editor") {
+		@backLink("/admin/users", "Back to users")
+	}
+}
+
+// AdminUserContent renders the user editor, which the user page loads.
+templ AdminUserContent(d AdminUserData) {
+	<div id="admin-user" class="space-y-6" data-status={ AdminUserStatusID } { busyAttrs... }>
+		@AdminUserHeader(d, false)
+		@AdminUserForm(d)
+		@adminUserLinks(d)
+		@AdminUserPermissions(d, false)
+	</div>
+}
+
+// AdminUserUsername renders the username field, or its out-of-band copy with the message the username was refused with.
+templ AdminUserUsername(value string, errText string, oob bool) {
+	@fieldWithError("admin-user-username", "Username", "", errText, oob) {
+		@textInput("admin-user-username", "username", value, "", false, fieldDescription("admin-user-username", "", errText), errText != "")
+	}
+}
+
+// AdminUserHeader renders the account's name and ID, or the out-of-band copy of them a save sends.
+templ AdminUserHeader(d AdminUserData, oob bool) {
+	@entityHeader("admin-user", adminUsername(d.User.Username), d.User.UserID, oob)
+}
+
+// AdminUserLoaded holds the values the form was loaded with, which a save compares against, or the out-of-band copy of them a save sends.
+templ AdminUserLoaded(d AdminUserData, oob bool) {
+	<div
+		id="admin-user-loaded"
+		if oob {
+			hx-swap-oob="true"
+		}
+		hidden
+	>
+		<input type="hidden" name="loaded_username" value={ d.User.Username }/>
+		for _, roleID := range d.User.Roles {
+			<input type="hidden" name="loaded_roles" value={ roleID }/>
+		}
+	</div>
+}
+
+// AdminUserForm renders the form that edits the username and roles, which htmx swaps in after a save.
+templ AdminUserForm(d AdminUserData) {
+	<form
+		id="admin-user-form"
+		class="space-y-6"
+		hx-post={ adminUserPath(d.User.UserID) }
+		hx-target="#admin-user-form"
+		hx-swap="outerHTML"
+	>
+		@AdminUserLoaded(d, false)
+		if d.RolesReadable {
+			<input type="hidden" name="roles_editable" value="1"/>
+			for _, roleID := range d.UnlistedRoles() {
+				<input type="hidden" name="kept_roles" value={ roleID }/>
+			}
+		}
+		@AdminUserUsername(d.User.Username, "", false)
+		<fieldset class="space-y-2">
+			<legend class="text-sm font-medium leading-none">Roles</legend>
+			<ul id="admin-user-roles" class="space-y-2">
+				if d.RolesReadable {
+					for _, role := range d.Roles {
+						<li>
+							<label class="flex cursor-pointer items-start gap-3 rounded-md border border-input px-3 py-2 text-sm">
+								<input type="checkbox" name="roles" value={ role.ID } checked?={ d.HeldRole(role.ID) } class={ checkboxClass + " mt-1" }/>
+								@adminTextBlock(role.Name, role.Description)
+							</label>
+						</li>
+					}
+				} else {
+					for _, roleID := range d.User.Roles {
+						<li class="break-all rounded-md border border-input px-3 py-2 text-sm">{ roleID }</li>
+					}
+				}
+			</ul>
+			if !d.RolesReadable {
+				<p id="admin-user-roles-note" class={ mutedSmallClass }>
+					Role names and changes need the roles.admin permission, so the roles are shown by ID and left as they are.
+				</p>
+			}
+		</fieldset>
+		<button id="admin-user-save" type="submit" class={ submitClass }>Save</button>
+	</form>
+}
+
+templ adminUserLinks(d AdminUserData) {
+	<div class="space-y-2">
+		<h2 class="text-sm font-medium leading-none">Linked accounts</h2>
+		if d.LinksError != "" {
+			<p id="admin-user-links-error" role="alert" class={ errorTextClass }>{ d.LinksError }</p>
+		} else if len(d.Links) == 0 {
+			@mutedNote("admin-user-links-empty", "No linked accounts")
+		} else {
+			<ul id="admin-user-links" class="space-y-1 text-sm">
+				for _, link := range d.Links {
+					<li class="flex justify-between gap-3 rounded-md border border-input px-3 py-2">
+						<span class="font-medium capitalize">{ link.Platform }</span>
+						<span class={ mutedClass + " min-w-0 truncate" }>{ adminLinkName(link) }</span>
+					</li>
+				}
+			</ul>
+		}
+	</div>
+}
+
+// AdminUserPermissions renders the effective permissions, or the out-of-band copy of them a save sends.
+templ AdminUserPermissions(d AdminUserData, oob bool) {
+	<div
+		id="admin-user-permissions-section"
+		if oob {
+			hx-swap-oob="true"
+		}
+		class="space-y-2"
+	>
+		<h2 class="text-sm font-medium leading-none">Effective permissions</h2>
+		if d.PermissionsErr != "" {
+			<p id="admin-user-permissions-error" role="alert" class={ errorTextClass }>{ d.PermissionsErr }</p>
+		} else if len(d.Permissions) == 0 {
+			@mutedNote("admin-user-permissions-empty", "No permissions")
+		} else {
+			<ul id="admin-user-permissions" class="flex flex-wrap gap-2">
+				for _, permission := range d.Permissions {
+					<li class={ chipClass }>{ permission }</li>
+				}
+			</ul>
+		}
+	</div>
+}
+
+// AdminUserPage serves the shell for the editor of one user account, which loads the editor.
+templ AdminUserPage(id string) {
+	@htmxPage("Edit user - NeuralNexus", adminUser(id))
+}
+
+templ adminRoles() {
+	@pageShell("max-w-xl", "", "/admin/roles/list") {
+		@pageHeading("Roles", "Select a role to edit the permissions it grants")
+		@linkPair("/admin", "Back to the admin dashboard", "/admin/permissions", "Permissions")
+	}
+}
+
+// AdminRolesContent renders the list of roles and the form that creates one.
+templ AdminRolesContent(d AdminRolesData) {
+	<div class="space-y-6">
+		<ul id="admin-roles" class="space-y-2">
+			for _, role := range d.Roles {
+				<li>
+					<a href={ templ.URL(adminRolePath(role.ID)) } class={ cardClass }>
+						@adminTextBlock(role.Name, role.Description)
+						if len(role.Permissions) > 0 {
+							<span class="mt-2 flex flex-wrap gap-2">
+								for _, permission := range role.Permissions {
+									<span class={ chipClass }>{ permission.Label() }</span>
+								}
+							</span>
+						}
+					</a>
+				</li>
+			}
+		</ul>
+		if len(d.Roles) == 0 {
+			@emptyState("admin-roles-empty", "No roles")
+		}
+		<form id="admin-role-create-form" class="space-y-4 rounded-lg border border-input p-4" hx-post="/admin/roles" hx-sync="this:drop">
+			<h2 class="text-lg font-semibold">New role</h2>
+			@AdminRoleCreateName("", "", false)
+			@formField("admin-role-create-description", "Description", "") {
+				@proseInput("admin-role-create-description", "description", "")
+			}
+			<button id="admin-role-create-submit" type="submit" class={ submitClass }>Create role</button>
+		</form>
+	</div>
+}
+
+// AdminRolesPage serves the role list shell, which loads the list.
+templ AdminRolesPage() {
+	@htmxPage("Roles - NeuralNexus", adminRoles())
+}
+
+func valueInputType(valueType string) string {
+	if valueType == "int" {
+		return "number"
+	}
+	return "text"
+}
+
+templ adminValueField(permission Permission, value string, name string) {
+	switch permission.ValueType {
+		case "int", "string":
+			<input
+				type={ valueInputType(permission.ValueType) }
+				if permission.ValueType == "int" {
+					step="1"
+				}
+				name={ name }
+				value={ value }
+				autocomplete="off"
+				aria-label={ "Value of " + permission.Node }
+				class={ inputClass }
+			/>
+		case "string_list":
+			<textarea
+				name={ name }
+				rows="3"
+				placeholder="One item per line"
+				aria-label={ "Value of " + permission.Node }
+				class={ inputClass + " h-auto" }
+			>{ value }</textarea>
+	}
+}
+
+// AdminGrantValue renders the value input the grant form needs for a permission, and nothing for a permission granted as is.
+templ AdminGrantValue(permission Permission, value string) {
+	@adminValueField(permission, value, "grant_value")
+}
+
+templ adminRole(id string) {
+	@pageShell("max-w-md", AdminRoleStatusID, adminRolePath(id)+"/editor") {
+		@backLink("/admin/roles", "Back to roles")
+	}
+}
+
+// AdminRoleContent renders the role editor, which the role page loads.
+templ AdminRoleContent(d AdminRoleData) {
+	<div id="admin-role" class="space-y-6" data-status={ AdminRoleStatusID } { busyAttrs... }>
+		@AdminRoleHeader(d, false)
+		@AdminRoleForm(d)
+		@AdminRoleGrants(d)
+		@AdminRoleDelete(d, false)
+	</div>
+}
+
+// AdminRoleHeader renders the role's name and ID, or the out-of-band copy of them a rename sends.
+templ AdminRoleHeader(d AdminRoleData, oob bool) {
+	@entityHeader("admin-role", d.Role.Name, d.Role.ID, oob)
+}
+
+// AdminRoleForm renders the form that renames the role, which htmx swaps in after a save.
+templ AdminRoleForm(d AdminRoleData) {
+	<form
+		id="admin-role-form"
+		class="space-y-4"
+		hx-post={ adminRolePath(d.Role.ID) }
+		hx-target="#admin-role-form"
+		hx-swap="outerHTML"
+	>
+		<input type="hidden" name="loaded_name" value={ d.Role.Name }/>
+		<input type="hidden" name="loaded_description" value={ d.Role.Description }/>
+		@AdminRoleName(d.Role.Name, "", false)
+		@formField("admin-role-description", "Description", "") {
+			@proseInput("admin-role-description", "description", d.Role.Description)
+		}
+		<button id="admin-role-save" type="submit" class={ submitClass }>Save</button>
+	</form>
+}
+
+// AdminRoleName renders the name field of the editor, or its out-of-band copy with the message the name was refused with.
+templ AdminRoleName(value string, errText string, oob bool) {
+	@fieldWithError("admin-role-name", "Name", "", errText, oob) {
+		@textInput("admin-role-name", "name", value, "", true, fieldDescription("admin-role-name", "", errText), errText != "")
+	}
+}
+
+// AdminRoleCreateName renders the name field of the create form, or its out-of-band copy with the message the API refused the name with.
+templ AdminRoleCreateName(value string, errText string, oob bool) {
+	@fieldWithError("admin-role-create-name", "Name", roleNameHelp, errText, oob) {
+		@textInput("admin-role-create-name", "name", value, "moderator", true, fieldDescription("admin-role-create-name", roleNameHelp, errText), errText != "")
+	}
+}
+
+// AdminRoleDelete renders the button that deletes the role, or the out-of-band copy of it a rename sends.
+templ AdminRoleDelete(d AdminRoleData, oob bool) {
+	<button
+		id="admin-role-delete"
+		if oob {
+			hx-swap-oob="true"
+		}
+		type="button"
+		hx-delete={ adminRolePath(d.Role.ID) }
+		hx-confirm={ "Delete the role " + d.Role.Name + "?" }
+		class={ buttonBaseClass + " border border-red-600 text-red-600 hover:bg-red-600/10 dark:border-red-400 dark:text-red-400 dark:hover:bg-red-400/10 ring-offset-background h-10 w-full px-4 py-2" }
+	>
+		Delete role
+	</button>
+}
+
+// AdminRoleGrants renders the granted permissions and the grant form, which a change swaps by region.
+templ AdminRoleGrants(d AdminRoleData) {
+	<div id="admin-role-grants" class="space-y-6" hx-target:inherited="#admin-role-granted" hx-swap:inherited="outerHTML">
+		@AdminRoleGranted(d, false)
+		@AdminRoleGrantForm(d, false)
+	</div>
+}
+
+// AdminRoleGranted renders the granted permissions, which htmx swaps in after a change to one of them, or the out-of-band copy a refused grant sends.
+templ AdminRoleGranted(d AdminRoleData, oob bool) {
+	<div
+		id="admin-role-granted"
+		class="space-y-2"
+		if oob {
+			hx-swap-oob="true"
+		}
+	>
+		for _, permission := range d.Role.Permissions {
+			<input type="hidden" name="granted" value={ permission.ID }/>
+		}
+		<h2 id="admin-role-permissions-title" tabindex="-1" autofocus?={ d.FocusList } class="text-lg font-semibold">Granted permissions</h2>
+		if len(d.Role.Permissions) == 0 {
+			@mutedNote("admin-role-permissions-empty", "This role grants no permissions")
+		} else {
+			<ul id="admin-role-permissions" class="space-y-2">
+				for _, permission := range d.Role.Permissions {
+					<li id={ AdminGrantRowPrefix + permission.ID } class="space-y-2 rounded-lg border border-input p-3">
+						<div class="flex items-start justify-between gap-3">
+							@adminTextBlock(permission.Node, permission.Description)
+							<button
+								type="button"
+								aria-label={ "Remove " + permission.Node }
+								hx-delete={ adminRolePermissionPath(d.Role.ID, permission.ID) }
+								hx-include="#admin-role-grants"
+								class={ buttonClass }
+							>
+								Remove
+							</button>
+						</div>
+						if permission.ValueType != "" {
+							<form
+								class="flex items-start gap-2"
+								hx-post={ adminRolePermissionPath(d.Role.ID, permission.ID) }
+								hx-include="#admin-role-grants"
+							>
+								@adminValueField(permission.Permission, d.Draft(permission), "value_"+permission.ID)
+								<button type="submit" aria-label={ "Save value of " + permission.Node } class={ buttonClass }>Save value</button>
+							</form>
+						}
+					</li>
+				}
+			</ul>
+		}
+	</div>
+}
+
+// AdminRoleGrantForm renders the form that grants a permission, or the out-of-band copy of it a grant or a removal sends.
+templ AdminRoleGrantForm(d AdminRoleData, oob bool) {
+	<div
+		id="admin-role-grant"
+		if oob {
+			hx-swap-oob="true"
+		}
+	>
+		if selected, ok := d.Selected(); ok {
+			<form
+				id="admin-role-grant-form"
+				class="space-y-3 rounded-lg border border-input p-4"
+				hx-post={ adminRolePath(d.Role.ID) + "/permissions" }
+				hx-include="#admin-role-grants"
+			>
+				<h2 class="text-lg font-semibold">Grant a permission</h2>
+				<select
+					id="admin-role-grant-permission"
+					name="grant_permission"
+					aria-label="Permission"
+					hx-get={ adminRolePath(d.Role.ID) + "/grant-value" }
+					hx-trigger="change"
+					hx-target="#admin-role-grant-value"
+					hx-swap="innerHTML"
+					hx-sync="this:replace"
+					class={ selectClass }
+				>
+					for _, permission := range d.Available() {
+						<option value={ permission.ID } selected?={ permission.ID == selected.ID }>{ permission.Node }</option>
+					}
+				</select>
+				<div id="admin-role-grant-value">
+					if selected.ID == d.GrantPermission {
+						@AdminGrantValue(selected, d.GrantValue)
+					} else {
+						@AdminGrantValue(selected, "")
+					}
+				</div>
+				<button id="admin-role-grant-submit" type="submit" class={ submitClass }>Grant</button>
+			</form>
+		} else {
+			@mutedNote("admin-role-grant-empty", "Every permission is already granted")
+		}
+	</div>
+}
+
+// AdminRoleGrantUnavailable replaces the grant form when the permissions it offers could not be loaded.
+templ AdminRoleGrantUnavailable() {
+	<div id="admin-role-grant" hx-swap-oob="true">
+		@mutedNote("admin-role-grant-unavailable", "The permissions to grant could not be loaded. Reload the page to grant one.")
+	</div>
+}
+
+// AdminRolePage serves the shell for the editor of one role, which loads the editor.
+templ AdminRolePage(id string) {
+	@htmxPage("Edit role - NeuralNexus", adminRole(id))
+}
+
+templ adminPermissions() {
+	@pageShell("max-w-xl", "", "/admin/permissions/list") {
+		@pageHeading("Permissions", "The permissions roles can grant")
+		@linkPair("/admin", "Back to the admin dashboard", "/admin/roles", "Roles")
+	}
+}
+
+// AdminPermissionsContent renders the permission list and the form that creates one.
+templ AdminPermissionsContent(d AdminPermissionsData) {
+	<div id="admin-permissions-root" class="space-y-6" { busyAttrs... } hx-target:inherited="#admin-permissions-list" hx-swap:inherited="outerHTML">
+		@AdminPermissionList(d)
+		@AdminPermissionForm(false)
+	</div>
+}
+
+// AdminPermissionList renders the permission list, which htmx swaps in after a change.
+templ AdminPermissionList(d AdminPermissionsData) {
+	<div id="admin-permissions-list" class="space-y-6">
+		<h2 id="admin-permissions-title" tabindex="-1" autofocus?={ d.FocusList } class="sr-only">Permission list</h2>
+		if len(d.Permissions) == 0 {
+			@emptyState("admin-permissions-empty", "No permissions")
+		}
+		<ul id="admin-permissions" class="space-y-2">
+			for _, permission := range d.Permissions {
+				@adminPermissionRow(permission)
+			}
+		</ul>
+	</div>
+}
+
+templ adminPermissionRow(permission Permission) {
+	<li id={ AdminPermissionRowPrefix + permission.ID } class="flex items-start justify-between gap-3 rounded-lg border border-input p-3">
+		<span class="min-w-0">
+			@adminTextBlock(permission.Node, permission.Description)
+			if permission.ValueType != "" {
+				<span class={ chipClass + " mt-2 inline-block" }>{ permission.ValueType + ", merge " + permission.Merge }</span>
+			}
+		</span>
+		<button
+			type="button"
+			aria-label={ "Delete " + permission.Node }
+			hx-delete={ "/admin/permissions/" + url.PathEscape(permission.ID) }
+			hx-confirm={ "Delete the permission " + permission.Node + "?" }
+			class={ buttonClass }
+		>
+			Delete
+		</button>
+	</li>
+}
+
+// AdminPermissionAdded appends a created permission to the list, for when the list could not be loaded again.
+templ AdminPermissionAdded(permission Permission) {
+	<ul hx-swap-oob="beforeend:#admin-permissions">
+		@adminPermissionRow(permission)
+	</ul>
+	<div hx-swap-oob="delete:#admin-permissions-empty"></div>
+}
+
+// AdminPermissionCreateNode renders the node field of the create form, or its out-of-band copy with the message the API refused the node with.
+templ AdminPermissionCreateNode(value string, errText string, oob bool) {
+	@fieldWithError("admin-permission-create-node", "Node", permissionNodeHelp, errText, oob) {
+		@textInput("admin-permission-create-node", "node", value, "petpictures.admin", true, fieldDescription("admin-permission-create-node", permissionNodeHelp, errText), errText != "")
+	}
+}
+
+// AdminPermissionForm renders the form that creates a permission, or the out-of-band fresh copy of it a create sends.
+templ AdminPermissionForm(oob bool) {
+	<form
+		id="admin-permission-create-form"
+		if oob {
+			hx-swap-oob="true"
+		}
+		class="group space-y-4 rounded-lg border border-input p-4"
+		hx-post="/admin/permissions"
+	>
+		<h2 class="text-lg font-semibold">New permission</h2>
+		@AdminPermissionCreateNode("", "", false)
+		@formField("admin-permission-create-description", "Description", "") {
+			@proseInput("admin-permission-create-description", "description", "")
+		}
+		@formField("admin-permission-create-type", "Value", "") {
+			<select id="admin-permission-create-type" name="value_type" class={ selectClass }>
+				<option value="">None (granted as is)</option>
+				<option value="int">Whole number</option>
+				<option value="string">Text</option>
+				<option value="string_list">List of text</option>
+			</select>
+		}
+		<div id="admin-permission-create-merge-field" class="hidden space-y-2 group-has-[option[value=int]:checked]:block">
+			<label class="text-sm font-medium leading-none" for="admin-permission-create-merge">When an account holds it through several roles</label>
+			<select id="admin-permission-create-merge" name="merge" class={ selectClass }>
+				<option value="max">Use the highest value</option>
+				<option value="min">Use the lowest value</option>
+			</select>
+		</div>
+		<button id="admin-permission-create-submit" type="submit" class={ submitClass }>Create permission</button>
+	</form>
+}
+
+// AdminPermissionsPage serves the permission list shell, which loads the list and the create form.
+templ AdminPermissionsPage() {
+	@htmxPage("Permissions - NeuralNexus", adminPermissions())
+}

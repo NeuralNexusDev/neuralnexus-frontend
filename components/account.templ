@@ -1,64 +1,244 @@
 package components
 
+// AccountPlatform is a sign-in platform an account can link.
+type AccountPlatform struct {
+	ID   string
+	Name string
+}
+
+// AccountPlatforms are the platforms the account page lists, in order.
+var AccountPlatforms = []AccountPlatform{
+	{"discord", "Discord"},
+	{"twitch", "Twitch"},
+	{"microsoft", "Microsoft"},
+	{"xboxlive", "Xbox Live"},
+	{"steam", "Steam"},
+}
+
+// AccountData is what the account page shows.
+type AccountData struct {
+	Username      string
+	PasswordAuth  bool
+	SettingsError string
+	LinksError    string
+	Links         map[string]LinkedAccount
+	AdminLink     bool
+}
+
+// AccountSettingsData is the password login setting.
+type AccountSettingsData struct {
+	PasswordAuth bool
+	Error        string
+}
+
+// Account renders the account settings page, which loads its content.
 templ Account() {
 	@ErrorBanner()
-	<div class="mx-auto max-w-sm space-y-6">
-		<div class="space-y-2 text-center">
-			<h1 class="text-3xl font-bold">Account Settings</h1>
-			<p class="text-gray-500 dark:text-gray-400">
-				Manage your profile and connected sign-in methods
-			</p>
-		</div>
-		<div class="space-y-2">
-			<h2 class="text-lg font-semibold">Profile</h2>
-			<div class="rounded-md border border-input p-4 text-sm">
-				<span class="text-gray-500 dark:text-gray-400">Username:</span>
-				<span id="account-username">Loading...</span>
-			</div>
-		</div>
-		<div
-			data-orientation="horizontal"
-			role="none"
-			class="shrink-0 bg-gray-100 h-[1px] w-full my-8"
-		></div>
-		<div class="space-y-2">
-			<h2 class="text-lg font-semibold">Sign-in Settings</h2>
-			<div class="rounded-lg border border-input p-3 flex items-center justify-between">
-				<label for="password-auth-enabled" class="text-sm font-medium">
-					Password login
-				</label>
-				<label class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full bg-gray-300 transition-colors has-[:checked]:bg-primary has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 dark:bg-gray-600">
-					<input
-						type="checkbox"
-						id="password-auth-enabled"
-						disabled
-						onchange="setPasswordAuthEnabled(this.checked)"
-						class="peer sr-only"
-					/>
-					<span class="pointer-events-none inline-block h-4 w-4 translate-x-0.5 rounded-full bg-background shadow transition-transform peer-checked:translate-x-4"></span>
-				</label>
-			</div>
-		</div>
-		<div
-			data-orientation="horizontal"
-			role="none"
-			class="shrink-0 bg-gray-100 h-[1px] w-full my-8"
-		></div>
-		<div class="space-y-2">
-			<h2 class="text-lg font-semibold">Connected Accounts</h2>
-			<p class="text-gray-500 dark:text-gray-400 text-sm">
-				Link another sign-in method below, or use the Login checkbox and
-				Unlink button to manage a method you've already connected.
-			</p>
-			@LinkAccountButtons()
-		</div>
-	</div>
+	@pageShell("max-w-sm", "", "/account/content") {
+		@pageHeading("Account Settings", "Manage your profile and connected sign-in methods")
+	}
+	@LinkAccountSetup()
 	<script>
 		showAuthErrorFromQuery();
-		loadAccountProfile();
 	</script>
 }
 
+// AccountContent renders the profile, the sign-in setting and the connected accounts, which the account page loads.
+templ AccountContent(d AccountData) {
+	<div class="mx-auto max-w-sm space-y-6">
+		<div class="space-y-2">
+			<h2 class="text-lg font-semibold">Profile</h2>
+			<div class="rounded-md border border-input p-4 text-sm">
+				<span class={ mutedClass }>Username:</span>
+				<span id="account-username">{ d.Username }</span>
+			</div>
+		</div>
+		if d.AdminLink {
+			@AdminDashboardLink()
+		}
+		@separator()
+		<div class="space-y-2">
+			<h2 class="text-lg font-semibold">Sign-in Settings</h2>
+			@AccountPasswordLogin(AccountSettingsData{PasswordAuth: d.PasswordAuth, Error: d.SettingsError}, false)
+		</div>
+		@separator()
+		<div class="space-y-2">
+			<h2 class="text-lg font-semibold">Connected Accounts</h2>
+			<p class={ mutedSmallClass }>
+				Link another sign-in method below, or use the Login checkbox and
+				Unlink button to manage a method you've already connected.
+			</p>
+			if d.LinksError != "" {
+				<p id="account-links-error" role="alert" class={ errorTextClass }>{ d.LinksError }</p>
+			} else {
+				<div id="account-links" class="space-y-2">
+					for _, platform := range AccountPlatforms {
+						@AccountLinkRow(platform, d.Links[platform.ID], d.HasLink(platform.ID), false)
+					}
+					if false {
+						@AccountLinkRow(AccountPlatform{ID: "minecraft", Name: "Minecraft"}, LinkedAccount{}, false, false)
+					}
+				</div>
+			}
+		</div>
+	</div>
+}
+
+// HasLink reports whether the account is linked to the platform.
+func (d AccountData) HasLink(platform string) bool {
+	_, ok := d.Links[platform]
+	return ok
+}
+
+// AccountPasswordLogin renders the password login setting, which htmx swaps in after a change, or the out-of-band copy a failed change sends.
+templ AccountPasswordLogin(d AccountSettingsData, oob bool) {
+	<div
+		id="account-password"
+		if oob {
+			hx-swap-oob="true"
+		}
+		{ selfSwapAttrs... }
+		class="space-y-2"
+	>
+		<div class="rounded-lg border border-input p-3 flex items-center justify-between">
+			<label for="password-auth-enabled" class="text-sm font-medium">
+				Password login
+			</label>
+			@toggle() {
+				<input
+					type="checkbox"
+					id="password-auth-enabled"
+					name="password_auth"
+					value="true"
+					checked?={ d.PasswordAuth }
+					disabled?={ d.Error != "" }
+					hx-post="/account/settings"
+					hx-trigger="change"
+					role="switch"
+					class="peer sr-only"
+				/>
+			}
+		</div>
+		if d.Error != "" {
+			<p id="account-password-error" role="alert" class={ errorTextClass }>{ d.Error }</p>
+		}
+	</div>
+}
+
+func accountActionLabel(linked bool) string {
+	if linked {
+		return "Unlink"
+	}
+	return "Link"
+}
+
+// AccountLinkRow renders one platform, linked or not, which htmx swaps in after a change to it, or the out-of-band copy a failed change sends.
+templ AccountLinkRow(platform AccountPlatform, link LinkedAccount, linked bool, oob bool) {
+	{{ base := "link-" + platform.ID }}
+	<div
+		id={ base }
+		if oob {
+			hx-swap-oob="true"
+		}
+		{ selfSwapAttrs... }
+		class="rounded-lg border border-input p-3 space-y-2"
+	>
+		<div class="flex items-center gap-2">
+			@accountPlatformIcon(platform.ID)
+			<div class="min-w-0 flex-1">
+				<div class="flex items-center gap-1">
+					<span id={ base + "-title" } class="text-sm font-medium truncate">
+						if linked && link.PlatformUsername != "" {
+							{ link.PlatformUsername }
+						} else {
+							{ platform.Name }
+						}
+					</span>
+					<svg
+						id={ base + "-verified-icon" }
+						class={ "w-4 h-4 shrink-0 text-green-600 dark:text-green-500", templ.KV("hidden", !linked || !link.Verified) }
+						xmlns="http://www.w3.org/2000/svg"
+						viewBox="0 0 24 24"
+					>
+						<title>Verified</title>
+						<path fill="currentColor" d="M9.55 18L3.85 12.3l1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path>
+					</svg>
+					<span id={ base + "-status" } class={ subtleXsClass }>
+						if linked && !link.Verified {
+							Unverified
+						}
+					</span>
+				</div>
+				<span id={ base + "-subtitle" } class={ subtleXsClass, templ.KV("hidden", !linked) }>
+					{ platform.Name }
+				</span>
+			</div>
+			<button
+				id={ base + "-action" }
+				type="button"
+				aria-label={ accountActionLabel(linked) + " " + platform.Name }
+				if linked {
+					hx-delete={ "/account/links/" + platform.ID }
+					hx-confirm={ "Unlink " + platform.Name + " from your account?" }
+				} else {
+					data-platform={ platform.ID }
+					onclick="handleLinkAction(this.dataset.platform)"
+				}
+				class="-m-1 shrink-0 p-1 text-xs underline"
+			>
+				{ accountActionLabel(linked) }
+			</button>
+		</div>
+		<div class="flex items-center justify-between pl-9">
+			<label for={ base + "-login-enabled" } class={ subtleXsClass }>
+				Allow logins
+			</label>
+			@toggle() {
+				@AccountLoginInput(platform, linked && link.LoginEnabled, !linked || !link.Verified, false)
+			}
+		</div>
+	</div>
+}
+
+// AccountLoginInput renders the checkbox that allows logins through a platform, or the out-of-band copy a refused change sends.
+templ AccountLoginInput(platform AccountPlatform, checked bool, disabled bool, oob bool) {
+	<input
+		type="checkbox"
+		id={ "link-" + platform.ID + "-login-enabled" }
+		if oob {
+			hx-swap-oob="true"
+		}
+		aria-label={ "Allow logins for " + platform.Name }
+		name="login_enabled"
+		value="true"
+		checked?={ checked }
+		disabled?={ disabled }
+		hx-post={ "/account/links/" + platform.ID }
+		hx-trigger="change"
+		role="switch"
+		class="peer sr-only"
+	/>
+}
+
+templ accountPlatformIcon(platform string) {
+	switch platform {
+		case "microsoft":
+			<img src="/public/MicrosoftLogo.svg" alt="Microsoft Logo" class="w-5 h-5 shrink-0"/>
+		case "minecraft":
+			<img src="/public/MinecraftLogo.svg" alt="Minecraft Logo" class="h-5 w-auto shrink-0"/>
+		case "steam":
+			<img src="/public/SteamLogo.svg" alt="Steam Logo" class="w-5 h-5 shrink-0 dark:hidden"/>
+			<img src="/public/SteamLogoWhite.svg" alt="Steam Logo" class="w-5 h-5 shrink-0 hidden dark:block"/>
+		default:
+			if provider, ok := oauthProviderFor(platform); ok {
+				<div class={ "flex items-center justify-center w-7 h-7 rounded-md shrink-0 " + provider.Background }>
+					<img src={ provider.Icon } alt={ provider.Alt } class="w-4 h-4"/>
+				</div>
+			}
+	}
+}
+
+// AccountPage serves the account settings shell, which loads the profile, the sign-in setting and the connected accounts.
 templ AccountPage() {
-	@WrapContents(Account())
+	@htmxPage("Account - NeuralNexus", Account())
 }

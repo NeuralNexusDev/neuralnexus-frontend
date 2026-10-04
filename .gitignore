@@ -30,6 +30,6 @@ tmp
 /public/css/styles.css
 
 # Playwright output
-/test/integration/test-results
-/test/integration/playwright-report
-/test/integration/blob-report
+/test/js/test-results
+/test/js/playwright-report
+/test/js/blob-report
