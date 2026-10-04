@@ -366,70 +366,31 @@ func TestRefusedRoleNamesFlagTheNameField(t *testing.T) {
 	})
 }
 
-func TestFailedAPICallsLogTheRouteNotTheValuesInThePath(t *testing.T) {
-	t.Run("a bee review", func(t *testing.T) {
-		for _, name := range []string{"Zq9-distinctive-name", "Zq9 distinctive/name?", "Zq9%distinctive"} {
-			for _, choice := range []string{"accept", "reject"} {
-				f := newFakeBackend(t)
-				f.problem("PUT /bee-name-generator/suggestion/"+url.PathEscape(name), 502, "the API is down")
-				f.problem("DELETE /bee-name-generator/suggestion/"+url.PathEscape(name), 502, "the API is down")
-				buf := captureLog(t)
-				rec := reviewBee(url.Values{"name": {name}, "action": {choice}})
-				assertStatus(t, rec, http.StatusBadGateway)
-				want := map[string]string{"accept": "PUT", "reject": "DELETE"}[choice] + " /bee-name-generator/suggestion/{name}"
-				if !strings.Contains(buf.String(), `api="`+want+`"`) {
-					t.Errorf("%s %q: the log is missing the route %q:\n%s", choice, name, want, buf.String())
-				}
-				if strings.Contains(buf.String(), "Zq9") || strings.Contains(buf.String(), "distinctive") {
-					t.Errorf("%s %q: the log holds the name:\n%s", choice, name, buf.String())
-				}
-			}
-		}
-	})
-	t.Run("an ID in the address", func(t *testing.T) {
-		f := newFakeBackend(t)
-		f.problem("PUT /users/"+idBob, 500, "database down")
-		buf := captureLog(t)
-		assertStatus(t, saveUser(userForm(url.Values{"username": {"robert"}})), http.StatusInternalServerError)
-		failure, _, _ := strings.Cut(buf.String(), "\n")
-		if !strings.Contains(failure, `api="PUT /users/{id}"`) || strings.Contains(failure, idBob) {
-			t.Errorf("the failure line names the route or holds the ID:\n%s", failure)
-		}
-	})
-}
-
-func TestAPIRoutesNameEveryCallTheHandlersMake(t *testing.T) {
-	cases := []struct{ method, path, want string }{
-		{"GET", "/users?limit=200&offset=0", "GET /users"},
-		{"GET", "/users/" + idBob, "GET /users/{id}"},
-		{"PUT", "/users/" + idBob, "PUT /users/{id}"},
-		{"GET", "/users/" + idBob + "/links", "GET /users/{id}/links"},
-		{"GET", "/users/" + idBob + "/permissions", "GET /users/{id}/permissions"},
-		{"GET", "/users/me/links", "GET /users/me/links"},
-		{"GET", "/users/me/permissions", "GET /users/me/permissions"},
-		{"PATCH", "/users/me/settings", "PATCH /users/me/settings"},
-		{"PATCH", "/users/me/link/discord", "PATCH /users/me/link/{platform}"},
-		{"DELETE", "/users/me/link/discord", "DELETE /users/me/link/{platform}"},
-		{"GET", "/roles", "GET /roles"},
-		{"POST", "/roles", "POST /roles"},
-		{"GET", "/roles/" + idBee, "GET /roles/{id}"},
-		{"PATCH", "/roles/" + idBee, "PATCH /roles/{id}"},
-		{"DELETE", "/roles/" + idBee, "DELETE /roles/{id}"},
-		{"PUT", "/roles/" + idBee + "/permissions/" + idPBee, "PUT /roles/{id}/permissions/{permission}"},
-		{"DELETE", "/roles/" + idBee + "/permissions/" + idPBee, "DELETE /roles/{id}/permissions/{permission}"},
-		{"GET", "/permissions", "GET /permissions"},
-		{"POST", "/permissions", "POST /permissions"},
-		{"DELETE", "/permissions/" + idPBee, "DELETE /permissions/{id}"},
-		{"GET", "/bee-name-generator/suggestion/100", "GET /bee-name-generator/suggestion/{limit}"},
-		{"PUT", "/bee-name-generator/suggestion/royal%20jelly%2Fqueen%3F", "PUT /bee-name-generator/suggestion/{name}"},
-		{"DELETE", "/bee-name-generator/suggestion/100%25", "DELETE /bee-name-generator/suggestion/{name}"},
-		{"GET", "/somewhere/Zq9", "GET unlisted"},
-		{"TRACE", "/roles", "TRACE unlisted"},
+func TestFailedAPICallsLogTheMethodAndPathOfTheCall(t *testing.T) {
+	cases := []struct {
+		name   string
+		call   func() *httptest.ResponseRecorder
+		route  string
+		status int
+	}{
+		{"a bee review", func() *httptest.ResponseRecorder {
+			return reviewBee(url.Values{"name": {"royal jelly/queen?"}, "action": {"accept"}})
+		}, "PUT /bee-name-generator/suggestion/royal%20jelly%2Fqueen%3F", http.StatusBadGateway},
+		{"a user save", func() *httptest.ResponseRecorder {
+			return saveUser(userForm(url.Values{"username": {"robert"}}))
+		}, "PUT /users/" + idBob, http.StatusBadGateway},
 	}
 	for _, tc := range cases {
-		if got := apiRoute(tc.method, tc.path); got != tc.want {
-			t.Errorf("apiRoute(%s %s) = %q, want %q", tc.method, tc.path, got, tc.want)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFakeBackend(t)
+			f.problem(tc.route, tc.status, "the API is down")
+			buf := captureLog(t)
+			assertStatus(t, tc.call(), tc.status)
+			failure, _, _ := strings.Cut(buf.String(), "\n")
+			if !strings.Contains(failure, `api="`+tc.route+`"`) {
+				t.Errorf("the failure line does not hold the call %q:\n%s", tc.route, failure)
+			}
+		})
 	}
 }
 

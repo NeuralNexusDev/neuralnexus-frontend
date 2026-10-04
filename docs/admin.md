@@ -24,7 +24,7 @@ A middleware around the whole router adds a second check. It rejects any request
 - A 400, 409 or 422 on a role name, permission node or username also redraws that field with `aria-invalid`, the message and focus.
 - A reload that fails after a write succeeded goes through `afterWrite`, which says the change was made.
 
-The server logs failures with a status of 500 or more. The log line has the request ID, the route pattern of the API call, such as `PUT /roles/{id}`, and the cause. It does not have the path, so an ID or a name that someone typed stays out of the log. It never has the cookie, the form or anything else a person typed.
+The server logs failures with a status of 500 or more. The log line has the request ID, the method and path of the API call, and the cause. It never has the cookie or the form body.
 
 ## What happens while a request runs
 
