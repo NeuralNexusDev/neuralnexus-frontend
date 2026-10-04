@@ -133,8 +133,7 @@ templ OAuthButtons(labelPrefix string) {
 	</div>
 }
 
-// LinkAccountSetup holds what starting to link a platform needs in the browser, which the account rows cannot carry because htmx swaps them.
-templ LinkAccountSetup() {
+templ linkAccountSetup() {
 	<script>
     const linkRedirect = window.location.href;
     </script>

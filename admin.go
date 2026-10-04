@@ -75,7 +75,6 @@ func failFragment(w http.ResponseWriter, r *http.Request, err error, restore ...
 	render(w, r, append([]templ.Component{components.AdminErrorText(message)}, restore...)...)
 }
 
-// failEditor also empties the status line of the editor, so a failed change is not shown under the Saved of the one before it.
 func failEditor(w http.ResponseWriter, r *http.Request, statusID string, err error, restore ...templ.Component) {
 	failFragment(w, r, err, append([]templ.Component{components.AdminStatus(statusID, "")}, restore...)...)
 }

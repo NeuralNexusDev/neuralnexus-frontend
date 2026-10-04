@@ -238,7 +238,6 @@ func TestAdminRoleSaveValueDoesNotReloadThePermissionList(t *testing.T) {
 	seedRoleEditor(f)
 	f.on("PUT /roles/"+idBee+"/permissions/"+idPRate, 204, ``)
 	putRoleValue(idPRate, url.Values{"value_" + idPRate: {"250"}})
-	// The one lookup is the one that builds the request body; the reload reads only the role.
 	var lookups int
 	for _, uri := range f.uris() {
 		if uri == "GET /permissions" {

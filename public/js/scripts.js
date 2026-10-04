@@ -465,7 +465,6 @@ document.addEventListener('htmx:finally:request', (event) => {
     requests.get(event.detail.ctx)?.region?.removeAttribute('aria-busy');
 });
 
-/** htmx drops a change made while another is in flight without a word, so say so. */
 const reportDropped = (event) => {
     const banner = document.getElementById('admin-error');
     if (banner && event.target.closest?.('[aria-busy="true"]')) {

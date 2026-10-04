@@ -145,7 +145,6 @@ func getPage(target string) *httptest.ResponseRecorder {
 	return adminReq{method: http.MethodGet, target: target}.do()
 }
 
-// actionDelete sends a DELETE as htmx does, with the form in the query.
 func actionDelete(target string, form url.Values) *httptest.ResponseRecorder {
 	if len(form) > 0 {
 		target += "?" + form.Encode()
@@ -157,7 +156,6 @@ func action(method, target string, form url.Values) *httptest.ResponseRecorder {
 	return adminReq{method: method, target: target, form: form, htmx: true}.do()
 }
 
-// bannerText is the text of an error response without the out-of-band fragments that follow it.
 func bannerText(rec *httptest.ResponseRecorder) string {
 	body, _, _ := strings.Cut(rec.Body.String(), "<")
 	return body

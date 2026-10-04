@@ -55,7 +55,6 @@ func TestAccountContentShowsProfileSettingAndLinks(t *testing.T) {
 	}
 }
 
-// accountRow returns the markup of one platform's row, which runs up to the next platform's row.
 func accountRow(body string, platform string) string {
 	order := []string{"discord", "twitch", "microsoft", "xboxlive", "steam"}
 	start := strings.Index(body, `id="link-`+platform+`" `)

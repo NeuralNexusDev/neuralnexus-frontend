@@ -700,7 +700,7 @@ templ AdminRoleContent(d AdminRoleData) {
 	<div id="admin-role" class={ "space-y-6 " + adminBusyClass } hx-sync:inherited="this:drop" hx-indicator:inherited="this">
 		@AdminRoleHeader(d, false)
 		@AdminRoleForm(d)
-		@AdminRoleGrants(d)
+		@adminRoleGrants(d)
 		@AdminRoleDelete(d, false)
 	</div>
 }
@@ -766,8 +766,7 @@ templ AdminRoleDelete(d AdminRoleData, oob bool) {
 	</button>
 }
 
-// AdminRoleGrants renders the granted permissions and the grant form, which a change swaps by region.
-templ AdminRoleGrants(d AdminRoleData) {
+templ adminRoleGrants(d AdminRoleData) {
 	<div id="admin-role-grants" class="space-y-6" hx-target:inherited="#admin-role-granted" hx-swap:inherited="outerHTML">
 		@AdminRoleGranted(d)
 		@AdminRoleGrantForm(d, false)
