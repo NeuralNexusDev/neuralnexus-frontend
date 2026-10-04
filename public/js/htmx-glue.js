@@ -66,6 +66,7 @@
         requests.set(event.detail.ctx, request);
         // htmx logs a rejection with a reason to the console and skips one without, and it aborts a replaced request
         // and a timed-out one the same way. Only the timeout is an error, so a replacement aborts with a null reason.
+        // ctx.request.abort is an htmx 4.0.0 internal, so check it again when the htmx version changes.
         const abort = event.detail.ctx.request.abort;
         event.detail.ctx.request.abort = () => abort(request.timedOut() ? undefined : null);
         latestRequests.set(event.target, request);
@@ -164,6 +165,7 @@
         }
         clearBusy(request.element);
         if (request.element.dataset.pageLoad !== undefined) {
+            // ctx.response and ctx.status are htmx 4.0.0 internals, so check them again when the htmx version changes.
             const { ctx } = event.detail;
             if (ctx.response?.status < 400 && !ctx.status.startsWith('error')) {
                 setPageStatus('Loaded');

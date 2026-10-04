@@ -4,7 +4,7 @@ import { test as base, expect } from '@playwright/test';
 
 export { expect };
 
-export const STUB = process.env.NN_API_URL;
+const STUB = process.env.NN_API_URL;
 export const APP = process.env.BASE_URL || 'http://localhost:8099';
 const HTMX_CDN = 'https://s3.neuralnexus.dev/cdn/htmx/v4.0.0/htmx.min.js';
 const HTMX_FILE = fileURLToPath(new URL('../node_modules/htmx.org/dist/htmx.min.js', import.meta.url));

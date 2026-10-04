@@ -88,6 +88,7 @@ templ oauthBases(prefix string) {
 	}
 }
 
+// OAuthButtons renders a sign-in button for each OAuth provider, labelled with labelPrefix and the provider name.
 templ OAuthButtons(labelPrefix string) {
 	@oauthBases("")
 	for i, provider := range oauthProviders {
@@ -136,6 +137,7 @@ templ LinkAccountSetup() {
 	@oauthBases("link-")
 }
 
+// Login renders the login form and the OAuth buttons.
 templ Login() {
 	@ErrorBanner()
 	<div class="mx-auto max-w-sm space-y-6">
@@ -185,10 +187,12 @@ templ Login() {
 	</script>
 }
 
+// LoginPage serves the login form in the site layout.
 templ LoginPage() {
 	@WrapContents(Login())
 }
 
+// Register renders the sign-up form and the OAuth buttons.
 templ Register() {
 	@ErrorBanner()
 	<div class="mx-auto max-w-sm space-y-6">
@@ -255,6 +259,7 @@ templ Register() {
 	</script>
 }
 
+// RegisterPage serves the sign-up form in the site layout.
 templ RegisterPage() {
 	@WrapContents(Register())
 }

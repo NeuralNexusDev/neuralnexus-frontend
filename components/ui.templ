@@ -111,8 +111,6 @@ templ formField(id string, label string, help string) {
 	}
 }
 
-// fieldWithError renders a labelled field. Help and error text get ids built from the field id, which the input
-// names in aria-describedby through fieldDescription. A server error replaces the field out of band.
 templ fieldWithError(id string, label string, help string, errText string, oob bool) {
 	<div
 		id={ id + "-field" }

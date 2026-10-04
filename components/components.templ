@@ -20,6 +20,7 @@ templ WrapContents(contents templ.Component) {
 	@WrapContentsWithHead("NeuralNexus", nil, contents)
 }
 
+// WrapContentsWithHead renders the page layout around contents, with a title and extra head content, which can be nil.
 templ WrapContentsWithHead(title string, head templ.Component, contents templ.Component) {
 	<!DOCTYPE html>
 	<html lang="en">
@@ -88,6 +89,7 @@ templ ThemeToggle() {
 	</button>
 }
 
+// Header renders the site navigation, the theme button and the account, login and logout buttons.
 templ Header() {
 	<header class="p-8 flex items-center justify-between mb-8 text-lg text-red-600">
 		<nav aria-label="Main" class="flex items-center gap-4">
@@ -151,6 +153,7 @@ templ ProjectsPage() {
 	@WrapContents(Projects())
 }
 
+// BeeNameGenerator renders the bee name generator: the button that draws a name and the form that suggests one.
 templ BeeNameGenerator() {
 	<script>
 		function getBeeName() {
@@ -259,10 +262,12 @@ templ BeeNameGeneratorAdminLink() {
 	</a>
 }
 
+// BeeNameGeneratorPage serves the bee name generator in the site layout, with htmx for the review link.
 templ BeeNameGeneratorPage() {
 	@htmxPage("Bee name generator - NeuralNexus", BeeNameGenerator())
 }
 
+// BeeNameGeneratorAdmin renders the shell of the suggestion review page, which loads the pending suggestions.
 templ BeeNameGeneratorAdmin() {
 	@pageShell("max-w-md", "", "/project/bee-name-generator/admin/suggestions") {
 		@pageHeading("Bee Name Suggestions", "Accept a suggestion to add it to the generator, or reject it to discard it")
