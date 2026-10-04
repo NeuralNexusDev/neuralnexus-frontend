@@ -40,6 +40,8 @@ function defaultState() {
         { platform: 'steam', platform_id: '76561198000000000' },
       ],
     },
+    account: { username: 'testuser', password_auth: true },
+    myLinks: [],
     suggestions: ['buzz', 'honey', 'wax'],
     failures: {},
     delays: {},
@@ -181,6 +183,33 @@ export async function handleAdmin(req, res, pathname, searchParams) {
   }
   if (path === '/users/me/permissions') {
     return send(res, 200, state.me);
+  }
+  if (kind === 'users' && id === 'me') {
+    if (!sub && req.method === 'GET') {
+      return send(res, 200, { username: state.account.username });
+    }
+    if (sub === 'settings' && req.method === 'GET') {
+      return send(res, 200, { password_auth: state.account.password_auth });
+    }
+    if (sub === 'settings' && req.method === 'PATCH') {
+      state.account.password_auth = body.password_auth;
+      return send(res, 204);
+    }
+    if (sub === 'links' && req.method === 'GET') {
+      return send(res, 200, state.myLinks);
+    }
+    const link = state.myLinks.find((candidate) => candidate.platform === subId);
+    if (sub === 'link' && !link) {
+      return problem(res, 404, 'That platform is not linked');
+    }
+    if (sub === 'link' && req.method === 'PATCH') {
+      link.login_enabled = body.login_enabled;
+      return send(res, 204);
+    }
+    if (sub === 'link' && req.method === 'DELETE') {
+      state.myLinks = state.myLinks.filter((candidate) => candidate !== link);
+      return send(res, 204);
+    }
   }
   if (kind === 'users') {
     if (!can('users.admin')) {

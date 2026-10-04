@@ -90,9 +90,9 @@ func TestBeeReviewRefusesWhatCannotBeSent(t *testing.T) {
 		form url.Values
 		want string
 	}{
-		{"dot", url.Values{"name": {"."}, "action": {"accept"}}, "That name can't be reviewed here"},
-		{"dots", url.Values{"name": {".."}, "action": {"reject"}}, "That name can't be reviewed here"},
-		{"blank", url.Values{"name": {"  "}, "action": {"accept"}}, "That name can't be reviewed here"},
+		{"dot", url.Values{"name": {"."}, "action": {"accept"}}, "That name cannot be reviewed here"},
+		{"dots", url.Values{"name": {".."}, "action": {"reject"}}, "That name cannot be reviewed here"},
+		{"blank", url.Values{"name": {"  "}, "action": {"accept"}}, "That name cannot be reviewed here"},
 		{"no action", url.Values{"name": {"buzz"}}, "Choose accept or reject"},
 		{"other action", url.Values{"name": {"buzz"}, "action": {"delete"}}, "Choose accept or reject"},
 	}

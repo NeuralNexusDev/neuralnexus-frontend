@@ -61,7 +61,8 @@ func adminShellFor(page func(id string) templ.Component) http.Handler {
 }
 
 // failFragment answers an htmx request with the error for the banner, or sends a signed-out visitor to the login page.
-func failFragment(w http.ResponseWriter, r *http.Request, err error) {
+// The restore fragments are out-of-band copies that put back what the failed change had altered in the browser.
+func failFragment(w http.ResponseWriter, r *http.Request, err error, restore ...templ.Component) {
 	if errors.Is(err, errUnauthorized) {
 		w.Header().Set("HX-Redirect", "/login")
 		w.WriteHeader(http.StatusUnauthorized)
@@ -76,7 +77,7 @@ func failFragment(w http.ResponseWriter, r *http.Request, err error) {
 	if id := statusLineID(r.URL.Path); id != "" {
 		parts = append(parts, components.AdminStatus(id, ""))
 	}
-	render(w, r, parts...)
+	render(w, r, append(parts, restore...)...)
 }
 
 // statusLineID returns the status line of the editor a path belongs to, which a failed change empties.

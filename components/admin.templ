@@ -19,6 +19,8 @@ type LinkedAccount struct {
 	Platform         string `json:"platform"`
 	PlatformUsername string `json:"platform_username"`
 	PlatformID       string `json:"platform_id"`
+	Verified         bool   `json:"verified"`
+	LoginEnabled     bool   `json:"login_enabled"`
 }
 
 // Permission is a permission node roles can grant.

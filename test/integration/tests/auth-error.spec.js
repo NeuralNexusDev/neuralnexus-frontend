@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, signIn } from './helpers.js';
 
 // Mirrors nn-api's redirectWithError (modules/auth/routes/auth.go): on an
 // OAuth/OpenID failure the API 303-redirects back to the frontend with an
@@ -29,10 +29,7 @@ test.describe('OAuth/OpenID error redirects', () => {
   });
 
   test('shows the problem detail on /account (link-mode failures redirect here)', async ({ page }) => {
-    await page.route('**/api/v1/users/me', (route) =>
-      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ username: 'tester' }) })
-    );
-    await page.route('**/api/v1/users/me/links', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+    await signIn(page);
 
     const problem = encodeProblem({ type: 'about:blank', status: 401, title: 'Unauthorized', detail: 'You must be logged in to link an account' });
     await page.goto(`/account?problem=${problem}`);

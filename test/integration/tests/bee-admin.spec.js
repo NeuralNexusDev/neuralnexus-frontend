@@ -1,4 +1,4 @@
-import { test, expect, signIn, HOSTILE, error, expectNoInjection } from './admin-helpers.js';
+import { test, expect, signIn, HOSTILE, error, expectNoInjection } from './helpers.js';
 
 test.describe('bee name generator - suggestion review', () => {
   const rows = (page) => page.locator('#bee-suggestions li');
@@ -60,7 +60,7 @@ test.describe('bee name generator - suggestion review', () => {
     const { writes } = await signIn(page, { me: ['beenamegenerator.admin'], suggestions: ['..', 'ok'] });
     await page.goto(page_);
     await page.getByRole('button', { name: 'Accept ..' }).click();
-    await expect(error(page)).toHaveText("That name can't be reviewed here");
+    await expect(error(page)).toHaveText('That name cannot be reviewed here');
     await expect(rows(page)).toHaveCount(2);
     expect(await writes()).toEqual([]);
   });

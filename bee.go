@@ -50,7 +50,7 @@ func beeReviewHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 		return
 	}
 	if strings.TrimSpace(name) == "" || isDotSegment(name) {
-		failFragment(w, r, invalidInput("That name can't be reviewed here"))
+		failFragment(w, r, invalidInput("That name cannot be reviewed here"))
 		return
 	}
 	if _, err := adminSend[struct{}](a, method, "/bee-name-generator/suggestion/"+url.PathEscape(name), nil, fallback); err != nil {

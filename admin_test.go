@@ -587,9 +587,11 @@ func TestAccountAdminLinkIsEmptyWhenThePermissionsCannotBeRead(t *testing.T) {
 	}
 }
 
-func TestAccountPageLoadsTheAdminLinkThroughHTMX(t *testing.T) {
-	rec := getPage("/account")
-	assertBody(t, rec, `hx-get="/account/admin-link"`, `hx-trigger="load"`, `hx-swap="outerHTML"`, "htmx.v1.9.5.min.js")
+func TestAccountContentLoadsTheAdminLinkThroughHTMX(t *testing.T) {
+	f := newFakeAdmin(t)
+	seedAccount(f)
+	rec := getPage("/account/content")
+	assertBody(t, rec, `hx-get="/account/admin-link"`, `hx-trigger="load"`, `hx-swap="outerHTML"`)
 	assertNoBody(t, rec, "showAdminDashboardLink", `id="admin-dashboard-link"`)
 }
 

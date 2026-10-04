@@ -1,4 +1,4 @@
-import { test, expect, signIn, ID, HOSTILE, error, expectNoInjection } from './admin-helpers.js';
+import { test, expect, signIn, ID, HOSTILE, error, expectNoInjection } from './helpers.js';
 
 test.describe('admin - roles', () => {
   const granted = (page) => page.locator('#admin-role-permissions li');

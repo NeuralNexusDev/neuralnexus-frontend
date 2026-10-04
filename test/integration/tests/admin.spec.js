@@ -1,4 +1,4 @@
-import { test, expect, signIn, STUB, APP, error } from './admin-helpers.js';
+import { test, expect, signIn, STUB, APP, error } from './helpers.js';
 
 test.describe('admin - access', () => {
   test('a signed-out visitor is sent to the login page', async ({ page }) => {
@@ -47,11 +47,7 @@ test.describe('admin - access', () => {
 
 test.describe('admin - settings link', () => {
   async function openAccount(page, permissions) {
-    const json = (body) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
-    await signIn(page, { me: permissions });
-    await page.route(`${STUB}/api/v1/users/me`, (route) => route.fulfill(json({ username: 'admin' })));
-    await page.route(`${STUB}/api/v1/users/me/links`, (route) => route.fulfill(json([])));
-    await page.route(`${STUB}/api/v1/users/me/settings`, (route) => route.fulfill(json({ password_auth: true })));
+    await signIn(page, { me: permissions, account: { username: 'admin', password_auth: true } });
     const answered = page.waitForResponse('**/account/admin-link');
     await page.goto('/account');
     await answered;
@@ -74,12 +70,10 @@ test.describe('admin - settings link', () => {
     });
   }
 
-  test('the account page has no admin link when the session is not accepted', async ({ page }) => {
+  test('the account page sends a session the API does not accept to the login page', async ({ page }) => {
     await page.route('**/login', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: 'login' }));
-    const answered = page.waitForResponse('**/account/admin-link');
     await page.goto('/account');
-    await answered;
-    await expect(page.locator('#admin-dashboard-link')).toHaveCount(0);
+    await expect(page).toHaveURL(/\/login$/);
   });
 });
 
