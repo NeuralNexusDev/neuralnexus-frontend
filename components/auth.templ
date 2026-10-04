@@ -90,7 +90,7 @@ templ oauthBases(prefix string) {
 
 templ OAuthButtons(labelPrefix string) {
 	@oauthBases("")
-	for _, provider := range oauthProviders {
+	for i, provider := range oauthProviders {
 		<a
 			href=""
 			id={ provider.ElementID }
@@ -102,9 +102,11 @@ templ OAuthButtons(labelPrefix string) {
 				<img src={ provider.Icon } alt={ provider.Alt } class="w-6 h-6 mr-2"/>
 			</button>
 		</a>
-		<div class="mt-2"></div>
+		if i < len(oauthProviders)-1 {
+			<div class="mt-2"></div>
+		}
 	}
-	<div class="flex justify-center">
+	<div class="mt-2 flex justify-center">
 		<a href="" id="steam-oauth" onclick="startOAuthLogin('steam', null); return false;">
 			<img src="/public/SteamSignIn.png" alt="Sign in through Steam"/>
 		</a>

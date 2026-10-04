@@ -7,6 +7,7 @@ const (
 
 	mutedClass      = "text-gray-500 dark:text-gray-400"
 	mutedXsClass    = mutedClass + " text-xs"
+	subtleXsClass   = "text-xs text-muted-foreground"
 	mutedSmallClass = mutedClass + " text-sm"
 	emptyClass      = mutedSmallClass + " text-center"
 	errorTextClass  = "text-sm text-red-600 dark:text-red-400"
@@ -25,7 +26,6 @@ const (
 	buttonClass     = buttonBaseClass + " border border-input hover:bg-accent hover:text-accent-foreground h-9 px-3"
 	linkButtonClass = buttonBaseClass + " border border-input hover:bg-accent hover:text-accent-foreground ring-offset-background focus-visible:ring-offset-2 h-10 px-4 py-2 w-full"
 	submitClass     = buttonBaseClass + " border hover:bg-primary-light ring-offset-background focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
-	dangerClass     = buttonBaseClass + " border border-red-600 text-red-600 hover:bg-red-600/10 dark:border-red-400 dark:text-red-400 dark:hover:bg-red-400/10 ring-offset-background h-10 w-full px-4 py-2"
 )
 
 var (
@@ -120,6 +120,19 @@ templ textInput(id string, name string, value string, placeholder string, requir
 		autocomplete="off"
 		autocapitalize="off"
 		spellcheck="false"
+		class={ inputClass }
+	/>
+}
+
+templ proseInput(id string, name string, value string) {
+	<input
+		id={ id }
+		name={ name }
+		type="text"
+		if value != "" {
+			value={ value }
+		}
+		autocomplete="off"
 		class={ inputClass }
 	/>
 }

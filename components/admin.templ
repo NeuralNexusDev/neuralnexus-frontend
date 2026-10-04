@@ -184,10 +184,14 @@ func (d AdminRoleData) Draft(p RolePermission) string {
 }
 
 const (
-	AdminUserStatusID        = "admin-user-status"
-	AdminRoleStatusID        = "admin-role-status"
+	// AdminUserStatusID is the id of the user editor's status line.
+	AdminUserStatusID = "admin-user-status"
+	// AdminRoleStatusID is the id of the role editor's status line.
+	AdminRoleStatusID = "admin-role-status"
+	// AdminPermissionRowPrefix starts the id of each row in the permission list.
 	AdminPermissionRowPrefix = "permission-"
-	AdminGrantRowPrefix      = "granted-"
+	// AdminGrantRowPrefix starts the id of each row in a role's granted permissions.
+	AdminGrantRowPrefix = "granted-"
 )
 
 func adminUserRowsPath(offset int, search string) string {
@@ -556,7 +560,7 @@ templ AdminRolesContent(d AdminRolesData) {
 				@textInput("admin-role-create-name", "name", "", "moderator", true)
 			}
 			@formField("admin-role-create-description", "Description", "") {
-				@textInput("admin-role-create-description", "description", "", "", false)
+				@proseInput("admin-role-create-description", "description", "")
 			}
 			<button id="admin-role-create-submit" type="submit" class={ submitClass }>Create role</button>
 		</form>
@@ -641,7 +645,7 @@ templ AdminRoleForm(d AdminRoleData) {
 			@textInput("admin-role-name", "name", d.Role.Name, "", true)
 		}
 		@formField("admin-role-description", "Description", "") {
-			@textInput("admin-role-description", "description", d.Role.Description, "", false)
+			@proseInput("admin-role-description", "description", d.Role.Description)
 		}
 		<button id="admin-role-save" type="submit" class={ submitClass }>Save</button>
 	</form>
@@ -657,7 +661,7 @@ templ AdminRoleDelete(d AdminRoleData, oob bool) {
 		type="button"
 		hx-delete={ adminRolePath(d.Role.ID) }
 		hx-confirm={ "Delete the role " + d.Role.Name + "?" }
-		class={ dangerClass }
+		class={ buttonBaseClass + " border border-red-600 text-red-600 hover:bg-red-600/10 dark:border-red-400 dark:text-red-400 dark:hover:bg-red-400/10 ring-offset-background h-10 w-full px-4 py-2" }
 	>
 		Delete role
 	</button>
@@ -844,7 +848,7 @@ templ AdminPermissionForm(oob bool) {
 			@textInput("admin-permission-create-node", "node", "", "petpictures.admin", true)
 		}
 		@formField("admin-permission-create-description", "Description", "") {
-			@textInput("admin-permission-create-description", "description", "", "", false)
+			@proseInput("admin-permission-create-description", "description", "")
 		}
 		@formField("admin-permission-create-type", "Value", "") {
 			<select id="admin-permission-create-type" name="value_type" class={ selectClass }>

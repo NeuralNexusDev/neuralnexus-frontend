@@ -156,13 +156,13 @@ templ AccountLinkRow(platform AccountPlatform, link LinkedAccount, linked bool, 
 						<title>Verified</title>
 						<path fill="currentColor" d="M9.55 18L3.85 12.3l1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path>
 					</svg>
-					<span id={ base + "-status" } class={ mutedXsClass }>
+					<span id={ base + "-status" } class={ subtleXsClass }>
 						if linked && !link.Verified {
 							Unverified
 						}
 					</span>
 				</div>
-				<span id={ base + "-subtitle" } class={ mutedXsClass, templ.KV("hidden", !linked) }>
+				<span id={ base + "-subtitle" } class={ subtleXsClass, templ.KV("hidden", !linked) }>
 					{ platform.Name }
 				</span>
 			</div>
@@ -183,7 +183,7 @@ templ AccountLinkRow(platform AccountPlatform, link LinkedAccount, linked bool, 
 			</button>
 		</div>
 		<div class="flex items-center justify-between pl-9">
-			<label for={ base + "-login-enabled" } class={ mutedXsClass }>
+			<label for={ base + "-login-enabled" } class={ subtleXsClass }>
 				Allow logins
 			</label>
 			@toggle() {
