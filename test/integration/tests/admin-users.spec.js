@@ -193,7 +193,7 @@ test.describe('admin - user editor', () => {
     await username(page).pressSequentially('X');
     await username(page).press('Enter');
     await expect(error(page)).toHaveText('The last change is still being saved. Try again in a moment.');
-    await expect(status(page)).toHaveText('Saved');
+    await expect(status(page)).toHaveText('Saved. Changes made while saving are not saved yet.');
     await expect(error(page)).toHaveText('The change made while saving was not sent. Make it again.');
     await expect(username(page)).toHaveValue('robertX');
     expect(await writes()).toEqual([{ method: 'PUT', path: `/users/${ID.bob}`, body: { username: 'robert' } }]);
@@ -207,7 +207,7 @@ test.describe('admin - user editor', () => {
     await expect(page.locator('#admin-user')).toHaveAttribute('aria-busy', 'true');
     await page.locator(`#admin-user-roles input[value="${ID.owner}"]`).focus();
     await page.keyboard.press('Space');
-    await expect(status(page)).toHaveText('Saved');
+    await expect(status(page)).toHaveText('Saved. Changes made while saving are not saved yet.');
     await expect(page.locator(`#admin-user-roles input[value="${ID.owner}"]`)).toBeChecked();
     await expect(error(page)).toHaveText('');
     expect(await writes()).toEqual([{ method: 'PUT', path: `/users/${ID.bob}`, body: { username: 'robert' } }]);
@@ -223,7 +223,7 @@ test.describe('admin - user editor', () => {
     await username(page).pressSequentially('XY');
     await username(page).press('ArrowLeft');
     await username(page).press('ArrowLeft');
-    await expect(status(page)).toHaveText('Saved');
+    await expect(status(page)).toHaveText('Saved. Changes made while saving are not saved yet.');
     await expect(username(page)).toHaveValue('robertXY');
     await expect(username(page)).toBeFocused();
     expect(await username(page).evaluate((input) => input.selectionStart)).toBe(6);

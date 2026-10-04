@@ -305,6 +305,26 @@ test.describe('admin - role changes while other edits are open', () => {
     expect(await writes()).toEqual([{ method: 'DELETE', path: `/roles/${ID.bee}/permissions/${ID.pBee}`, body: null }]);
   });
 
+  test('a grant form changed while a rename is in flight keeps what was chosen and typed without a message', async ({ page }) => {
+    const { writes } = await signIn(page, { delays: { [`PATCH /roles/${ID.bee}`]: 800 } });
+    await page.goto(roleEditor);
+    await page.locator('#admin-role-name').fill('bee_manager');
+    await page.locator('#admin-role-name').press('Enter');
+    await expect(page.locator('#admin-role')).toHaveAttribute('aria-busy', 'true');
+    await page.locator('#admin-role-grant-permission').selectOption({ label: 'motd' });
+    await page.locator('#admin-role-grant-value input[type="text"]').fill('hello');
+    await expect(page.locator('#admin-role-status')).toHaveText('Saved');
+    await expect(page.locator('#admin-role-grant-permission option:checked')).toHaveText('motd');
+    await expect(page.locator('#admin-role-grant-value input[type="text"]')).toHaveValue('hello');
+    await expect(error(page)).toHaveText('');
+    await page.locator('#admin-role-grant-submit').click();
+    await expect(grantedRows(page)).toHaveCount(3);
+    expect(await writes()).toEqual([
+      { method: 'PATCH', path: `/roles/${ID.bee}`, body: { name: 'bee_manager' } },
+      { method: 'PUT', path: `/roles/${ID.bee}/permissions/${ID.pMotd}`, body: { value: 'hello' } },
+    ]);
+  });
+
   test('a grant select that finishes while a removal is in flight leaves the editor busy', async ({ page }) => {
     await signIn(page, { delays: { [`DELETE /roles/${ID.bee}/permissions/${ID.pBee}`]: 1200 } });
     await page.goto(roleEditor);

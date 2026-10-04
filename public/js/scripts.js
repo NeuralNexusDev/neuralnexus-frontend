@@ -497,7 +497,7 @@ document.addEventListener('htmx:before:swap', (event) => {
         if (request.values.get(key) === fieldState(field)) {
             continue;
         }
-        request.typed.set(key, { state: fieldState(field), form: field.form?.id ?? '', select: field.tagName === 'SELECT' });
+        request.typed.set(key, { state: fieldState(field), form: field.form?.id ?? '', element: field });
         if (field === document.activeElement) {
             let start = null;
             let end = null;
@@ -512,9 +512,14 @@ document.addEventListener('htmx:before:swap', (event) => {
 });
 
 const restoreTyped = (request) => {
-    const blocked = new Set([...request.typed.values()].filter((entry) => entry.select).map((entry) => entry.form));
+    const replaced = [...request.typed.values()].filter((entry) => !entry.element.isConnected);
+    const blocked = new Set(replaced.filter((entry) => entry.element.tagName === 'SELECT').map((entry) => entry.form));
     const fields = fieldsIn(request.region);
+    let restored = false;
     for (const [key, entry] of request.typed) {
+        if (entry.element.isConnected) {
+            continue;
+        }
         if (blocked.has(entry.form)) {
             request.dropped = true;
             continue;
@@ -523,10 +528,13 @@ const restoreTyped = (request) => {
         if (!field) {
             continue;
         }
-        if (isChoice(field)) {
-            field.checked = entry.state;
-        } else if (field.value !== entry.state) {
-            field.value = entry.state;
+        if (fieldState(field) !== entry.state) {
+            restored = true;
+            if (isChoice(field)) {
+                field.checked = entry.state;
+            } else {
+                field.value = entry.state;
+            }
         }
         if (request.active?.key === key) {
             field.focus({ preventScroll: true });
@@ -536,6 +544,15 @@ const restoreTyped = (request) => {
                 // the field has no caret
             }
         }
+    }
+    return restored;
+};
+
+const noteUnsaved = (region) => {
+    const status = document.getElementById(`${region.id}-status`);
+    if (status) {
+        const note = 'Changes made while saving are not saved yet.';
+        status.textContent = status.textContent ? `${status.textContent}. ${note}` : note;
     }
 };
 
@@ -547,8 +564,8 @@ document.addEventListener('htmx:finally:request', (event) => {
     }
     const state = regionState(region);
     state.active.delete(request);
-    if (region.isConnected) {
-        restoreTyped(request);
+    if (region.isConnected && restoreTyped(request)) {
+        noteUnsaved(region);
     }
     state.dropped ||= request.dropped;
     if (state.active.size > 0) {
