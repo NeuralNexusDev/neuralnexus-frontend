@@ -16,14 +16,7 @@ templ Account() {
 				<span id="account-username">Loading...</span>
 			</div>
 		</div>
-		<a
-			id="admin-dashboard-link"
-			hidden
-			href="/admin"
-			class="border border-input hover:bg-accent hover:text-accent-foreground inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 h-10 px-4 py-2 w-full"
-		>
-			Admin dashboard
-		</a>
+		<div hx-get="/account/admin-link" hx-trigger="load" hx-swap="outerHTML"></div>
 		<div
 			data-orientation="horizontal"
 			role="none"
@@ -64,10 +57,9 @@ templ Account() {
 	<script>
 		showAuthErrorFromQuery();
 		loadAccountProfile();
-		showAdminDashboardLink();
 	</script>
 }
 
 templ AccountPage() {
-	@WrapContents(Account())
+	@WrapContentsWithHead("NeuralNexus", adminHead(), Account())
 }

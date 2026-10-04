@@ -149,6 +149,12 @@ func action(method, target string, form url.Values) *httptest.ResponseRecorder {
 	return adminReq{method: method, target: target, form: form, htmx: true}.do()
 }
 
+// bannerText is the text of an error response without the status line it empties out of band.
+func bannerText(rec *httptest.ResponseRecorder) string {
+	body, _, _ := strings.Cut(rec.Body.String(), "<p id=")
+	return body
+}
+
 func short(body string) string {
 	if start := strings.Index(body, `class="relative isolate`); start >= 0 {
 		body = body[start:]
@@ -261,7 +267,7 @@ func TestOtherPagesKeepTheirCaching(t *testing.T) {
 		if got := rec.Header().Get("Cache-Control"); got != "" {
 			t.Errorf("%s: Cache-Control = %q, want none", path, got)
 		}
-		if strings.Contains(rec.Body.String(), "htmx") {
+		if path != "/account" && strings.Contains(rec.Body.String(), "htmx") {
 			t.Errorf("%s should not load htmx", path)
 		}
 	}
@@ -350,7 +356,7 @@ func TestAdminRefusalsShowTheAPIMessage(t *testing.T) {
 	if got := rec.Header().Get("HX-Reswap"); got != "innerHTML" {
 		t.Errorf("HX-Reswap = %q", got)
 	}
-	if got := rec.Body.String(); got != "A role with that name already exists" {
+	if got := bannerText(rec); got != "A role with that name already exists" {
 		t.Errorf("body = %q", got)
 	}
 }
@@ -377,7 +383,7 @@ func TestAdminAPIDownGivesAGenericMessage(t *testing.T) {
 	assertBody(t, rec, "Failed to load your permissions")
 	rec = action(http.MethodPost, "/admin/roles", url.Values{"name": {"x"}})
 	assertStatus(t, rec, http.StatusBadGateway)
-	if got := rec.Body.String(); got != "Failed to create the role" {
+	if got := bannerText(rec); got != "Failed to create the role" {
 		t.Errorf("body = %q", got)
 	}
 }
@@ -427,7 +433,7 @@ func TestAdminUserListPagesAndNamesRoles(t *testing.T) {
 	assertBody(t, rec,
 		`id="admin-users-search"`,
 		`href="/admin/users/`+idAlice+`"`,
-		`data-name="alice"`, `data-id="`+idBob+`"`,
+		">alice<", ">"+idBob+"<",
 		">bee_admin<", ">system<", "No username",
 	)
 	assertNoBody(t, rec, `id="admin-users-more"`)
@@ -461,8 +467,8 @@ func TestAdminUserListOffersMoreOnlyAfterAFullPage(t *testing.T) {
 			if tc.wantMore {
 				assertBody(t, rec, `hx-get="/admin/users/rows?offset=200"`)
 			}
-			if got := strings.Contains(rec.Body.String(), `id="admin-users-empty" hidden`); got != (tc.rows > 0) {
-				t.Errorf("the empty notice is hidden = %v with %d rows", got, tc.rows)
+			if got := strings.Contains(rec.Body.String(), `id="admin-users-empty"`); got != (tc.rows == 0) {
+				t.Errorf("the empty notice is shown = %v with %d rows", got, tc.rows)
 			}
 		})
 	}
@@ -483,7 +489,7 @@ func TestAdminUserRowsContinueFromTheOffset(t *testing.T) {
 
 func TestAdminUserRowsRejectABadOffset(t *testing.T) {
 	f := newFakeAdmin(t)
-	for _, offset := range []string{"", "-1", "x", "1.5", "99999999999999999999"} {
+	for _, offset := range []string{"-1", "x", "1.5", "99999999999999999999"} {
 		t.Run(offset, func(t *testing.T) {
 			f.reset()
 			rec := adminReq{method: http.MethodGet, target: "/admin/users/rows?offset=" + offset, htmx: true}.do()
@@ -707,7 +713,7 @@ func TestAdminUserSaveRefusesAnEmptiedUsername(t *testing.T) {
 	seedUserEditor(f)
 	rec := saveUser(userForm(url.Values{"username": {"   "}}))
 	assertStatus(t, rec, http.StatusBadRequest)
-	if got := rec.Body.String(); got != "Enter a username" {
+	if got := bannerText(rec); got != "Enter a username" {
 		t.Errorf("body = %q", got)
 	}
 	assertWrites(t, f)
@@ -755,7 +761,7 @@ func TestAdminUserSaveRefusedShowsTheAPIMessage(t *testing.T) {
 	f.problem("PUT /users/"+idBob, 409, "An account with this username already exists")
 	rec := saveUser(userForm(url.Values{"username": {"alice"}}))
 	assertStatus(t, rec, http.StatusConflict)
-	if got := rec.Body.String(); got != "An account with this username already exists" {
+	if got := bannerText(rec); got != "An account with this username already exists" {
 		t.Errorf("body = %q", got)
 	}
 	assertNoBody(t, rec, "Saved")
@@ -768,7 +774,7 @@ func TestAdminUserSaveReloadFailureIsNotReportedAsAFailedSave(t *testing.T) {
 	f.problem("GET /roles", 500, "roles are down")
 	rec := saveUser(userForm(url.Values{"username": {"robert"}}))
 	assertStatus(t, rec, http.StatusInternalServerError)
-	if got := rec.Body.String(); got != "The change was made, but the page could not be refreshed: roles are down" {
+	if got := bannerText(rec); got != "The change was made, but the page could not be refreshed: roles are down" {
 		t.Errorf("body = %q", got)
 	}
 }
@@ -965,7 +971,7 @@ func TestAdminRoleGrantRefusesUnusableValues(t *testing.T) {
 			seedRoleEditor(f)
 			rec := action(http.MethodPost, "/admin/roles/"+idBee+"/permissions", url.Values{"grant_permission": {tc.permission}, "grant_value": {tc.value}})
 			assertStatus(t, rec, http.StatusBadRequest)
-			if got := rec.Body.String(); got != tc.message {
+			if got := bannerText(rec); got != tc.message {
 				t.Errorf("body = %q, want %q", got, tc.message)
 			}
 			assertWrites(t, f)
@@ -987,7 +993,7 @@ func TestAdminRoleGrantRefusedShowsTheAPIMessage(t *testing.T) {
 	f.problem("PUT /roles/"+idBee+"/permissions/"+idPStore, 400, "The value must match")
 	rec := action(http.MethodPost, "/admin/roles/"+idBee+"/permissions", url.Values{"grant_permission": {idPStore}})
 	assertStatus(t, rec, http.StatusBadRequest)
-	if got := rec.Body.String(); got != "The value must match" {
+	if got := bannerText(rec); got != "The value must match" {
 		t.Errorf("body = %q", got)
 	}
 }
@@ -1027,7 +1033,7 @@ func TestAdminRoleRemoveRefusedShowsTheAPIMessage(t *testing.T) {
 	f.problem("DELETE /roles/"+idBee+"/permissions/"+idPBee, 409, "system and owner keep roles.admin")
 	rec := action(http.MethodPost, "/admin/roles/"+idBee+"/permissions/"+idPBee+"/remove", nil)
 	assertStatus(t, rec, http.StatusConflict)
-	if got := rec.Body.String(); got != "system and owner keep roles.admin" {
+	if got := bannerText(rec); got != "system and owner keep roles.admin" {
 		t.Errorf("body = %q", got)
 	}
 }
@@ -1200,7 +1206,7 @@ func TestAdminPermissionCreateRefusedShowsTheAPIMessage(t *testing.T) {
 	f.problem("POST /permissions", 400, "Nodes are lower-case words")
 	rec := action(http.MethodPost, "/admin/permissions", url.Values{"node": {"Bad Node"}})
 	assertStatus(t, rec, http.StatusBadRequest)
-	if got := rec.Body.String(); got != "Nodes are lower-case words" {
+	if got := bannerText(rec); got != "Nodes are lower-case words" {
 		t.Errorf("body = %q", got)
 	}
 }
@@ -1220,7 +1226,7 @@ func TestAdminPermissionDeleteRefusedShowsTheAPIMessage(t *testing.T) {
 	f.problem("DELETE /permissions/"+idPBee, 409, "The permission is granted by a role")
 	rec := action(http.MethodDelete, "/admin/permissions/"+idPBee, nil)
 	assertStatus(t, rec, http.StatusConflict)
-	if got := rec.Body.String(); got != "The permission is granted by a role" {
+	if got := bannerText(rec); got != "The permission is granted by a role" {
 		t.Errorf("body = %q", got)
 	}
 }
@@ -1340,7 +1346,7 @@ func TestAdminReloadFailureAfterAWriteIsNotReportedAsAFailedWrite(t *testing.T) 
 			f.problem(tc.reload, 500, "the API is down")
 			rec := tc.req()
 			assertStatus(t, rec, http.StatusInternalServerError)
-			if got := rec.Body.String(); got != message {
+			if got := bannerText(rec); got != message {
 				t.Errorf("body = %q, want %q", got, message)
 			}
 			if len(f.writes()) != 1 {
@@ -1480,4 +1486,212 @@ func TestAdminUserEditorEscapesTheIDInEveryCall(t *testing.T) {
 	rec := getPage("/admin/users/" + escaped)
 	assertStatus(t, rec, http.StatusOK)
 	assertBody(t, rec, `hx-post="/admin/users/`+escaped+`"`)
+}
+
+func userPage(from, n int) string {
+	var users []string
+	for i := from; i < from+n; i++ {
+		users = append(users, fmt.Sprintf(`{"user_id":"%d","username":"User%d","roles":[]}`, 3541025163146700000+int64(i), i))
+	}
+	return "[" + strings.Join(users, ",") + "]"
+}
+
+func TestAdminUserSearchMatchesNamesAndIDsIgnoringCase(t *testing.T) {
+	f := newFakeAdmin(t)
+	f.on("GET /users", 200, usersJSON)
+	f.on("GET /roles", 200, `[]`)
+	cases := []struct {
+		search string
+		want   []string
+		not    []string
+	}{
+		{"ALI", []string{">alice<"}, []string{">bob<"}},
+		{"  bob  ", []string{">bob<"}, []string{">alice<"}},
+		{idAnon[len(idAnon)-4:], []string{">" + idAnon + "<"}, []string{">alice<"}},
+		{"nobody", nil, []string{">alice<", ">bob<"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.search, func(t *testing.T) {
+			rec := adminReq{method: http.MethodGet, target: "/admin/users/rows?search=" + url.QueryEscape(tc.search), htmx: true}.do()
+			assertStatus(t, rec, http.StatusOK)
+			assertBody(t, rec, tc.want...)
+			assertNoBody(t, rec, tc.not...)
+			if len(tc.want) == 0 {
+				assertBody(t, rec, `id="admin-users-empty"`, "No users found")
+			}
+		})
+	}
+}
+
+func TestAdminUserSearchReadsPagesUntilTheListEnds(t *testing.T) {
+	f := newFakeAdmin(t)
+	f.on("GET /roles", 200, `[]`)
+	f.on("GET /users", 200, fullPage(200))
+	rec := adminReq{method: http.MethodGet, target: "/admin/users/rows?search=user19", htmx: true}.do()
+	assertStatus(t, rec, http.StatusOK)
+	uris := f.uris()
+	wantCalls := []string{
+		"GET /users?limit=200&offset=0", "GET /users?limit=200&offset=200", "GET /users?limit=200&offset=400",
+		"GET /users?limit=200&offset=600", "GET /users?limit=200&offset=800", "GET /roles",
+	}
+	if strings.Join(uris, "|") != strings.Join(wantCalls, "|") {
+		t.Errorf("calls = %v, want %v", uris, wantCalls)
+	}
+	assertBody(t, rec, `hx-get="/admin/users/rows?offset=1000&amp;search=user19"`, "Searched the first 1000 users")
+}
+
+func TestAdminUserSearchStopsAtAShortPage(t *testing.T) {
+	f := newFakeAdmin(t)
+	f.on("GET /roles", 200, `[]`)
+	f.on("GET /users", 200, fullPage(150))
+	rec := adminReq{method: http.MethodGet, target: "/admin/users/rows?search=user1", htmx: true}.do()
+	if got := len(f.uris()); got != 2 {
+		t.Errorf("calls = %v, want one page and the roles", f.uris())
+	}
+	assertNoBody(t, rec, `id="admin-users-more"`, "Searched the first")
+}
+
+func TestAdminUserSearchWithoutMatchesInTheScannedUsersOffersMore(t *testing.T) {
+	f := newFakeAdmin(t)
+	f.on("GET /roles", 200, `[]`)
+	f.on("GET /users", 200, fullPage(200))
+	rec := adminReq{method: http.MethodGet, target: "/admin/users/rows?search=zzz", htmx: true}.do()
+	assertBody(t, rec, "No matches in the first 1000 users", `id="admin-users-more"`)
+}
+
+func TestAdminUserRowsAfterTheFirstPageHaveNoEmptyNotice(t *testing.T) {
+	f := newFakeAdmin(t)
+	f.on("GET /roles", 200, `[]`)
+	f.on("GET /users", 200, `[]`)
+	rec := adminReq{method: http.MethodGet, target: "/admin/users/rows?offset=200&search=zzz", htmx: true}.do()
+	assertNoBody(t, rec, `id="admin-users-empty"`)
+}
+
+func TestAdminUserListWithoutASearchReadsOnePage(t *testing.T) {
+	f := newFakeAdmin(t)
+	f.on("GET /roles", 200, `[]`)
+	f.on("GET /users", 200, fullPage(200))
+	rec := getPage("/admin/users")
+	if got := len(f.uris()); got != 2 {
+		t.Errorf("calls = %v, want one page and the roles", f.uris())
+	}
+	assertBody(t, rec, `hx-get="/admin/users/rows?offset=200"`)
+	assertNoBody(t, rec, "Searched the first")
+}
+
+func TestAdminUserSearchBoxQueriesTheServer(t *testing.T) {
+	f := newFakeAdmin(t)
+	f.on("GET /users", 200, usersJSON)
+	f.on("GET /roles", 200, `[]`)
+	assertBody(t, getPage("/admin/users"),
+		`name="search"`, `hx-get="/admin/users/rows"`, `hx-trigger="input changed delay:250ms, search"`,
+		`hx-target="#admin-users"`, `hx-sync="this:replace"`)
+	assertNoBody(t, getPage("/admin/users"), "oninput", "filterAdminUsers")
+}
+
+func TestAccountAdminLinkShowsForEitherAdminPermission(t *testing.T) {
+	for _, permissions := range []string{`["users.admin"]`, `["roles.admin:1"]`, `["ratelimit:5","users.admin"]`} {
+		t.Run(permissions, func(t *testing.T) {
+			f := newFakeAdmin(t)
+			f.on("GET /users/me/permissions", 200, permissions)
+			rec := getPage("/account/admin-link")
+			assertStatus(t, rec, http.StatusOK)
+			assertBody(t, rec, `id="admin-dashboard-link"`, `href="/admin"`)
+			if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+				t.Errorf("Cache-Control = %q", got)
+			}
+		})
+	}
+}
+
+func TestAccountAdminLinkIsEmptyWithoutAnAdminPermission(t *testing.T) {
+	for _, permissions := range []string{`[]`, `["ratelimit:1000"]`, `["beenamegenerator.admin"]`, `["users.administrator"]`, `["xusers.admin"]`} {
+		t.Run(permissions, func(t *testing.T) {
+			f := newFakeAdmin(t)
+			f.on("GET /users/me/permissions", 200, permissions)
+			rec := getPage("/account/admin-link")
+			assertStatus(t, rec, http.StatusOK)
+			if rec.Body.Len() != 0 {
+				t.Errorf("body = %q, want empty", rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestAccountAdminLinkIsEmptyWhenThePermissionsCannotBeRead(t *testing.T) {
+	f := newFakeAdmin(t)
+	f.problem("GET /users/me/permissions", 401, "expired")
+	rec := getPage("/account/admin-link")
+	assertStatus(t, rec, http.StatusOK)
+	if rec.Body.Len() != 0 {
+		t.Errorf("body = %q, want empty", rec.Body.String())
+	}
+}
+
+func TestAccountPageLoadsTheAdminLinkThroughHTMX(t *testing.T) {
+	rec := getPage("/account")
+	assertBody(t, rec, `hx-get="/account/admin-link"`, `hx-trigger="load"`, `hx-swap="outerHTML"`, "htmx.v1.9.5.min.js")
+	assertNoBody(t, rec, "showAdminDashboardLink", `id="admin-dashboard-link"`)
+}
+
+func TestAdminFragmentsEmptyTheBannerOutOfBand(t *testing.T) {
+	const clear = `<div id="admin-error" hx-swap-oob="innerHTML"></div>`
+	f := newFakeAdmin(t)
+	seedUserEditor(f)
+	seedRoleEditor(f)
+	f.on("PUT /users/"+idBob, 200, bobJSON)
+	f.on("PUT /roles/"+idBee+"/permissions/"+idPStore, 204, ``)
+	f.on("DELETE /permissions/"+idPStore, 204, ``)
+	f.on("GET /users", 200, usersJSON)
+	f.on("GET /roles", 200, rolesJSON)
+	cases := map[string]*httptest.ResponseRecorder{
+		"user save":   saveUser(userForm(url.Values{"username": {"robert"}})),
+		"grant":       action(http.MethodPost, "/admin/roles/"+idBee+"/permissions", url.Values{"grant_permission": {idPStore}}),
+		"grant value": adminReq{method: http.MethodGet, target: "/admin/roles/" + idBee + "/grant-value?grant_permission=" + idPMotd, htmx: true}.do(),
+		"user rows":   adminReq{method: http.MethodGet, target: "/admin/users/rows", htmx: true}.do(),
+	}
+	f.on("GET /permissions", 200, permissionsJSON)
+	cases["permission delete"] = action(http.MethodDelete, "/admin/permissions/"+idPStore, nil)
+	for name, rec := range cases {
+		t.Run(name, func(t *testing.T) {
+			assertStatus(t, rec, http.StatusOK)
+			assertBody(t, rec, clear)
+		})
+	}
+}
+
+func TestAdminRoleChangesEmptyTheStatusLine(t *testing.T) {
+	f := newFakeAdmin(t)
+	seedRoleEditor(f)
+	f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
+	rec := action(http.MethodPost, "/admin/roles/"+idBee+"/permissions/"+idPBee+"/remove", nil)
+	assertBody(t, rec, `<p id="admin-role-status" hx-swap-oob="innerHTML"></p>`)
+}
+
+func TestAdminErrorsEmptyTheStatusLineOfTheEditorTheyCameFrom(t *testing.T) {
+	cases := []struct {
+		name, method, target, route, want string
+	}{
+		{"user", http.MethodPost, "/admin/users/" + idBob, "PUT /users/" + idBob, `<p id="admin-user-status" hx-swap-oob="innerHTML"></p>`},
+		{"role", http.MethodDelete, "/admin/roles/" + idBee, "DELETE /roles/" + idBee, `<p id="admin-role-status" hx-swap-oob="innerHTML"></p>`},
+		{"user rows", http.MethodGet, "/admin/users/rows", "GET /users", ""},
+		{"permissions", http.MethodDelete, "/admin/permissions/" + idPBee, "DELETE /permissions/" + idPBee, ""},
+		{"role list", http.MethodPost, "/admin/roles", "POST /roles", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFakeAdmin(t)
+			f.problem(tc.route, 409, "refused")
+			form := url.Values{"username": {"robert"}, "loaded_username": {"bob"}, "name": {"x"}}
+			rec := action(tc.method, tc.target, form)
+			assertStatus(t, rec, http.StatusConflict)
+			if tc.want == "" {
+				if got := rec.Body.String(); got != "refused" {
+					t.Errorf("body = %q, want just the message", got)
+				}
+				return
+			}
+			assertBody(t, rec, "refused"+tc.want)
+		})
+	}
 }

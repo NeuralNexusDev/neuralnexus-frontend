@@ -14,7 +14,9 @@ import (
 
 const (
 	usersPageSize = 200
-	maxGrantInt   = 1 << 53
+	// searchPages is how many pages of users one search request reads.
+	searchPages = 5
+	maxGrantInt = 1 << 53
 )
 
 func noStoreHandler(next http.Handler) http.Handler {
@@ -70,16 +72,40 @@ func failFragment(w http.ResponseWriter, r *http.Request, err error) {
 	status, message := errorStatus(err)
 	w.Header().Set("HX-Retarget", "#admin-error")
 	w.Header().Set("HX-Reswap", "innerHTML")
-	templ.Handler(components.AdminErrorText(message), templ.WithStatus(status)).ServeHTTP(w, r)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	parts := []templ.Component{components.AdminErrorText(message)}
+	if id := statusLineID(r.URL.Path); id != "" {
+		parts = append(parts, components.AdminStatus(id, ""))
+	}
+	render(w, r, parts...)
 }
 
-func renderAll(w http.ResponseWriter, r *http.Request, parts ...templ.Component) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+// statusLineID returns the status line of the editor a path belongs to, which a failed change empties.
+func statusLineID(path string) string {
+	switch {
+	case path == "/admin/users/rows":
+		return ""
+	case strings.HasPrefix(path, "/admin/users/"):
+		return "admin-user-status"
+	case strings.HasPrefix(path, "/admin/roles/"):
+		return "admin-role-status"
+	}
+	return ""
+}
+
+func render(w http.ResponseWriter, r *http.Request, parts ...templ.Component) {
 	for _, part := range parts {
 		if err := part.Render(r.Context(), w); err != nil {
 			return
 		}
 	}
+}
+
+// renderAll answers an htmx request with the fragments and an empty error banner, since the change worked.
+func renderAll(w http.ResponseWriter, r *http.Request, parts ...templ.Component) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	render(w, r, append(parts, components.AdminErrorClear())...)
 }
 
 func redirectHTMX(w http.ResponseWriter, location string) {
@@ -137,6 +163,16 @@ func secondary(err error) (string, error) {
 	return message, nil
 }
 
+// accountAdminLinkHandler answers the account page with the link to the dashboard, or with nothing for an account without admin permissions.
+// The link is a convenience, so a failed lookup shows no link.
+func accountAdminLinkHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
+	permissions, err := adminGet[[]string](a, "/users/me/permissions", "Failed to load your permissions")
+	if err != nil || !(hasPermission(permissions, "users.admin") || hasPermission(permissions, "roles.admin")) {
+		return
+	}
+	templ.Handler(components.AdminDashboardLink()).ServeHTTP(w, r)
+}
+
 func adminDashboardHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	permissions, err := adminGet[[]string](a, "/users/me/permissions", "Failed to load your permissions")
 	if err != nil {
@@ -151,10 +187,33 @@ func adminDashboardHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	})).ServeHTTP(w, r)
 }
 
-func loadUsersPage(a adminAPI, offset int) (components.AdminUsersData, error) {
-	users, err := adminGet[[]components.UserAccount](a, fmt.Sprintf("/users?limit=%d&offset=%d", usersPageSize, offset), "Failed to load users")
-	if err != nil {
-		return components.AdminUsersData{}, err
+// loadUsersPage reads the users from the offset, and with a search reads on until it has covered searchPages pages.
+// The API cannot search, so the matching happens here.
+func loadUsersPage(a adminAPI, offset int, search string) (components.AdminUsersData, error) {
+	search = strings.TrimSpace(search)
+	needle := strings.ToLower(search)
+	pages := 1
+	if needle != "" {
+		pages = searchPages
+	}
+	var users []components.UserAccount
+	next := offset
+	more := false
+	for range pages {
+		page, err := adminGet[[]components.UserAccount](a, fmt.Sprintf("/users?limit=%d&offset=%d", usersPageSize, next), "Failed to load users")
+		if err != nil {
+			return components.AdminUsersData{}, err
+		}
+		next += len(page)
+		more = len(page) == usersPageSize
+		for _, user := range page {
+			if strings.Contains(strings.ToLower(user.Username), needle) || strings.Contains(user.UserID, needle) {
+				users = append(users, user)
+			}
+		}
+		if !more {
+			break
+		}
 	}
 	roles, readable, err := listRoles(a)
 	if err != nil {
@@ -170,14 +229,16 @@ func loadUsersPage(a adminAPI, offset int) (components.AdminUsersData, error) {
 	return components.AdminUsersData{
 		Users:      users,
 		RoleNames:  names,
-		NextOffset: offset + len(users),
-		More:       len(users) == usersPageSize,
+		Search:     search,
+		Start:      offset,
+		NextOffset: next,
+		More:       more,
 		Loaded:     true,
 	}, nil
 }
 
 func adminUsersHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
-	data, err := loadUsersPage(a, 0)
+	data, err := loadUsersPage(a, 0, "")
 	if err != nil {
 		failPage(w, r, err, func(message string) templ.Component {
 			return components.AdminUsersPage(components.AdminUsersData{Error: message})
@@ -188,18 +249,21 @@ func adminUsersHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 }
 
 func adminUserRowsHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
-	offset, err := strconv.Atoi(r.URL.Query().Get("offset"))
-	if err != nil || offset < 0 {
-		failFragment(w, r, invalidInput("The offset must be a whole number from 0"))
-		return
+	offset := 0
+	if raw := r.URL.Query().Get("offset"); raw != "" {
+		var err error
+		if offset, err = strconv.Atoi(raw); err != nil || offset < 0 {
+			failFragment(w, r, invalidInput("The offset must be a whole number from 0"))
+			return
+		}
 	}
-	data, err := loadUsersPage(a, offset)
+	data, err := loadUsersPage(a, offset, r.URL.Query().Get("search"))
 	if err != nil {
 		failFragment(w, r, err)
 		return
 	}
 	data.FocusFirst = offset > 0
-	templ.Handler(components.AdminUserRows(data)).ServeHTTP(w, r)
+	renderAll(w, r, components.AdminUserRows(data))
 }
 
 func loadUserEditor(a adminAPI, id string, user *components.UserAccount) (components.AdminUserData, error) {
@@ -471,7 +535,7 @@ func renderGrants(w http.ResponseWriter, r *http.Request, a adminAPI, drafts map
 	data.GrantPermission = grantPermission
 	data.GrantValue = grantValue
 	data.FocusList = focusList || len(data.Available()) == 0
-	templ.Handler(components.AdminRoleGrants(data)).ServeHTTP(w, r)
+	renderAll(w, r, components.AdminRoleGrants(data), components.AdminStatus("admin-role-status", ""))
 }
 
 // putGrant grants the permission to the role with the value typed for it.
@@ -535,7 +599,7 @@ func adminRoleGrantValueHandler(w http.ResponseWriter, r *http.Request, a adminA
 		failFragment(w, r, err)
 		return
 	}
-	templ.Handler(components.AdminGrantValue(permission, "")).ServeHTTP(w, r)
+	renderAll(w, r, components.AdminGrantValue(permission, ""))
 }
 
 func adminPermissionsHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
@@ -595,5 +659,5 @@ func adminPermissionDeleteHandler(w http.ResponseWriter, r *http.Request, a admi
 		failFragment(w, r, afterWrite(err))
 		return
 	}
-	templ.Handler(components.AdminPermissionList(data)).ServeHTTP(w, r)
+	renderAll(w, r, components.AdminPermissionList(data))
 }

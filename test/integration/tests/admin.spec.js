@@ -100,14 +100,13 @@ test.describe('admin - access', () => {
 test.describe('admin - settings link', () => {
   async function openAccount(page, permissions) {
     const json = (body) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    await signIn(page, { me: permissions });
     await page.route(`${STUB}/api/v1/users/me`, (route) => route.fulfill(json({ username: 'admin' })));
     await page.route(`${STUB}/api/v1/users/me/links`, (route) => route.fulfill(json([])));
     await page.route(`${STUB}/api/v1/users/me/settings`, (route) => route.fulfill(json({ password_auth: true })));
-    await page.route(`${STUB}/api/v1/users/me/permissions`, (route) => route.fulfill(json(permissions)));
-    const answered = page.waitForResponse(`${STUB}/api/v1/users/me/permissions`);
+    const answered = page.waitForResponse('**/account/admin-link');
     await page.goto('/account');
     await answered;
-    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 0)));
   }
 
   for (const permissions of [['users.admin'], ['roles.admin'], ['ratelimit:1000', 'users.admin'], ['roles.admin:1']]) {
@@ -122,9 +121,18 @@ test.describe('admin - settings link', () => {
     test(`the account page has no admin link with [${permissions.join(', ')}]`, async ({ page }) => {
       await openAccount(page, permissions);
       await expect(page.locator('#account-username')).toHaveText('admin');
-      await expect(page.locator('#admin-dashboard-link')).toBeHidden();
+      await expect(page.locator('#admin-dashboard-link')).toHaveCount(0);
+      await expect(page.locator('[hx-get="/account/admin-link"]')).toHaveCount(0);
     });
   }
+
+  test('the account page has no admin link when the session is not accepted', async ({ page }) => {
+    await page.route('**/login', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: 'login' }));
+    const answered = page.waitForResponse('**/account/admin-link');
+    await page.goto('/account');
+    await answered;
+    await expect(page.locator('#admin-dashboard-link')).toHaveCount(0);
+  });
 });
 
 test.describe('admin - dashboard', () => {
@@ -160,8 +168,8 @@ test.describe('admin - dashboard', () => {
 });
 
 test.describe('admin - user list', () => {
-  const rows = (page) => page.locator('#admin-users li[data-id]');
-  const visible = (page) => page.locator('#admin-users li[data-id]:visible');
+  const rows = (page) => page.locator('#admin-users > li:has(> a)');
+  const search = (page) => page.locator('#admin-users-search');
 
   test('lists every user with a link to its editor and role names', async ({ page }) => {
     await signIn(page);
@@ -174,35 +182,54 @@ test.describe('admin - user list', () => {
     await expect(rows(page).nth(2)).toContainText('No username');
   });
 
-  test('the search box filters by username or user ID, ignoring case and surrounding spaces', async ({ page }) => {
-    await signIn(page);
+  test('the search box asks the server, matching username or user ID, ignoring case and surrounding spaces', async ({ page }) => {
+    const { calls } = await signIn(page);
     await page.goto('/admin/users');
-    await page.locator('#admin-users-search').fill('  BO ');
-    await expect(visible(page)).toHaveCount(1);
-    await expect(visible(page)).toContainText('bob');
+    await search(page).fill('  BO ');
+    await expect(rows(page)).toHaveCount(1);
+    await expect(rows(page)).toContainText('bob');
 
-    await page.locator('#admin-users-search').fill('675903');
-    await expect(visible(page)).toContainText('No username');
+    await search(page).fill('675903');
+    await expect(rows(page)).toContainText('No username');
 
-    await page.locator('#admin-users-search').fill('nobody');
-    await expect(visible(page)).toHaveCount(0);
-    await expect(page.locator('#admin-users-empty')).toBeVisible();
+    await search(page).fill('nobody');
+    await expect(rows(page)).toHaveCount(0);
+    await expect(page.locator('#admin-users-empty')).toHaveText('No users found');
 
-    await page.locator('#admin-users-search').fill('');
-    await expect(visible(page)).toHaveCount(3);
-    await expect(page.locator('#admin-users-empty')).toBeHidden();
+    await search(page).fill('');
+    await expect(rows(page)).toHaveCount(3);
+    await expect(page.locator('#admin-users-empty')).toHaveCount(0);
+    await expect(search(page)).toHaveValue('');
+    expect((await calls()).filter((call) => call.path === '/users').length).toBeGreaterThan(1);
   });
 
-  test('Load more adds the next page, search covers it, and the button goes when the list ends', async ({ page }) => {
+  test('a search covers users beyond the first page, and stops asking once the list ends', async ({ page }) => {
     await signIn(page, { generateUsers: 247 });
     await page.goto('/admin/users');
     await expect(rows(page)).toHaveCount(200);
-    await page.locator('#admin-users-search').fill('user247');
-    await expect(visible(page)).toHaveCount(0);
+    await search(page).fill('user247');
+    await expect(rows(page)).toHaveCount(1);
+    await expect(page.locator('#admin-users-more-button')).toHaveCount(0);
+  });
 
+  test('a search that reaches its limit offers to keep looking, and keeps the search text', async ({ page }) => {
+    await signIn(page, { generateUsers: 1100 });
+    await page.goto('/admin/users');
+    await search(page).fill('user1099');
+    await expect(page.locator('#admin-users-empty')).toHaveText('No matches in the first 1000 users');
+    await page.locator('#admin-users-more-button').click();
+    await expect(rows(page)).toHaveCount(1);
+    await expect(rows(page)).toContainText('user1099');
+    await expect(page.locator('#admin-users-more-button')).toHaveCount(0);
+    await expect(search(page)).toHaveValue('user1099');
+  });
+
+  test('Load more adds the next page and the button goes when the list ends', async ({ page }) => {
+    await signIn(page, { generateUsers: 247 });
+    await page.goto('/admin/users');
+    await expect(rows(page)).toHaveCount(200);
     await page.locator('#admin-users-more-button').click();
     await expect(rows(page)).toHaveCount(250);
-    await expect(visible(page)).toHaveCount(1);
     await expect(page.locator('#admin-users-more-button')).toHaveCount(0);
   });
 
@@ -898,23 +925,34 @@ test.describe('admin - changes made while other edits are open', () => {
     expect(await writes()).toEqual([{ method: 'PUT', path: `/users/${ID.bob}`, body: { username: 'robert' } }]);
   });
 
-  test('a status line from one save is cleared when the next action starts', async ({ page }) => {
-    await signIn(page, { delays: { [`PUT /users/${ID.bob}`]: 400 } });
+  test('a failed save empties the status line of the save before it', async ({ page }) => {
+    await signIn(page);
     await page.goto(`/admin/users/${ID.bob}`);
     await page.locator('#admin-user-save').click();
     await expect(page.locator('#admin-user-status')).toHaveText('Nothing to save');
-    await page.locator('#admin-user-username').fill('robert');
+    await page.locator('#admin-user-username').fill('alice');
     await page.locator('#admin-user-save').click();
+    await expect(error(page)).toHaveText('An account with this username already exists');
     await expect(page.locator('#admin-user-status')).toHaveText('');
-    await expect(page.locator('#admin-user-status')).toHaveText('Saved');
+  });
+
+  test('a role change empties the status line of the rename before it', async ({ page }) => {
+    await signIn(page);
+    await page.goto(roleEditor);
+    await page.locator('#admin-role-name').fill('bee_manager');
+    await page.locator('#admin-role-save').click();
+    await expect(page.locator('#admin-role-status')).toHaveText('Saved');
+    await grantedRows(page).nth(0).getByRole('button', { name: 'Remove beenamegenerator.admin' }).click();
+    await expect(grantedRows(page)).toHaveCount(1);
+    await expect(page.locator('#admin-role-status')).toHaveText('');
   });
 
   test('Load more moves focus to the first new user', async ({ page }) => {
     await signIn(page, { generateUsers: 247 });
     await page.goto('/admin/users');
     await page.locator('#admin-users-more-button').click();
-    await expect(page.locator('#admin-users li[data-id]')).toHaveCount(250);
-    await expect(page.locator('#admin-users li[data-id]').nth(200).locator('a')).toBeFocused();
+    await expect(page.locator('#admin-users > li:has(> a)')).toHaveCount(250);
+    await expect(page.locator('#admin-users > li:has(> a)').nth(200).locator('a')).toBeFocused();
   });
 
   test('going back after the session ends does not show the page again', async ({ page }) => {

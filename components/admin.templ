@@ -81,7 +81,11 @@ type AdminDashboardData struct {
 type AdminUsersData struct {
 	Users []UserAccount
 	// RoleNames maps role IDs to names, and is nil when the caller cannot read roles.
-	RoleNames  map[string]string
+	RoleNames map[string]string
+	// Search is the text the usernames and IDs were matched against, which is empty for the whole list.
+	Search string
+	// Start is the offset the page began at.
+	Start      int
 	NextOffset int
 	More       bool
 	// FocusFirst moves focus to the first row, which replaces the button that loaded the page.
@@ -212,6 +216,14 @@ const (
 	adminSectionError = "text-sm text-red-600 dark:text-red-400"
 )
 
+func adminUserRowsPath(offset int, search string) string {
+	query := url.Values{"offset": {strconv.Itoa(offset)}}
+	if search != "" {
+		query.Set("search", search)
+	}
+	return "/admin/users/rows?" + query.Encode()
+}
+
 func adminUserPath(id string) string {
 	return "/admin/users/" + url.PathEscape(id)
 }
@@ -260,6 +272,22 @@ templ adminError(message string) {
 
 templ adminStatus(id string) {
 	<p id={ id } role="status" class="text-center text-sm text-gray-500 dark:text-gray-400"></p>
+}
+
+// AdminErrorClear empties the error banner out of band, so a change that works removes the message of one that did not.
+templ AdminErrorClear() {
+	<div id="admin-error" hx-swap-oob="innerHTML"></div>
+}
+
+// AdminDashboardLink is the link from the account page to the admin dashboard.
+templ AdminDashboardLink() {
+	<a
+		id="admin-dashboard-link"
+		href="/admin"
+		class="border border-input hover:bg-accent hover:text-accent-foreground inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 h-10 px-4 py-2 w-full"
+	>
+		Admin dashboard
+	</a>
 }
 
 // AdminStatus updates a page's status line out of band, so the line keeps announcing what it says.
@@ -330,14 +358,18 @@ templ adminUsers(d AdminUsersData) {
 					type="search"
 					autocomplete="off"
 					placeholder="Username or user ID"
-					oninput="filterAdminUsers()"
+					name="search"
+					hx-get="/admin/users/rows"
+					hx-trigger="input changed delay:250ms, search"
+					hx-target="#admin-users"
+					hx-swap="innerHTML"
+					hx-sync="this:replace"
 					class={ adminInputClass }
 				/>
 			</div>
 			<ul id="admin-users" class="space-y-2">
 				@AdminUserRows(d)
 			</ul>
-			<p id="admin-users-empty" hidden?={ len(d.Users) > 0 } class="text-center text-sm text-gray-500 dark:text-gray-400">No users found</p>
 		}
 	</div>
 }
@@ -345,7 +377,7 @@ templ adminUsers(d AdminUsersData) {
 // AdminUserRows renders a page of user rows, followed by the button that loads the next page when there is one.
 templ AdminUserRows(d AdminUsersData) {
 	for i, user := range d.Users {
-		<li data-name={ strings.ToLower(user.Username) } data-id={ user.UserID }>
+		<li>
 			<a href={ templ.SafeURL(adminUserPath(user.UserID)) } autofocus?={ d.FocusFirst && i == 0 } class={ adminCardClass }>
 				@adminTextBlock(adminUsername(user.Username), user.UserID)
 				if len(user.Roles) > 0 {
@@ -358,12 +390,21 @@ templ AdminUserRows(d AdminUsersData) {
 			</a>
 		</li>
 	}
+	if len(d.Users) == 0 && d.Start == 0 {
+		<li id="admin-users-empty" class="text-center text-sm text-gray-500 dark:text-gray-400">
+			if d.More {
+				No matches in the first { strconv.Itoa(d.NextOffset) } users
+			} else {
+				No users found
+			}
+		</li>
+	}
 	if d.More {
 		<li id="admin-users-more" class="space-y-2 text-center">
 			<button
 				id="admin-users-more-button"
 				type="button"
-				hx-get={ "/admin/users/rows?offset=" + strconv.Itoa(d.NextOffset) }
+				hx-get={ adminUserRowsPath(d.NextOffset, d.Search) }
 				hx-target="#admin-users-more"
 				hx-swap="outerHTML"
 				hx-sync="this:drop"
@@ -371,7 +412,9 @@ templ AdminUserRows(d AdminUsersData) {
 			>
 				Load more
 			</button>
-			<span class="block text-xs text-gray-500 dark:text-gray-400">Search covers the users loaded so far</span>
+			if d.Search != "" {
+				<span class="block text-xs text-gray-500 dark:text-gray-400">Searched the first { strconv.Itoa(d.NextOffset) } users</span>
+			}
 		</li>
 	}
 }

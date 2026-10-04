@@ -806,52 +806,6 @@ function loadMcStatusFromUrl() {
     checkMcStatus();
 }
 
-/** Cosmetic only - the admin endpoints enforce the permission. */
-function hasAdminPermission(permissions, node) {
-    return permissions.some((permission) => permission === node || permission.startsWith(`${node}:`));
-}
-
-function showAdminDashboardLink() {
-    fetch(`${apiBaseUrl()}/api/v1/users/me/permissions`, {
-        credentials: 'include'
-    })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((permissions) => {
-            if (permissions && (hasAdminPermission(permissions, 'users.admin') || hasAdminPermission(permissions, 'roles.admin'))) {
-                document.getElementById('admin-dashboard-link').hidden = false;
-            }
-        })
-        .catch((error) => {
-            console.error('Error:', error);
-        });
-}
-
-/** The user list is filtered in the browser, over the rows loaded so far. */
-function filterAdminUsers() {
-    const input = document.getElementById('admin-users-search');
-    if (!input) {
-        return;
-    }
-    const search = input.value.trim().toLowerCase();
-    let shown = 0;
-    document.querySelectorAll('#admin-users li[data-id]').forEach((row) => {
-        const match = row.dataset.name.includes(search) || row.dataset.id.includes(search);
-        row.hidden = !match;
-        shown += match ? 1 : 0;
-    });
-    document.getElementById('admin-users-empty').hidden = shown > 0;
-}
-
-document.addEventListener('htmx:afterSwap', filterAdminUsers);
-
-document.addEventListener('htmx:beforeRequest', () => {
-    const banner = document.getElementById('admin-error');
-    if (banner) {
-        banner.replaceChildren();
-    }
-    document.querySelectorAll('[id^="admin-"][role="status"]').forEach((status) => status.replaceChildren());
-});
-
 /** The server sends its refusals as error responses aimed at the banner, which htmx would not swap by default. */
 document.addEventListener('htmx:beforeSwap', (event) => {
     if (event.detail.xhr.getResponseHeader('HX-Retarget')) {

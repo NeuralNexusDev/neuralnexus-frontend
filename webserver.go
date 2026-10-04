@@ -37,6 +37,7 @@ func (s *WebServer) Setup() http.Handler {
 	router.Handle("/login", templ.Handler(components.LoginPage()))
 	router.Handle("/register", templ.Handler(components.RegisterPage()))
 	router.Handle("/account", templ.Handler(components.AccountPage()))
+	router.Handle("GET /account/admin-link", adminRoute(accountAdminLinkHandler))
 	router.Handle("GET /admin", adminRoute(adminDashboardHandler))
 	router.Handle("GET /admin/users", adminRoute(adminUsersHandler))
 	router.Handle("GET /admin/users/rows", adminRoute(adminUserRowsHandler))
