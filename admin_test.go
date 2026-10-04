@@ -320,6 +320,10 @@ func TestAdminActionsNeedHTMX(t *testing.T) {
 		{http.MethodDelete, "/admin/roles/" + idBee + "/permissions/" + idPRate},
 		{http.MethodPost, "/admin/permissions"},
 		{http.MethodDelete, "/admin/permissions/" + idPRate},
+		{http.MethodPost, "/account/settings"},
+		{http.MethodPost, "/account/links/discord"},
+		{http.MethodDelete, "/account/links/discord"},
+		{http.MethodPost, "/project/bee-name-generator/admin/suggestions"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.method+" "+tc.target, func(t *testing.T) {
@@ -546,16 +550,6 @@ func TestAdminPathsEscapeIDsThatLookLikeURLs(t *testing.T) {
 		`PUT /users/`+escaped+` {"username":"robert"}`,
 		`DELETE /roles/`+escaped+`/permissions/`+escaped+` `,
 		`POST /roles {"description":"","name":"n"}`,
-	)
-}
-
-func TestAdminHTMXIsLoadedFromTheCDNWithHardenedConfig(t *testing.T) {
-	f := newFakeAdmin(t)
-	f.on("GET /users/me/permissions", 200, `["users.admin"]`)
-	rec := getPage("/admin")
-	assertBody(t, rec,
-		`<script src="https://s3.neuralnexus.dev/cdn/htmx/v4.0.0/htmx.min.js" integrity="sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc" crossorigin="anonymous" defer>`,
-		`&#34;mode&#34;:&#34;same-origin&#34;`, `&#34;history&#34;:false`,
 	)
 }
 

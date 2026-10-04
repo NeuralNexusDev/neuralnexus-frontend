@@ -130,13 +130,6 @@ func TestBeeReviewReloadFailureIsNotReportedAsAFailedReview(t *testing.T) {
 	}
 }
 
-func TestBeeReviewNeedsHTMX(t *testing.T) {
-	f := newFakeAdmin(t)
-	rec := adminReq{method: http.MethodPost, target: "/project/bee-name-generator/admin/suggestions", form: url.Values{"name": {"buzz"}, "action": {"accept"}}}.do()
-	assertStatus(t, rec, http.StatusForbidden)
-	assertWrites(t, f)
-}
-
 func TestBeeAdminPageIsAShell(t *testing.T) {
 	f := newFakeAdmin(t)
 	rec := getPage("/project/bee-name-generator/admin")

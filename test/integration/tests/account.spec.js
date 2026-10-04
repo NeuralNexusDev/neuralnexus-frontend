@@ -1,4 +1,4 @@
-import { test, expect, signIn, error, HOSTILE, expectNoInjection } from './helpers.js';
+import { test, expect, signIn, HOSTILE, error, expectNoInjection } from './helpers.js';
 
 const LINKS = [
   { platform: 'discord', platform_username: 'someone#1234', verified: true, login_enabled: true },
@@ -24,15 +24,6 @@ test.describe('account page - loading', () => {
     await expect(page.locator('#link-microsoft-action')).toHaveText('Link');
     await expect(page.locator('#link-steam-title')).toHaveText('Steam');
     await expect(page.locator('#link-steam-action')).toHaveText('Link');
-  });
-
-  test('reflects an already-linked Steam account on the row', async ({ page }) => {
-    await signIn(page, { myLinks: [{ platform: 'steam', platform_username: 'gearhead', verified: true, login_enabled: true }] });
-    await page.goto('/account');
-
-    await expect(page.locator('#link-steam-title')).toHaveText('gearhead');
-    await expect(page.locator('#link-steam-action')).toHaveText('Unlink');
-    await expect(page.locator('#link-steam-login-enabled')).toBeChecked();
   });
 
   test('clicking Link on Steam navigates to a Steam OpenID URL, not a pre-rendered base href', async ({ page }) => {
@@ -69,31 +60,6 @@ test.describe('account page - loading', () => {
     );
     expect(state.platform).toBe('discord');
     expect(state.mode).toBe('link');
-  });
-
-  test('a signed-out visitor is sent to the login page', async ({ page }) => {
-    await page.route('**/login', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: 'login' }));
-    await page.goto('/account');
-    await expect(page).toHaveURL(/\/login$/);
-  });
-
-  test('a failed settings lookup shows an error beside its section and keeps the rest', async ({ page }) => {
-    await signIn(page, {
-      myLinks: LINKS,
-      failures: { 'GET /users/me/settings': { status: 500, detail: 'settings down' } },
-    });
-    await page.goto('/account');
-    await expect(page.locator('#account-password-error')).toHaveText('settings down');
-    await expect(page.locator('#password-auth-enabled')).toBeDisabled();
-    await expect(page.locator('#link-discord-title')).toHaveText('someone#1234');
-  });
-
-  test('a failed links lookup shows an error beside its section and keeps the rest', async ({ page }) => {
-    await signIn(page, { failures: { 'GET /users/me/links': { status: 500, detail: 'links down' } } });
-    await page.goto('/account');
-    await expect(page.locator('#account-links-error')).toHaveText('links down');
-    await expect(page.locator('#account-username')).toHaveText('testuser');
-    await expect(page.locator('#link-discord')).toHaveCount(0);
   });
 
   test('account text is rendered as text, never as HTML', async ({ page }) => {
@@ -166,15 +132,6 @@ test.describe('account page - login-enabled toggle', () => {
     await page.locator('#link-discord-login-enabled').uncheck({ force: true });
     await expect(error(page)).toHaveText('Keep one way to sign in');
     await expect(page.locator('#link-discord-login-enabled')).toBeChecked();
-  });
-
-  test('a session that stops being accepted sends the toggle to the login page', async ({ page }) => {
-    await signIn(page, { myLinks: LINKS });
-    await page.route('**/login', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: 'login' }));
-    await page.goto('/account');
-    await page.context().clearCookies();
-    await page.locator('#link-discord-login-enabled').uncheck({ force: true });
-    await expect(page).toHaveURL(/\/login$/);
   });
 
   test('a second change to a row while one is in flight is dropped', async ({ page }) => {

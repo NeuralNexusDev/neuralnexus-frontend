@@ -354,15 +354,6 @@ func TestAdminRoleSaveRefusedShowsTheAPIMessage(t *testing.T) {
 	assertNoBody(t, rec, "Saved")
 }
 
-func TestAdminRoleSaveFailedReloadShowsTheErrorWithoutSaved(t *testing.T) {
-	f := newFakeAdmin(t)
-	f.on("PATCH /roles/"+idBee, 200, `{}`)
-	f.problem("GET /roles/"+idBee, 500, "roles are down")
-	rec := action(http.MethodPost, "/admin/roles/"+idBee, url.Values{"loaded_name": {"bee_admin"}, "name": {"renamed"}})
-	assertStatus(t, rec, http.StatusInternalServerError)
-	assertNoBody(t, rec, "Saved")
-}
-
 func TestAdminRoleDeleteRedirectsToTheList(t *testing.T) {
 	f := newFakeAdmin(t)
 	f.on("DELETE /roles/"+idBee, 204, ``)

@@ -300,19 +300,6 @@ func TestAccountLinkChangeReloadFailureIsNotReportedAsAFailedChange(t *testing.T
 	}
 }
 
-func TestAccountChangesNeedHTMX(t *testing.T) {
-	f := newFakeAdmin(t)
-	for _, tc := range []struct{ method, target string }{
-		{http.MethodPost, "/account/settings"},
-		{http.MethodPost, "/account/links/discord"},
-		{http.MethodDelete, "/account/links/discord"},
-	} {
-		rec := adminReq{method: tc.method, target: tc.target, form: url.Values{}}.do()
-		assertStatus(t, rec, http.StatusForbidden)
-	}
-	assertWrites(t, f)
-}
-
 func TestAccountUnlinkRefusesAnUnknownPlatform(t *testing.T) {
 	f := newFakeAdmin(t)
 	rec := action(http.MethodDelete, "/account/links/minecraft", nil)

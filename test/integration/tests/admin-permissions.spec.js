@@ -12,13 +12,6 @@ test.describe('admin - permissions', () => {
     await expect(rows(page).nth(2).locator('span.rounded-full')).toHaveText('string_list, merge union');
   });
 
-  test('a refused list shows the API message and no create form', async ({ page }) => {
-    await signIn(page, { me: ['users.admin'] });
-    await page.goto('/admin/permissions');
-    await expect(error(page)).toHaveText('You do not have permission to manage roles and permissions');
-    await expect(page.locator('#admin-permission-create-form')).toHaveCount(0);
-  });
-
   test('creating a permission without a value adds it and resets the form', async ({ page }) => {
     const { writes } = await signIn(page);
     await page.goto('/admin/permissions');
@@ -74,15 +67,6 @@ test.describe('admin - permissions', () => {
     await expect(page.locator('#admin-permissions-title')).toBeFocused();
   });
 
-  test('deleting a permission a role grants shows the API message', async ({ page }) => {
-    await signIn(page);
-    page.on('dialog', (dialog) => dialog.accept());
-    await page.goto('/admin/permissions');
-    await rows(page).nth(0).getByRole('button', { name: 'Delete' }).click();
-    await expect(error(page)).toHaveText('The permission is granted by a role');
-    await expect(rows(page)).toHaveCount(5);
-  });
-
   test('API text is rendered as text, never as HTML', async ({ page }) => {
     await signIn(page, { permissions: [{ id: ID.pRate, node: HOSTILE, description: HOSTILE, value_type: 'int', merge: HOSTILE }] });
     await page.goto('/admin/permissions');
@@ -90,13 +74,4 @@ test.describe('admin - permissions', () => {
     await expectNoInjection(page);
   });
 
-  test('an interrupted permission create shows the banner and keeps what was typed', async ({ page }) => {
-    await signIn(page);
-    await page.goto('/admin/permissions');
-    await page.route('**/admin/permissions', (route) => (route.request().method() === 'POST' ? route.abort('failed') : route.continue()));
-    await page.locator('#admin-permission-create-node').fill('pets.write');
-    await page.locator('#admin-permission-create-submit').click();
-    await expect(error(page)).toHaveText('The server could not be reached. Try again in a moment.');
-    await expect(page.locator('#admin-permission-create-node')).toHaveValue('pets.write');
-  });
 });

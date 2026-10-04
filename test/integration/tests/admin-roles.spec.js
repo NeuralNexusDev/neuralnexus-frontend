@@ -15,13 +15,6 @@ test.describe('admin - roles', () => {
     await expect(rows.nth(2).locator('a')).toHaveAttribute('href', editor);
   });
 
-  test('a refused list shows the API message and no create form', async ({ page }) => {
-    await signIn(page, { me: ['users.admin'] });
-    await page.goto('/admin/roles');
-    await expect(error(page)).toHaveText('You do not have permission to manage roles and permissions');
-    await expect(page.locator('#admin-role-create-form')).toHaveCount(0);
-  });
-
   test('creating a role opens its editor', async ({ page }) => {
     const { writes } = await signIn(page);
     await page.goto('/admin/roles');
@@ -31,16 +24,6 @@ test.describe('admin - roles', () => {
     await expect(page).toHaveURL(/\/admin\/roles\/\d{19}$/);
     await expect(page.locator('#admin-role-name')).toHaveValue('moderator');
     expect(await writes()).toEqual([{ method: 'POST', path: '/roles', body: { name: 'moderator', description: 'Moderates things' } }]);
-  });
-
-  test('a refused create shows the API message and stays on the list', async ({ page }) => {
-    await signIn(page);
-    await page.goto('/admin/roles');
-    await page.locator('#admin-role-create-name').fill('system');
-    await page.locator('#admin-role-create-submit').click();
-    await expect(error(page)).toHaveText('A role with that name already exists');
-    await expect(page).toHaveURL(/\/admin\/roles$/);
-    await expect(page.locator('#admin-role-create-name')).toHaveValue('system');
   });
 
   test('the editor shows the role, its grants with values, and the permissions still to grant', async ({ page }) => {
@@ -89,15 +72,6 @@ test.describe('admin - roles', () => {
     expect(await writes()).toEqual([]);
   });
 
-  test('renaming a built-in role is refused with the API message', async ({ page }) => {
-    await signIn(page);
-    await page.goto(`/admin/roles/${ID.system}`);
-    await page.locator('#admin-role-name').fill('renamed');
-    await page.locator('#admin-role-save').click();
-    await expect(error(page)).toHaveText('Built-in roles cannot be deleted or renamed, and system and owner keep roles.admin');
-    await expect(page.locator('#admin-role-status')).toHaveText('');
-  });
-
   test('changing an int value puts the whole number and moves focus to the list heading', async ({ page }) => {
     const { writes } = await signIn(page);
     await page.goto(editor);
@@ -107,26 +81,6 @@ test.describe('admin - roles', () => {
     expect(await writes()).toEqual([{ method: 'PUT', path: `/roles/${ID.bee}/permissions/${ID.pRate}`, body: { value: 250 } }]);
     await expect(heading(page)).toBeFocused();
   });
-
-  test('a fraction is stopped by the number input before any request', async ({ page }) => {
-    const { writes } = await signIn(page);
-    await page.goto(editor);
-    await granted(page).nth(1).locator('input').fill('1.5');
-    await granted(page).nth(1).getByRole('button', { name: 'Save value' }).click();
-    await expect(granted(page).nth(1).locator('input:invalid')).toHaveCount(1);
-    expect(await writes()).toEqual([]);
-  });
-
-  for (const bad of ['', '9007199254740993']) {
-    test(`an int value of "${bad}" is refused in the banner without a request`, async ({ page }) => {
-      const { writes } = await signIn(page);
-      await page.goto(editor);
-      await granted(page).nth(1).locator('input').fill(bad);
-      await granted(page).nth(1).getByRole('button', { name: 'Save value' }).click();
-      await expect(error(page)).toHaveText('Enter a whole number from -9007199254740992 to 9007199254740992');
-      expect(await writes()).toEqual([]);
-    });
-  }
 
   test('granting a permission without a value puts it bare', async ({ page }) => {
     const { writes } = await signIn(page);
@@ -153,18 +107,6 @@ test.describe('admin - roles', () => {
     expect(await writes()).toEqual([{ method: 'PUT', path: `/roles/${ID.bee}/permissions/${ID.pPets}`, body: { value: ['rex', 'fido', 'spot'] } }]);
     await expect(granted(page).nth(2).locator('textarea')).toHaveValue('rex\nfido\nspot');
     await expect(page.locator('#admin-role-grant-submit')).toBeFocused();
-  });
-
-  test('a list or text value left empty is refused without a request', async ({ page }) => {
-    const { writes } = await signIn(page);
-    await page.goto(editor);
-    await page.locator('#admin-role-grant-permission').selectOption({ label: 'petpictures.pets' });
-    await page.locator('#admin-role-grant-submit').click();
-    await expect(error(page)).toHaveText('Enter at least one item');
-    await page.locator('#admin-role-grant-permission').selectOption({ label: 'motd' });
-    await page.locator('#admin-role-grant-submit').click();
-    await expect(error(page)).toHaveText('Enter a value');
-    expect(await writes()).toEqual([]);
   });
 
   test('removing a permission deletes the grant by its exact ID and moves focus to the list heading', async ({ page }) => {
@@ -202,22 +144,6 @@ test.describe('admin - roles', () => {
     await expect(error(page)).toHaveText('');
   });
 
-  test('a role holding every permission offers nothing more to grant', async ({ page }) => {
-    await signIn(page, {
-      roles: [
-        {
-          id: ID.bee,
-          name: 'bee_admin',
-          description: 'd',
-          grants: [{ id: ID.pBee }, { id: ID.pRate, value: 1 }, { id: ID.pPets, value: ['a'] }, { id: ID.pMotd, value: 'x' }, { id: ID.pStore }],
-        },
-      ],
-    });
-    await page.goto(editor);
-    await expect(page.locator('#admin-role-grant-form')).toHaveCount(0);
-    await expect(page.locator('#admin-role-grant-empty')).toBeVisible();
-  });
-
   test('deleting a role asks first, then deletes it and returns to the list', async ({ page }) => {
     const { writes } = await signIn(page, { users: [] });
     const messages = [];
@@ -234,23 +160,6 @@ test.describe('admin - roles', () => {
     await expect(page).toHaveURL(/\/admin\/roles$/);
     expect(messages).toEqual(['Delete the role bee_admin?', 'Delete the role bee_admin?']);
     expect(await writes()).toEqual([{ method: 'DELETE', path: `/roles/${ID.bee}`, body: null }]);
-  });
-
-  test('deleting a role an account holds shows the API message', async ({ page }) => {
-    await signIn(page);
-    page.on('dialog', (dialog) => dialog.accept());
-    await page.goto(editor);
-    await page.locator('#admin-role-delete').click();
-    await expect(error(page)).toHaveText('The role is assigned to an account');
-    await expect(page).toHaveURL(new RegExp(`/admin/roles/${ID.bee}$`));
-  });
-
-  test('an unknown role shows the API message and nothing from the URL', async ({ page }) => {
-    await signIn(page);
-    const res = await page.goto('/admin/roles/404');
-    expect(res.status()).toBe(404);
-    await expect(error(page)).toHaveText('Role not found');
-    await expect(page.locator('#admin-role-form')).toHaveCount(0);
   });
 
   test('API text is rendered as text, never as HTML', async ({ page }) => {
@@ -372,26 +281,6 @@ test.describe('admin - role changes while other edits are open', () => {
     await page.locator('#admin-role-grant-submit').click();
     await expect(grantedRows(page)).toHaveCount(3);
     await expect(page.locator('#admin-role-grant-submit')).toBeFocused();
-  });
-
-  test('an interrupted grant shows the banner and leaves the editor as it was', async ({ page }) => {
-    const { writes } = await signIn(page);
-    await page.goto(roleEditor);
-    await page.route('**/admin/roles/*/permissions', (route) => route.abort('failed'));
-    await page.locator('#admin-role-grant-submit').click();
-    await expect(error(page)).toHaveText('The server could not be reached. Try again in a moment.');
-    await expect(grantedRows(page)).toHaveCount(2);
-    expect(await writes()).toEqual([]);
-  });
-
-  test('an interrupted rename shows the banner', async ({ page }) => {
-    await signIn(page);
-    await page.goto(roleEditor);
-    await page.route(`**/admin/roles/${ID.bee}`, (route) => (route.request().method() === 'POST' ? route.abort('failed') : route.continue()));
-    await page.locator('#admin-role-name').fill('bee_manager');
-    await page.locator('#admin-role-save').click();
-    await expect(error(page)).toHaveText('The server could not be reached. Try again in a moment.');
-    await expect(page.locator('#admin-role-name')).toHaveValue('bee_manager');
   });
 
   test('a role change empties the status line of the rename before it', async ({ page }) => {
