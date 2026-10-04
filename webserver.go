@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/a-h/templ"
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/components"
@@ -76,20 +77,26 @@ func (s *WebServer) Setup() http.Handler {
 	router.Handle("/teapot", templ.Handler(components.TeapotPage()))
 
 	middlewareStack := mw.CreateStack(
+		mw.RecoveryMiddleware,
+		mw.SecurityHeadersMiddleware,
 		mw.SessionMiddleware,
 		mw.RequestIDMiddleware,
 		mw.IPMiddleware,
 		mw.RequestLoggerMiddleware,
 	)
 
-	return middlewareStack(router)
+	return middlewareStack(requireHTMXForWrites(router))
 }
 
 // Run - Start the web server
 func (s *WebServer) Run() error {
 	server := http.Server{
-		Addr:    s.Address,
-		Handler: s.Setup(),
+		Addr:              s.Address,
+		Handler:           s.Setup(),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       2 * time.Minute,
 	}
 
 	if s.UsingUDS {

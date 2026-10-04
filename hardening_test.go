@@ -1,0 +1,218 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"log"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/p0t4t0sandwich/neuralnexus-frontend/config"
+	mw "github.com/p0t4t0sandwich/neuralnexus-frontend/middleware"
+)
+
+const secretSession = "secret-session-value"
+
+func captureLog(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	return &buf
+}
+
+func TestResponsesCarryTheSecurityHeaders(t *testing.T) {
+	f := newFakeAdmin(t)
+	f.on("GET /users/me/permissions", 200, `["users.admin"]`)
+	for _, target := range []string{"/teapot", "/admin/cards", "/public/site.webmanifest"} {
+		t.Run(target, func(t *testing.T) {
+			rec := getPage(target)
+			for header, want := range map[string]string{
+				"X-Content-Type-Options":  "nosniff",
+				"Referrer-Policy":         "same-origin",
+				"Content-Security-Policy": "frame-ancestors 'none'",
+				"X-Frame-Options":         "DENY",
+			} {
+				if got := rec.Header().Get(header); got != want {
+					t.Errorf("%s = %q, want %q", header, got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestStateChangesNeedHTMXAndASameOriginSite(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /unlisted", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	mux.HandleFunc("GET /unlisted", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	mux.HandleFunc("DELETE /removable", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusAccepted) })
+	handler := requireHTMXForWrites(mux)
+	cases := []struct {
+		name, method, target string
+		headers              map[string]string
+		want                 int
+	}{
+		{"a new route without HX-Request", http.MethodPost, "/unlisted", nil, http.StatusForbidden},
+		{"a new route with HX-Request", http.MethodPost, "/unlisted", map[string]string{"HX-Request": "true"}, http.StatusNoContent},
+		{"HX-Request set to something else", http.MethodPost, "/unlisted", map[string]string{"HX-Request": "false"}, http.StatusForbidden},
+		{"a cross-site request", http.MethodPost, "/unlisted", map[string]string{"HX-Request": "true", "Sec-Fetch-Site": "cross-site"}, http.StatusForbidden},
+		{"a same-site request", http.MethodPost, "/unlisted", map[string]string{"HX-Request": "true", "Sec-Fetch-Site": "same-site"}, http.StatusForbidden},
+		{"a same-origin request", http.MethodPost, "/unlisted", map[string]string{"HX-Request": "true", "Sec-Fetch-Site": "same-origin"}, http.StatusNoContent},
+		{"a request that began in the address bar", http.MethodPost, "/unlisted", map[string]string{"HX-Request": "true", "Sec-Fetch-Site": "none"}, http.StatusNoContent},
+		{"a method the route does not list reaches the catch-all", http.MethodDelete, "/unlisted", nil, http.StatusAccepted},
+		{"a delete without HX-Request", http.MethodDelete, "/removable", nil, http.StatusForbidden},
+		{"a read", http.MethodGet, "/unlisted", nil, http.StatusNoContent},
+		{"a cross-site read", http.MethodGet, "/unlisted", map[string]string{"Sec-Fetch-Site": "cross-site"}, http.StatusNoContent},
+		{"the catch-all route", http.MethodPost, "/anywhere", nil, http.StatusAccepted},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.target, nil)
+			for header, value := range tc.headers {
+				req.Header.Set(header, value)
+			}
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			assertStatus(t, rec, tc.want)
+		})
+	}
+}
+
+func TestStateChangesKeepTheMuxAnswerForAMethodItDoesNotServe(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /only", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	rec := httptest.NewRecorder()
+	requireHTMXForWrites(mux).ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/only", nil))
+	assertStatus(t, rec, http.StatusMethodNotAllowed)
+}
+
+func TestFailedAPICallsLogTheirCauseWithoutTheSession(t *testing.T) {
+	cookie := &http.Cookie{Name: "session", Value: secretSession}
+	t.Run("an API that cannot be reached", func(t *testing.T) {
+		down := httptest.NewServer(http.NotFoundHandler())
+		apiURL := config.APIURL
+		config.APIURL = down.URL
+		t.Cleanup(func() { config.APIURL = apiURL })
+		down.Close()
+		buf := captureLog(t)
+		rec := adminReq{method: http.MethodGet, target: "/admin/roles/list", cookies: []*http.Cookie{cookie}}.do()
+		assertStatus(t, rec, http.StatusBadGateway)
+		for _, want := range []string{"admin request failed", "status=502", `api="GET /roles"`, "request_id=", "connection refused"} {
+			if !strings.Contains(buf.String(), want) {
+				t.Errorf("the log is missing %q:\n%s", want, buf.String())
+			}
+		}
+		if strings.Contains(buf.String(), secretSession) {
+			t.Errorf("the log holds the session cookie:\n%s", buf.String())
+		}
+	})
+	t.Run("an API that answers 500", func(t *testing.T) {
+		f := newFakeAdmin(t)
+		f.problem("GET /roles", 500, "the database is down")
+		buf := captureLog(t)
+		rec := adminReq{method: http.MethodGet, target: "/admin/roles/list", cookies: []*http.Cookie{cookie}}.do()
+		assertStatus(t, rec, http.StatusInternalServerError)
+		for _, want := range []string{"admin request failed", "status=500", `api="GET /roles"`, "request_id="} {
+			if !strings.Contains(buf.String(), want) {
+				t.Errorf("the log is missing %q:\n%s", want, buf.String())
+			}
+		}
+		if strings.Contains(buf.String(), secretSession) {
+			t.Errorf("the log holds the session cookie:\n%s", buf.String())
+		}
+	})
+	t.Run("an API that refuses with a 4xx", func(t *testing.T) {
+		f := newFakeAdmin(t)
+		f.problem("GET /roles", 403, "You do not have permission")
+		buf := captureLog(t)
+		adminReq{method: http.MethodGet, target: "/admin/roles/list", cookies: []*http.Cookie{cookie}}.do()
+		if strings.Contains(buf.String(), "admin request failed") {
+			t.Errorf("a refusal was logged as a failure:\n%s", buf.String())
+		}
+	})
+}
+
+func TestAbandonedRequestsAreNotLoggedAsFailures(t *testing.T) {
+	newFakeAdmin(t)
+	buf := captureLog(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	rec := httptest.NewRecorder()
+	NewWebServer("", false).Setup().ServeHTTP(rec, httptest.NewRequestWithContext(ctx, http.MethodGet, "/admin/roles/list", nil))
+	if strings.Contains(buf.String(), "admin request failed") {
+		t.Errorf("a request the client abandoned was logged as a failure:\n%s", buf.String())
+	}
+}
+
+func TestAdminRequestsStopWaitingForASlowAPI(t *testing.T) {
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-time.After(5 * time.Second):
+		}
+	}))
+	t.Cleanup(slow.Close)
+	apiURL, timeout := config.APIURL, adminRequestTimeout
+	config.APIURL, adminRequestTimeout = slow.URL, 50*time.Millisecond
+	t.Cleanup(func() { config.APIURL, adminRequestTimeout = apiURL, timeout })
+	captureLog(t)
+	start := time.Now()
+	rec := getPage("/admin/roles/list")
+	assertStatus(t, rec, http.StatusBadGateway)
+	if time.Since(start) > 2*time.Second {
+		t.Errorf("the request waited %s for the API", time.Since(start))
+	}
+}
+
+func TestAPanicInAHandlerAnswers500AndLogsWhereItHappened(t *testing.T) {
+	buf := captureLog(t)
+	handler := mw.RecoveryMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		panic("broken handler")
+	}))
+	req := httptest.NewRequest(http.MethodPost, "/boom", strings.NewReader("password=hunter2"))
+	req.AddCookie(&http.Cookie{Name: "session", Value: secretSession})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	assertStatus(t, rec, http.StatusInternalServerError)
+	if got := rec.Body.String(); got != "Internal Server Error\n" {
+		t.Errorf("body = %q", got)
+	}
+	for _, want := range []string{"panic serving POST /boom", "broken handler"} {
+		if !strings.Contains(buf.String(), want) {
+			t.Errorf("the log is missing %q:\n%s", want, buf.String())
+		}
+	}
+	for _, unwanted := range []string{secretSession, "hunter2"} {
+		if strings.Contains(buf.String(), unwanted) {
+			t.Errorf("the log holds %q:\n%s", unwanted, buf.String())
+		}
+	}
+}
+
+func TestLinksRenderTheirPaths(t *testing.T) {
+	f := newFakeAdmin(t)
+	f.on("GET /users", 200, usersJSON)
+	f.on("GET /roles", 200, rolesJSON)
+	f.on("GET /users/me/permissions", 200, `["users.admin","roles.admin"]`)
+	cases := []struct{ target, want string }{
+		{"/admin/users", `href="/admin"`},
+		{"/admin/users/" + idBob, `href="/admin/users"`},
+		{"/admin/roles", `href="/admin/permissions"`},
+		{"/admin/roles/" + idBee, `href="/admin/roles"`},
+		{"/admin/permissions", `href="/admin/roles"`},
+		{"/projects", `href="/project/bee-name-generator"`},
+		{"/admin/cards", `href="/admin/users"`},
+		{"/admin/users/list", `href="/admin/users/` + idBob + `"`},
+		{"/admin/roles/list", `href="/admin/roles/` + idBee + `"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.target, func(t *testing.T) {
+			assertBody(t, getPage(tc.target), tc.want)
+		})
+	}
+}

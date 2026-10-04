@@ -1,12 +1,16 @@
 package main
 
 import (
+	"context"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/a-h/templ"
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/components"
+	mw "github.com/p0t4t0sandwich/neuralnexus-frontend/middleware"
 )
 
 func noStoreHandler(next http.Handler) http.Handler {
@@ -16,10 +20,38 @@ func noStoreHandler(next http.Handler) http.Handler {
 	})
 }
 
+var adminRequestTimeout = 30 * time.Second
+
 func adminRoute(handler func(http.ResponseWriter, *http.Request, adminAPI)) http.Handler {
 	return noStoreHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), adminRequestTimeout)
+		defer cancel()
+		r = r.WithContext(ctx)
 		handler(w, r, adminAPI{r: r})
 	}))
+}
+
+func requireHTMXForWrites(mux *http.ServeMux) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+			mux.ServeHTTP(w, r)
+			return
+		}
+		if _, pattern := mux.Handler(r); pattern == "" || pattern == "/" {
+			mux.ServeHTTP(w, r)
+			return
+		}
+		if site := r.Header.Get("Sec-Fetch-Site"); site == "cross-site" || site == "same-site" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if r.Header.Get("HX-Request") != "true" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		mux.ServeHTTP(w, r)
+	})
 }
 
 // adminAction requires the HX-Request header, which a cross-site form cannot send.
@@ -63,6 +95,9 @@ func failFragment(w http.ResponseWriter, r *http.Request, err error, restore ...
 		return
 	}
 	status, message := errorStatus(err)
+	if status >= http.StatusInternalServerError {
+		logFailure(r, status, err)
+	}
 	w.Header().Set("HX-Retarget", "#admin-error")
 	w.Header().Set("HX-Reswap", "innerHTML")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -77,6 +112,22 @@ func failEditor(w http.ResponseWriter, r *http.Request, statusID string, err err
 func nothingToSave(w http.ResponseWriter, r *http.Request, statusID string) {
 	w.Header().Set("HX-Reswap", "none")
 	renderAll(w, r, components.AdminStatus(statusID, "Nothing to save"))
+}
+
+func logFailure(r *http.Request, status int, err error) {
+	if errors.Is(r.Context().Err(), context.Canceled) {
+		return
+	}
+	var failure *adminError
+	call := ""
+	if errors.As(err, &failure) {
+		call = failure.Method + " " + failure.Path
+	}
+	cause := err
+	for errors.Unwrap(cause) != nil {
+		cause = errors.Unwrap(cause)
+	}
+	log.Printf("admin request failed: request_id=%v status=%d api=%q cause=%v", r.Context().Value(mw.RequestIDKey), status, call, cause)
 }
 
 func render(w http.ResponseWriter, r *http.Request, parts ...templ.Component) {
@@ -149,7 +200,12 @@ func afterWrite(err error) error {
 		return err
 	}
 	status, message := errorStatus(err)
-	return &adminError{Status: status, Message: "The change was made, but the page could not be refreshed: " + message}
+	wrapped := &adminError{Status: status, Message: "The change was made, but the page could not be refreshed: " + message, Err: err}
+	var failure *adminError
+	if errors.As(err, &failure) {
+		wrapped.Method, wrapped.Path = failure.Method, failure.Path
+	}
+	return wrapped
 }
 
 func rowGone(prefix string, id string) []templ.Component {

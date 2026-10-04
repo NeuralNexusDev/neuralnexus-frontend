@@ -31,10 +31,17 @@ const (
 type adminError struct {
 	Status  int
 	Message string
+	Method  string
+	Path    string
+	Err     error
 }
 
 func (e *adminError) Error() string {
 	return e.Message
+}
+
+func (e *adminError) Unwrap() error {
+	return e.Err
 }
 
 func invalidInput(message string) error {
@@ -46,17 +53,20 @@ type adminAPI struct {
 }
 
 func (a adminAPI) call(method string, path string, body any, fallback string) ([]byte, error) {
+	fail := func(status int, cause error) error {
+		return &adminError{Status: status, Message: fallback, Method: method, Path: path, Err: cause}
+	}
 	var reader io.Reader
 	if body != nil {
 		encoded, err := json.Marshal(body)
 		if err != nil {
-			return nil, &adminError{Status: http.StatusInternalServerError, Message: fallback}
+			return nil, fail(http.StatusInternalServerError, err)
 		}
 		reader = bytes.NewReader(encoded)
 	}
 	req, err := http.NewRequestWithContext(a.r.Context(), method, config.APIURL+"/api/v1"+path, reader)
 	if err != nil {
-		return nil, &adminError{Status: http.StatusBadGateway, Message: fallback}
+		return nil, fail(http.StatusBadGateway, err)
 	}
 	req.Header.Set("Accept", "application/json")
 	if body != nil {
@@ -67,12 +77,12 @@ func (a adminAPI) call(method string, path string, body any, fallback string) ([
 	}
 	res, err := adminClient.Do(req)
 	if err != nil {
-		return nil, &adminError{Status: http.StatusBadGateway, Message: fallback}
+		return nil, fail(http.StatusBadGateway, err)
 	}
 	defer res.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(res.Body, maxAdminResponse))
 	if err != nil {
-		return nil, &adminError{Status: http.StatusBadGateway, Message: fallback}
+		return nil, fail(http.StatusBadGateway, err)
 	}
 	if res.StatusCode == http.StatusUnauthorized {
 		return nil, errUnauthorized
@@ -86,7 +96,7 @@ func (a adminAPI) call(method string, path string, body any, fallback string) ([
 		if message == "" {
 			message = fallback
 		}
-		return nil, &adminError{Status: res.StatusCode, Message: message}
+		return nil, &adminError{Status: res.StatusCode, Message: message, Method: method, Path: path}
 	}
 	return data, nil
 }
@@ -98,7 +108,7 @@ func adminGet[T any](a adminAPI, path string, fallback string) (T, error) {
 		return out, err
 	}
 	if err := json.Unmarshal(data, &out); err != nil {
-		return out, &adminError{Status: http.StatusBadGateway, Message: fallback}
+		return out, &adminError{Status: http.StatusBadGateway, Message: fallback, Method: http.MethodGet, Path: path, Err: err}
 	}
 	return out, nil
 }
@@ -113,7 +123,7 @@ func adminSend[T any](a adminAPI, method string, path string, body any, fallback
 		return out, nil
 	}
 	if err := json.Unmarshal(data, &out); err != nil {
-		return out, &adminError{Status: http.StatusBadGateway, Message: fallback}
+		return out, &adminError{Status: http.StatusBadGateway, Message: fallback, Method: method, Path: path, Err: err}
 	}
 	return out, nil
 }

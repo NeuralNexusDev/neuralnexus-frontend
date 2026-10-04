@@ -115,7 +115,7 @@ templ projectCardBody(icon string, title string, description string) {
 
 templ projectCard(href string, icon string, title string, description string) {
 	<a
-		href={ templ.SafeURL(href) }
+		href={ templ.URL(href) }
 		class="flex flex-col gap-4 rounded-lg border border-input p-5 transition-colors hover:bg-accent hover:text-accent-foreground"
 	>
 		@projectCardBody(icon, title, description) {

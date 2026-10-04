@@ -73,13 +73,13 @@ templ pageLoad(path string) {
 }
 
 templ backLink(href string, text string) {
-	<a href={ templ.SafeURL(href) } class={ mutedSmallClass + " underline" }>{ text }</a>
+	<a href={ templ.URL(href) } class={ mutedSmallClass + " underline" }>{ text }</a>
 }
 
 templ linkPair(leftHref string, leftText string, rightHref string, rightText string) {
 	<div class={ mutedSmallClass + " flex justify-between" }>
-		<a href={ templ.SafeURL(leftHref) } class="underline">{ leftText }</a>
-		<a href={ templ.SafeURL(rightHref) } class="underline">{ rightText }</a>
+		<a href={ templ.URL(leftHref) } class="underline">{ leftText }</a>
+		<a href={ templ.URL(rightHref) } class="underline">{ rightText }</a>
 	</div>
 }
 

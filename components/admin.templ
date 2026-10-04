@@ -269,7 +269,7 @@ templ adminTextBlock(name string, description string) {
 }
 
 templ adminCard(id string, href string, title string, description string) {
-	<a id={ id } href={ templ.SafeURL(href) } class={ cardClass }>
+	<a id={ id } href={ templ.URL(href) } class={ cardClass }>
 		<span class="block font-semibold">{ title }</span>
 		<span class={ mutedClass + " block text-sm" }>{ description }</span>
 	</a>
@@ -337,7 +337,7 @@ templ AdminUsersList(d AdminUsersData) {
 templ AdminUserRows(d AdminUsersData) {
 	for i, user := range d.Users {
 		<li>
-			<a href={ templ.SafeURL(adminUserPath(user.UserID)) } autofocus?={ d.FocusFirst && i == 0 } class={ cardClass }>
+			<a href={ templ.URL(adminUserPath(user.UserID)) } autofocus?={ d.FocusFirst && i == 0 } class={ cardClass }>
 				@adminTextBlock(adminUsername(user.Username), user.UserID)
 				if len(user.Roles) > 0 {
 					<span class="mt-2 flex flex-wrap gap-2">
@@ -538,7 +538,7 @@ templ AdminRolesContent(d AdminRolesData) {
 		<ul id="admin-roles" class="space-y-2">
 			for _, role := range d.Roles {
 				<li>
-					<a href={ templ.SafeURL(adminRolePath(role.ID)) } class={ cardClass }>
+					<a href={ templ.URL(adminRolePath(role.ID)) } class={ cardClass }>
 						@adminTextBlock(role.Name, role.Description)
 						if len(role.Permissions) > 0 {
 							<span class="mt-2 flex flex-wrap gap-2">
