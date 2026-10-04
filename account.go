@@ -53,6 +53,8 @@ func accountContentHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 			return
 		}
 	}
+	permissions, _ := adminGet[[]string](a, "/users/me/permissions", loadYourPermsFailed)
+	data.AdminLink = hasPermission(permissions, "users.admin") || hasPermission(permissions, "roles.admin")
 	renderAll(w, r, components.AccountContent(data))
 }
 

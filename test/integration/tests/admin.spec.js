@@ -62,7 +62,7 @@ test.describe('admin - access', () => {
 test.describe('admin - settings link', () => {
   async function openAccount(page, permissions) {
     await signIn(page, { me: permissions, account: { username: 'admin', password_auth: true } });
-    const answered = page.waitForResponse('**/account/admin-link');
+    const answered = page.waitForResponse('**/account/content');
     await page.goto('/account');
     await answered;
   }
@@ -76,7 +76,6 @@ test.describe('admin - settings link', () => {
     await openAccount(page, ['ratelimit:1000']);
     await expect(page.locator('#account-username')).toHaveText('admin');
     await expect(page.locator('#admin-dashboard-link')).toHaveCount(0);
-    await expect(page.locator('[hx-get="/account/admin-link"]')).toHaveCount(0);
   });
 });
 

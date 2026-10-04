@@ -3,7 +3,7 @@ package components
 const (
 	htmxURL       = "https://s3.neuralnexus.dev/cdn/htmx/v4.0.0/htmx.min.js"
 	htmxIntegrity = "sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc"
-	htmxConfig    = `{"mode":"same-origin","history":false,"allowEmptySwapAfterOOB":true,"defaultSettleDelay":0}`
+	htmxConfig    = `{"mode":"same-origin","history":false,"allowEmptySwapAfterOOB":true,"defaultSettleDelay":0,"defaultTimeout":60000}`
 
 	mutedClass      = "text-gray-500 dark:text-gray-400"
 	mutedXsClass    = mutedClass + " text-xs"
@@ -12,7 +12,6 @@ const (
 	emptyClass      = mutedSmallClass + " text-center"
 	errorTextClass  = "text-sm text-red-600 dark:text-red-400"
 	bannerClass     = "rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive"
-	busyClass       = "[&.htmx-request]:pointer-events-none [&.htmx-request]:opacity-60"
 
 	cardClass   = "block rounded-lg border border-input p-3 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 	chipClass   = "rounded-full border border-input px-2.5 py-0.5 text-xs"
@@ -28,14 +27,18 @@ const (
 	submitClass     = buttonBaseClass + " border hover:bg-primary-light ring-offset-background focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
 )
 
+// busyAttrs and selfSwapAttrs mark a region that runs one request at a time. htmx-glue.js finds the region by
+// data-busy-region, reads the id of its status line from data-status, and treats the value "replaced" as a region
+// whose response redraws every control in it.
 var (
-	busyAttrs     = templ.Attributes{"hx-sync:inherited": "this:drop", "hx-indicator:inherited": "this"}
-	selfSwapAttrs = templ.Attributes{"hx-sync:inherited": "this:drop", "hx-indicator:inherited": "this", "hx-target:inherited": "this", "hx-swap:inherited": "outerHTML"}
+	busyAttrs     = templ.Attributes{"data-busy-region": true, "hx-sync:inherited": "this:drop"}
+	selfSwapAttrs = templ.Attributes{"data-busy-region": "replaced", "hx-sync:inherited": "this:drop", "hx-target:inherited": "this", "hx-swap:inherited": "outerHTML"}
 )
 
 templ htmxHead() {
 	<meta name="htmx-config" content={ htmxConfig }/>
 	<script src={ htmxURL } integrity={ htmxIntegrity } crossorigin="anonymous" defer></script>
+	<script src="/public/js/htmx-glue.js" defer></script>
 }
 
 templ htmxPage(contents templ.Component) {
@@ -69,7 +72,9 @@ templ pageStatus(id string) {
 }
 
 templ pageLoad(path string) {
-	<div hx-get={ path } hx-trigger="load" hx-swap="outerHTML"></div>
+	<div hx-get={ path } hx-trigger="load" hx-swap="outerHTML">
+		<p role="status" class={ emptyClass }>Loading…</p>
+	</div>
 }
 
 templ backLink(href string, text string) {

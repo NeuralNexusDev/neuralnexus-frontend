@@ -503,7 +503,7 @@ func TestAdminRoleEditorQueuesActionsOnTheEditor(t *testing.T) {
 	seedRoleEditor(f)
 	rec := getPage("/admin/roles/" + idBee + "/editor")
 	assertBody(t, rec,
-		`id="admin-role" class="space-y-6 `+busyClasses+`" hx-indicator:inherited="this" hx-sync:inherited="this:drop"`,
+		`id="admin-role" class="space-y-6" data-status="admin-role-status" data-busy-region hx-sync:inherited="this:drop"`,
 		`id="admin-role-grants" class="space-y-6" hx-target:inherited="#admin-role-granted" hx-swap:inherited="outerHTML"`,
 		`hx-sync="this:replace"`,
 	)

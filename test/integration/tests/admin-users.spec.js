@@ -109,6 +109,26 @@ test.describe('admin - user list', () => {
     await expect(page.locator('#admin-users-more-button')).toHaveCount(0);
   });
 
+  test('the shell says Loading until its content arrives', async ({ page }) => {
+    await signIn(page, { delays: { 'GET /users': 600 } });
+    await page.goto('/admin/users');
+    await expect(page.getByRole('status').filter({ hasText: 'Loading' })).toBeVisible();
+    await expect(rows(page)).toHaveCount(3);
+    await expect(page.getByText('Loading…')).toHaveCount(0);
+  });
+
+  test('Load more shows a progress cursor and dims while its page loads', async ({ page }) => {
+    await signIn(page, { generateUsers: 247, delays: { 'GET /users': 400 } });
+    await page.goto('/admin/users');
+    await expect(rows(page)).toHaveCount(200);
+    const more = page.locator('#admin-users-more-button');
+    await more.click();
+    await expect(more).toHaveAttribute('aria-busy', 'true');
+    await expect(more).toHaveCSS('cursor', 'progress');
+    await expect(more).toHaveCSS('opacity', '0.6');
+    await expect(rows(page)).toHaveCount(250);
+  });
+
   test('Load more adds the next page and the button goes when the list ends', async ({ page }) => {
     await signIn(page, { generateUsers: 247 });
     await page.goto('/admin/users');
@@ -237,8 +257,8 @@ test.describe('admin - user editor', () => {
     await username(page).fill('robert');
     await username(page).press('Enter');
     await expect(page.locator('#admin-user')).toHaveAttribute('aria-busy', 'true');
-    await expect(status(page)).toHaveText('Saved');
     await expect(page.locator('#admin-user')).not.toHaveAttribute('aria-busy', 'true');
+    await expect(status(page)).toHaveText('Saved');
   });
 
   test('a refused save keeps the tick and the text without the note', async ({ page }) => {
@@ -253,6 +273,7 @@ test.describe('admin - user editor', () => {
     await page.locator(`#admin-user-roles input[value="${ID.owner}"]`).focus();
     await page.keyboard.press('Space');
     await expect(error(page)).toHaveText('An account with this username already exists');
+    await expect(page.locator('#admin-user')).not.toHaveAttribute('aria-busy', 'true');
     await expect(username(page)).toHaveValue('alice');
     await expect(page.locator(`#admin-user-roles input[value="${ID.owner}"]`)).toBeChecked();
     await expect(status(page)).toHaveText('');

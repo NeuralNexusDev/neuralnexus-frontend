@@ -116,7 +116,7 @@ test.describe('account page - login-enabled toggle', () => {
     await page.locator('label[for="link-discord-login-enabled"]').click();
     await expect.poll(writes).toEqual([{ method: 'PATCH', path: '/users/me/link/discord', body: { login_enabled: false } }]);
     await expect(page.locator('#link-discord-login-enabled')).not.toBeChecked();
-    await expect(page.locator('#link-discord.htmx-request')).toHaveCount(0);
+    await expect(page.locator('#link-discord[aria-busy="true"]')).toHaveCount(0);
 
     await page.locator('label[for="link-discord-login-enabled"]').click();
     await expect.poll(async () => (await writes()).length).toBe(2);
@@ -139,9 +139,9 @@ test.describe('account page - login-enabled toggle', () => {
     const { writes } = await signIn(page, { myLinks: LINKS, delays: { 'PATCH /users/me/link/discord': 600 } });
     await page.goto('/account');
     await page.locator('label[for="link-discord-login-enabled"]').click();
-    await expect(page.locator('#link-discord.htmx-request')).toHaveCount(1);
+    await expect(page.locator('#link-discord[aria-busy="true"]')).toHaveCount(1);
     await page.locator('#link-discord-login-enabled').dispatchEvent('click');
-    await expect(page.locator('#link-discord.htmx-request')).toHaveCount(0);
+    await expect(page.locator('#link-discord[aria-busy="true"]')).toHaveCount(0);
     expect(await writes()).toEqual([{ method: 'PATCH', path: '/users/me/link/discord', body: { login_enabled: false } }]);
     await expect(page.locator('#link-discord-login-enabled')).not.toBeChecked();
   });
@@ -156,12 +156,29 @@ test.describe('account page - password login toggle', () => {
     await page.locator('label[for="password-auth-enabled"]').click();
     await expect.poll(writes).toEqual([{ method: 'PATCH', path: '/users/me/settings', body: { password_auth: false } }]);
     await expect(page.locator('#password-auth-enabled')).not.toBeChecked();
-    await expect(page.locator('#account-password.htmx-request')).toHaveCount(0);
+    await expect(page.locator('#account-password[aria-busy="true"]')).toHaveCount(0);
 
     await page.locator('label[for="password-auth-enabled"]').click();
     await expect.poll(async () => (await writes()).length).toBe(2);
     expect((await writes())[1].body).toEqual({ password_auth: true });
     await expect(page.locator('#password-auth-enabled')).toBeChecked();
+  });
+
+  test('a keyboard toggle while the first one is in flight is undone and says it was not sent', async ({ page }) => {
+    const { writes } = await signIn(page, { account: { username: 'testuser', password_auth: true }, delays: { 'PATCH /users/me/settings': 600 } });
+    await page.goto('/account');
+    const toggle = page.locator('#password-auth-enabled');
+    await toggle.focus();
+    await page.keyboard.press('Space');
+    await expect(page.locator('#account-password')).toHaveAttribute('aria-busy', 'true');
+    await expect(toggle).not.toBeChecked();
+    await page.keyboard.press('Space');
+    await expect(error(page)).toHaveText('The last change is still being saved. Try again in a moment.');
+    await expect(toggle).not.toBeChecked();
+    await expect(page.locator('#account-password')).not.toHaveAttribute('aria-busy', 'true');
+    await expect(page.locator('#password-auth-enabled')).not.toBeChecked();
+    await expect(error(page)).toHaveText('The change made while saving was not sent. Make it again.');
+    expect(await writes()).toEqual([{ method: 'PATCH', path: '/users/me/settings', body: { password_auth: false } }]);
   });
 
   test('a rejected toggle puts the checkbox back and shows the API detail', async ({ page }) => {

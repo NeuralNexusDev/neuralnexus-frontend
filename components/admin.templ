@@ -395,7 +395,7 @@ templ adminUser(id string) {
 
 // AdminUserContent renders the user editor, which the user page loads.
 templ AdminUserContent(d AdminUserData) {
-	<div id="admin-user" class={ "space-y-6 " + busyClass } { busyAttrs... }>
+	<div id="admin-user" class="space-y-6" data-status={ AdminUserStatusID } { busyAttrs... }>
 		@AdminUserHeader(d, false)
 		@AdminUserForm(d)
 		@adminUserLinks(d)
@@ -617,7 +617,7 @@ templ adminRole(id string) {
 
 // AdminRoleContent renders the role editor, which the role page loads.
 templ AdminRoleContent(d AdminRoleData) {
-	<div id="admin-role" class={ "space-y-6 " + busyClass } { busyAttrs... }>
+	<div id="admin-role" class="space-y-6" data-status={ AdminRoleStatusID } { busyAttrs... }>
 		@AdminRoleHeader(d, false)
 		@AdminRoleForm(d)
 		@AdminRoleGrants(d)
@@ -784,7 +784,7 @@ templ adminPermissions() {
 
 // AdminPermissionsContent renders the permission list and the form that creates one.
 templ AdminPermissionsContent(d AdminPermissionsData) {
-	<div id="admin-permissions-root" class={ "space-y-6 " + busyClass } { busyAttrs... } hx-target:inherited="#admin-permissions-list" hx-swap:inherited="outerHTML">
+	<div id="admin-permissions-root" class="space-y-6" { busyAttrs... } hx-target:inherited="#admin-permissions-list" hx-swap:inherited="outerHTML">
 		@AdminPermissionList(d)
 		@AdminPermissionForm(false)
 	</div>

@@ -89,6 +89,26 @@
         @apply border-border;
     }
 
+    [aria-busy='true'] {
+        cursor: progress;
+    }
+
+    button[aria-busy='true'],
+    form[aria-busy='true'] button[type='submit'],
+    [data-busy-region][aria-busy='true'] {
+        opacity: 0.6;
+        transition: opacity 0.1s ease 150ms;
+    }
+
+    [data-busy-region][aria-busy='true'] {
+        pointer-events: none;
+    }
+
+    [data-busy-region][aria-busy='true'] button[aria-busy='true'],
+    [data-busy-region][aria-busy='true'] form[aria-busy='true'] button[type='submit'] {
+        opacity: 1;
+    }
+
     body {
         @apply bg-background text-foreground;
         font-feature-settings:

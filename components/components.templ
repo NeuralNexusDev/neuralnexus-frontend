@@ -276,7 +276,7 @@ type BeeSuggestionsData struct {
 
 // BeeSuggestions renders the pending suggestions, which htmx swaps in after one is accepted or rejected.
 templ BeeSuggestions(d BeeSuggestionsData) {
-	<div id="bee-suggestions-root" class={ "space-y-6 " + busyClass } { selfSwapAttrs... }>
+	<div id="bee-suggestions-root" class="space-y-6" { selfSwapAttrs... }>
 		<h2 id="bee-suggestions-title" tabindex="-1" autofocus?={ d.FocusList } class="sr-only">Pending suggestions</h2>
 		if len(d.Names) == 0 {
 			@emptyState("bee-suggestions-empty", "No pending suggestions")

@@ -15,6 +15,17 @@ test.describe('admin - roles', () => {
     await expect(rows.nth(2).locator('a')).toHaveAttribute('href', editor);
   });
 
+  test('creating a role dims its button and shows a progress cursor while the request runs', async ({ page }) => {
+    await signIn(page, { delays: { 'POST /roles': 600 } });
+    await page.goto('/admin/roles');
+    await page.locator('#admin-role-create-name').fill('moderator');
+    await page.locator('#admin-role-create-submit').click();
+    await expect(page.locator('#admin-role-create-form')).toHaveAttribute('aria-busy', 'true');
+    await expect(page.locator('#admin-role-create-form')).toHaveCSS('cursor', 'progress');
+    await expect(page.locator('#admin-role-create-submit')).toHaveCSS('opacity', '0.6');
+    await expect(page).toHaveURL(/\/admin\/roles\/\d{19}$/);
+  });
+
   test('creating a role opens its editor', async ({ page }) => {
     const { writes } = await signIn(page);
     await page.goto('/admin/roles');
@@ -265,13 +276,13 @@ test.describe('admin - role changes while other edits are open', () => {
     const { writes } = await signIn(page, { delays: { [`DELETE /roles/${ID.bee}/permissions/${ID.pBee}`]: 600 } });
     await page.goto(roleEditor);
     await grantedRows(page).nth(0).getByRole('button', { name: 'Remove beenamegenerator.admin' }).click();
-    await expect(page.locator('#admin-role.htmx-request')).toHaveCount(1);
+    await expect(page.locator('#admin-role[aria-busy="true"]')).toHaveCount(1);
     await expect(page.locator('#admin-role')).toHaveCSS('pointer-events', 'none');
     await expect(page.locator('#admin-role')).toHaveAttribute('aria-busy', 'true');
     await grantedRows(page).nth(1).getByRole('button', { name: 'Remove ratelimit' }).dispatchEvent('click');
     await expect(error(page)).toHaveText('The last change is still being saved. Try again in a moment.');
     await expect(grantedRows(page)).toHaveCount(1);
-    await expect(page.locator('#admin-role.htmx-request')).toHaveCount(0);
+    await expect(page.locator('#admin-role[aria-busy="true"]')).toHaveCount(0);
     await expect(page.locator('#admin-role')).not.toHaveAttribute('aria-busy', 'true');
     await expect(error(page)).toHaveText('The change made while saving was not sent. Make it again.');
     expect(await writes()).toEqual([{ method: 'DELETE', path: `/roles/${ID.bee}/permissions/${ID.pBee}`, body: null }]);
@@ -332,13 +343,14 @@ test.describe('admin - role changes while other edits are open', () => {
     await page.locator('#admin-role-name').press('Enter');
     await expect(page.locator('#admin-role')).toHaveAttribute('aria-busy', 'true');
     await page.getByRole('spinbutton', { name: 'Value of ratelimit' }).fill('99');
+    await expect(page.locator('#admin-role')).not.toHaveAttribute('aria-busy', 'true');
     await expect(page.locator('#admin-role-status')).toHaveText('Saved');
     await expect(page.getByRole('spinbutton', { name: 'Value of ratelimit' })).toHaveValue('99');
     expect(await writes()).toEqual([{ method: 'PATCH', path: `/roles/${ID.bee}`, body: { name: 'bee_manager' } }]);
   });
 
   test('quick changes of the grant select while its value loads end on the last choice without a message', async ({ page }) => {
-    await signIn(page, { delays: { 'GET /permissions': 500 } });
+    await signIn(page, { delays: { 'GET /permissions': 700 } });
     await page.addInitScript(() => {
       window.__banner = [];
       new MutationObserver(() => {
@@ -349,11 +361,14 @@ test.describe('admin - role changes while other edits are open', () => {
     await page.goto(roleEditor);
     const select = page.locator('#admin-role-grant-permission');
     await expect(select).toBeVisible();
-    await select.selectOption({ label: 'motd' });
-    await select.selectOption({ label: 'datastore.admin' });
-    await select.selectOption({ label: 'motd' });
+    for (const label of ['datastore.admin', 'petpictures.pets', 'motd']) {
+      const requested = page.waitForRequest((request) => request.url().includes('/grant-value'));
+      await select.selectOption({ label });
+      await requested;
+    }
     await expect(page.locator('#admin-role-grant-value input[type="text"]')).toBeVisible();
     await expect(page.locator('#admin-role-grant-permission option:checked')).toHaveText('motd');
+    await expect(page.locator('#admin-role')).not.toHaveAttribute('aria-busy', 'true');
     await expect(error(page)).toHaveText('');
     expect(await page.evaluate(() => window.__banner)).toEqual([]);
   });

@@ -161,8 +161,6 @@ func bannerText(rec *httptest.ResponseRecorder) string {
 	return body
 }
 
-const busyClasses = "[&amp;.htmx-request]:pointer-events-none [&amp;.htmx-request]:opacity-60"
-
 func short(body string) string {
 	if start := strings.Index(body, `class="relative isolate`); start >= 0 {
 		body = body[start:]
@@ -246,7 +244,7 @@ func TestAdminShellsHoldNoDataAndLoadTheirContent(t *testing.T) {
 			rec := getPage(tc.path)
 			assertStatus(t, rec, http.StatusOK)
 			assertBody(t, rec, `hx-get="`+tc.loads+`"`, `hx-trigger="load"`, `hx-swap="outerHTML"`, `id="admin-error"`,
-				`<script src="https://s3.neuralnexus.dev/cdn/htmx/v4.0.0/htmx.min.js" integrity="sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc" crossorigin="anonymous" defer>`, `&#34;mode&#34;:&#34;same-origin&#34;`, `&#34;history&#34;:false`, `&#34;allowEmptySwapAfterOOB&#34;:true`, `&#34;defaultSettleDelay&#34;:0`)
+				`<script src="https://s3.neuralnexus.dev/cdn/htmx/v4.0.0/htmx.min.js" integrity="sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc" crossorigin="anonymous" defer>`, `&#34;mode&#34;:&#34;same-origin&#34;`, `&#34;history&#34;:false`, `&#34;allowEmptySwapAfterOOB&#34;:true`, `&#34;defaultSettleDelay&#34;:0`, `&#34;defaultTimeout&#34;:60000`, `src="/public/js/htmx-glue.js" defer`)
 			if len(f.uris()) != 0 {
 				t.Errorf("a shell called the API: %v", f.uris())
 			}
@@ -257,7 +255,7 @@ func TestAdminShellsHoldNoDataAndLoadTheirContent(t *testing.T) {
 func TestAdminUserAndRoleShellsHaveAStatusLine(t *testing.T) {
 	assertBody(t, getPage("/admin/users/"+idBob), `id="admin-user-status" role="status"`)
 	assertBody(t, getPage("/admin/roles/"+idBee), `id="admin-role-status" role="status"`)
-	assertNoBody(t, getPage("/admin/users"), `role="status"`)
+	assertNoBody(t, getPage("/admin/users"), `id="admin-user-status"`, `id="admin-role-status"`)
 }
 
 func TestAdminShellsEscapeTheIDInTheirLoadPath(t *testing.T) {
@@ -550,48 +548,73 @@ func TestAdminPathsEscapeIDsThatLookLikeURLs(t *testing.T) {
 	)
 }
 
-func TestAccountAdminLinkShowsForEitherAdminPermission(t *testing.T) {
+func TestAccountContentShowsTheAdminLinkForEitherAdminPermission(t *testing.T) {
 	for _, permissions := range []string{`["users.admin"]`, `["roles.admin:1"]`, `["ratelimit:5","users.admin"]`} {
 		t.Run(permissions, func(t *testing.T) {
 			f := newFakeAdmin(t)
+			seedAccount(f)
 			f.on("GET /users/me/permissions", 200, permissions)
-			rec := getPage("/account/admin-link")
+			rec := getPage("/account/content")
 			assertStatus(t, rec, http.StatusOK)
 			assertBody(t, rec, `id="admin-dashboard-link"`, `href="/admin"`)
 		})
 	}
 }
 
-func TestAccountAdminLinkIsEmptyWithoutAnAdminPermission(t *testing.T) {
+func TestAccountContentLeavesOutTheAdminLinkWithoutAnAdminPermission(t *testing.T) {
 	for _, permissions := range []string{`[]`, `["ratelimit:1000"]`, `["beenamegenerator.admin"]`, `["users.administrator"]`, `["xusers.admin"]`} {
 		t.Run(permissions, func(t *testing.T) {
 			f := newFakeAdmin(t)
+			seedAccount(f)
 			f.on("GET /users/me/permissions", 200, permissions)
-			rec := getPage("/account/admin-link")
+			rec := getPage("/account/content")
 			assertStatus(t, rec, http.StatusOK)
-			if rec.Body.Len() != 0 {
-				t.Errorf("body = %q, want empty", rec.Body.String())
-			}
+			assertBody(t, rec, `id="account-username"`)
+			assertNoBody(t, rec, `id="admin-dashboard-link"`)
 		})
 	}
 }
 
-func TestAccountAdminLinkIsEmptyWhenThePermissionsCannotBeRead(t *testing.T) {
+func TestAccountContentStillRendersWhenThePermissionsCannotBeRead(t *testing.T) {
 	f := newFakeAdmin(t)
-	f.problem("GET /users/me/permissions", 401, "expired")
-	rec := getPage("/account/admin-link")
+	seedAccount(f)
+	f.problem("GET /users/me/permissions", 500, "down")
+	captureLog(t)
+	rec := getPage("/account/content")
 	assertStatus(t, rec, http.StatusOK)
-	if rec.Body.Len() != 0 {
-		t.Errorf("body = %q, want empty", rec.Body.String())
+	assertBody(t, rec, `id="account-username"`)
+	assertNoBody(t, rec, `id="admin-dashboard-link"`)
+}
+
+func TestAccountContentIsOneRequestAfterTheShell(t *testing.T) {
+	f := newFakeAdmin(t)
+	seedAccount(f)
+	f.on("GET /users/me/permissions", 200, `["users.admin"]`)
+	assertNoBody(t, getPage("/account/content"), `hx-get=`)
+}
+
+func TestShellsShowALoadingLineWhileTheirContentLoads(t *testing.T) {
+	newFakeAdmin(t)
+	for _, target := range []string{"/admin", "/admin/users", "/admin/roles", "/admin/permissions", "/account", "/project/bee-name-generator/admin"} {
+		t.Run(target, func(t *testing.T) {
+			assertBody(t, getPage(target), `hx-trigger="load" hx-swap="outerHTML"><p role="status"`, ">Loading…<")
+		})
 	}
 }
 
-func TestAccountContentLoadsTheAdminLinkThroughHTMX(t *testing.T) {
+func TestOnlyTheEditorsWithAStatusLineNameIt(t *testing.T) {
 	f := newFakeAdmin(t)
 	seedAccount(f)
-	rec := getPage("/account/content")
-	assertBody(t, rec, `hx-get="/account/admin-link"`, `hx-trigger="load"`, `hx-swap="outerHTML"`)
-	assertNoBody(t, rec, "showAdminDashboardLink", `id="admin-dashboard-link"`)
+	f.on("GET /users/me/permissions", 200, `[]`)
+	f.on("GET /permissions", 200, permissionsJSON)
+	f.on("GET /bee-name-generator/suggestion/100", 200, `{"suggestions":["buzz"]}`)
+	for _, target := range []string{"/admin/permissions/list", "/account/content", "/project/bee-name-generator/admin/suggestions"} {
+		t.Run(target, func(t *testing.T) {
+			rec := getPage(target)
+			assertBody(t, rec, "data-busy-region")
+			assertNoBody(t, rec, "data-status")
+		})
+	}
 }
 
 func TestAdminFragmentsEmptyTheBannerOutOfBand(t *testing.T) {

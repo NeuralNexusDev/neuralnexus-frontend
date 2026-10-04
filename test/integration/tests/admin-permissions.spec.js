@@ -43,6 +43,7 @@ test.describe('admin - permissions', () => {
     await page.locator('#admin-permission-create-type').selectOption('int');
     await expect(rows(page)).toHaveCount(4);
     await expect(page.locator('#admin-permission-create-type')).toHaveValue('int');
+    await expect(page.locator('#admin-permissions-root')).not.toHaveAttribute('aria-busy', 'true');
     await expect(error(page)).toHaveText('');
   });
 

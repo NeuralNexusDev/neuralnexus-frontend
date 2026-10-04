@@ -42,7 +42,6 @@ func (s *WebServer) Setup() http.Handler {
 	router.Handle("POST /account/settings", adminAction(accountSettingsHandler))
 	router.Handle("POST /account/links/{platform}", adminAction(accountLinkHandler))
 	router.Handle("DELETE /account/links/{platform}", adminAction(accountUnlinkHandler))
-	router.Handle("GET /account/admin-link", adminRoute(permissionLink(components.AdminDashboardLink(), "users.admin", "roles.admin")))
 	router.Handle("GET /admin", adminShell(components.AdminDashboardPage()))
 	router.Handle("GET /admin/cards", adminRoute(adminCardsHandler))
 	router.Handle("GET /admin/users", adminShell(components.AdminUsersPage()))

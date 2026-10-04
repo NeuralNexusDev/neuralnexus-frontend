@@ -22,6 +22,7 @@ type AccountData struct {
 	SettingsError string
 	LinksError    string
 	Links         map[string]LinkedAccount
+	AdminLink     bool
 }
 
 // AccountSettingsData is the password login setting.
@@ -52,7 +53,9 @@ templ AccountContent(d AccountData) {
 				<span id="account-username">{ d.Username }</span>
 			</div>
 		</div>
-		@pageLoad("/account/admin-link")
+		if d.AdminLink {
+			@AdminDashboardLink()
+		}
 		@separator()
 		<div class="space-y-2">
 			<h2 class="text-lg font-semibold">Sign-in Settings</h2>
@@ -95,7 +98,7 @@ templ AccountPasswordLogin(d AccountSettingsData, oob bool) {
 			hx-swap-oob="true"
 		}
 		{ selfSwapAttrs... }
-		class={ "space-y-2 " + busyClass }
+		class="space-y-2"
 	>
 		<div class="rounded-lg border border-input p-3 flex items-center justify-between">
 			<label for="password-auth-enabled" class="text-sm font-medium">
@@ -137,7 +140,7 @@ templ AccountLinkRow(platform AccountPlatform, link LinkedAccount, linked bool, 
 			hx-swap-oob="true"
 		}
 		{ selfSwapAttrs... }
-		class={ "rounded-lg border border-input p-3 space-y-2 " + busyClass }
+		class="rounded-lg border border-input p-3 space-y-2"
 	>
 		<div class="flex items-center gap-2">
 			@accountPlatformIcon(platform.ID)
