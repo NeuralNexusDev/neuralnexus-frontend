@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -165,7 +166,7 @@ func TestAdminRoleGrantBuildsTheBodyFromTheTypedValue(t *testing.T) {
 			rec := action(http.MethodPost, "/admin/roles/"+idBee+"/permissions", url.Values{"grant_permission": {tc.permission}, "grant_value": {tc.value}})
 			assertStatus(t, rec, http.StatusOK)
 			assertWrites(t, f, tc.wantWrite)
-			assertBody(t, rec, `id="admin-role-grants"`)
+			assertBody(t, rec, `id="admin-role-granted"`, `id="admin-role-grant" hx-swap-oob="true"`)
 			assertNoBody(t, rec, "autofocus", `id="admin-role-form"`, "<html")
 		})
 	}
@@ -219,21 +220,39 @@ func TestAdminRoleGrantRefusedShowsTheAPIMessage(t *testing.T) {
 	}
 }
 
-func TestAdminRoleSaveValueKeepsWhatWasTypedInTheGrantForm(t *testing.T) {
+func TestAdminRoleSaveValueAnswersWithTheGrantedListAlone(t *testing.T) {
 	f := newFakeAdmin(t)
 	seedRoleEditor(f)
 	f.on("PUT /roles/"+idBee+"/permissions/"+idPRate, 204, ``)
 	rec := putRoleValue(idPRate, url.Values{"value_" + idPRate: {"250"}, "grant_permission": {idPMotd}, "grant_value": {"half typed"}})
 	assertStatus(t, rec, http.StatusOK)
 	assertWrites(t, f, `PUT /roles/`+idBee+`/permissions/`+idPRate+` {"value":250}`)
-	assertBody(t, rec, `<option value="`+idPMotd+`" selected>`, `value="half typed"`, "autofocus")
+	assertBody(t, rec, `id="admin-role-granted"`, "autofocus", `id="admin-role-status" hx-swap-oob="innerHTML"></p>`)
+	assertNoBody(t, rec, `id="admin-role-grant"`, `half typed`)
 }
 
-func TestAdminRoleSaveValueDropsATypedValueForAPermissionNoLongerAvailable(t *testing.T) {
+func TestAdminRoleSaveValueDoesNotReloadThePermissionList(t *testing.T) {
 	f := newFakeAdmin(t)
 	seedRoleEditor(f)
 	f.on("PUT /roles/"+idBee+"/permissions/"+idPRate, 204, ``)
-	rec := putRoleValue(idPRate, url.Values{"value_" + idPRate: {"250"}, "grant_permission": {idPBee}, "grant_value": {"stale"}})
+	putRoleValue(idPRate, url.Values{"value_" + idPRate: {"250"}})
+	// The one lookup is the one that builds the request body; the reload reads only the role.
+	var lookups int
+	for _, uri := range f.uris() {
+		if uri == "GET /permissions" {
+			lookups++
+		}
+	}
+	if lookups != 1 {
+		t.Errorf("GET /permissions was called %d times, want 1: %v", lookups, f.uris())
+	}
+}
+
+func TestAdminRoleRemoveDropsATypedValueForAPermissionNoLongerAvailable(t *testing.T) {
+	f := newFakeAdmin(t)
+	seedRoleEditor(f)
+	f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
+	rec := action(http.MethodPost, "/admin/roles/"+idBee+"/permissions/"+idPBee+"/remove", url.Values{"grant_permission": {idPRate}, "grant_value": {"stale"}})
 	assertNoBody(t, rec, `value="stale"`)
 	assertBody(t, rec, `<option value="`+idPPets+`" selected>`)
 }
@@ -245,7 +264,8 @@ func TestAdminRoleRemoveDeletesTheGrantAndKeepsTheGrantForm(t *testing.T) {
 	rec := action(http.MethodPost, "/admin/roles/"+idBee+"/permissions/"+idPBee+"/remove", url.Values{"grant_permission": {idPMotd}, "grant_value": {"half typed"}})
 	assertStatus(t, rec, http.StatusOK)
 	assertWrites(t, f, `DELETE /roles/`+idBee+`/permissions/`+idPBee+` `)
-	assertBody(t, rec, `<option value="`+idPMotd+`" selected>`, `value="half typed"`, "autofocus")
+	assertBody(t, rec, `id="admin-role-granted"`, `id="admin-role-grant" hx-swap-oob="true"`,
+		`<option value="`+idPMotd+`" selected>`, `value="half typed"`, "autofocus")
 }
 
 func TestAdminRoleRemoveRefusedShowsTheAPIMessage(t *testing.T) {
@@ -308,7 +328,7 @@ func TestAdminRoleSaveSendsOnlyWhatChanged(t *testing.T) {
 			assertWrites(t, f, tc.want)
 			assertBody(t, rec, `id="admin-role-form"`, `id="admin-role-status" hx-swap-oob="innerHTML">Saved<`,
 				`id="admin-role-header" hx-swap-oob="true"`, `id="admin-role-delete" hx-swap-oob="true"`)
-			assertNoBody(t, rec, `id="admin-role-grants"`)
+			assertNoBody(t, rec, `id="admin-role-granted"`, `id="admin-role-grant"`)
 		})
 	}
 }
@@ -432,4 +452,19 @@ func TestAdminRoleChangesEmptyTheStatusLine(t *testing.T) {
 	f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
 	rec := action(http.MethodPost, "/admin/roles/"+idBee+"/permissions/"+idPBee+"/remove", nil)
 	assertBody(t, rec, `<p id="admin-role-status" hx-swap-oob="innerHTML"></p>`)
+}
+
+func TestAdminRoleEditorQueuesActionsOnTheEditor(t *testing.T) {
+	f := newFakeAdmin(t)
+	seedRoleEditor(f)
+	rec := getPage("/admin/roles/" + idBee + "/editor")
+	assertBody(t, rec,
+		`id="admin-role" class="space-y-6" hx-sync="this:drop"`,
+		`id="admin-role-grants" class="space-y-6" hx-target="#admin-role-granted" hx-swap="outerHTML"`,
+		`hx-sync="this:replace"`,
+	)
+	if got := strings.Count(rec.Body.String(), "hx-sync="); got != 2 {
+		t.Errorf("hx-sync appears %d times, want the editor and the grant select", got)
+	}
+	assertNoBody(t, rec, "closest")
 }

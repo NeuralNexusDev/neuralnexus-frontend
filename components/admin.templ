@@ -245,17 +245,22 @@ func adminLinkName(link LinkedAccount) string {
 	return link.PlatformID
 }
 
-templ adminHead() {
-	<meta name="htmx-config" content={ adminHTMXConfig }/>
-	<script src={ adminHTMXURL } defer></script>
-}
-
 templ adminPage(contents templ.Component) {
-	@WrapContentsWithHead("NeuralNexus", adminHead(), contents)
+	@WrapContentsWithHead("NeuralNexus", htmxHead(), contents)
 }
 
 templ adminError() {
 	<div id="admin-error" role="alert" class="empty:hidden rounded-md border border-destructive bg-destructive/10 p-3 text-center text-sm text-destructive"></div>
+}
+
+templ adminField(id string, label string, help string) {
+	<div class="space-y-2">
+		<label class="text-sm font-medium leading-none" for={ id }>{ label }</label>
+		{ children... }
+		if help != "" {
+			<p class="text-xs text-gray-500 dark:text-gray-400">{ help }</p>
+		}
+	</div>
 }
 
 templ adminLoad(path string) {
@@ -354,8 +359,7 @@ templ adminUsers() {
 // AdminUsersList renders the search box and the first page of users.
 templ AdminUsersList(d AdminUsersData) {
 	<div class="space-y-6">
-		<div class="space-y-2">
-			<label class="text-sm font-medium leading-none" for="admin-users-search">Search</label>
+		@adminField("admin-users-search", "Search", "") {
 			<input
 				id="admin-users-search"
 				type="search"
@@ -369,7 +373,7 @@ templ AdminUsersList(d AdminUsersData) {
 				hx-sync="this:replace"
 				class={ adminInputClass }
 			/>
-		</div>
+		}
 		<ul id="admin-users" class="space-y-2">
 			@AdminUserRows(d)
 		</ul>
@@ -437,7 +441,7 @@ templ adminUser(id string) {
 
 // AdminUserContent renders the user editor, which the user page loads.
 templ AdminUserContent(d AdminUserData) {
-	<div id="admin-user" class="space-y-6">
+	<div id="admin-user" class="space-y-6" hx-sync="this:drop">
 		@AdminUserHeader(d, false)
 		@AdminUserForm(d)
 		@adminUserLinks(d)
@@ -467,7 +471,6 @@ templ AdminUserForm(d AdminUserData) {
 		hx-post={ adminUserPath(d.User.UserID) }
 		hx-target="#admin-user-form"
 		hx-swap="outerHTML"
-		hx-sync="closest #admin-user:drop"
 	>
 		<input type="hidden" name="loaded_username" value={ d.User.Username }/>
 		for _, roleID := range d.User.Roles {
@@ -479,8 +482,7 @@ templ AdminUserForm(d AdminUserData) {
 				<input type="hidden" name="kept_roles" value={ roleID }/>
 			}
 		}
-		<div class="space-y-2">
-			<label class="text-sm font-medium leading-none" for="admin-user-username">Username</label>
+		@adminField("admin-user-username", "Username", "") {
 			<input
 				id="admin-user-username"
 				name="username"
@@ -491,7 +493,7 @@ templ AdminUserForm(d AdminUserData) {
 				spellcheck="false"
 				class={ adminInputClass }
 			/>
-		</div>
+		}
 		<fieldset class="space-y-2">
 			<legend class="text-sm font-medium leading-none">Roles</legend>
 			<ul id="admin-user-roles" class="space-y-2">
@@ -603,8 +605,7 @@ templ AdminRolesContent(d AdminRolesData) {
 		<p id="admin-roles-empty" hidden?={ len(d.Roles) > 0 } class="text-center text-sm text-gray-500 dark:text-gray-400">No roles</p>
 		<form id="admin-role-create-form" class="space-y-4 rounded-lg border border-input p-4" hx-post="/admin/roles" hx-sync="this:drop">
 			<h2 class="text-lg font-semibold">New role</h2>
-			<div class="space-y-2">
-				<label class="text-sm font-medium leading-none" for="admin-role-create-name">Name</label>
+			@adminField("admin-role-create-name", "Name", "Lower-case letters, digits and underscores, starting with a letter") {
 				<input
 					id="admin-role-create-name"
 					name="name"
@@ -616,12 +617,10 @@ templ AdminRolesContent(d AdminRolesData) {
 					placeholder="moderator"
 					class={ adminInputClass }
 				/>
-				<p class="text-xs text-gray-500 dark:text-gray-400">Lower-case letters, digits and underscores, starting with a letter</p>
-			</div>
-			<div class="space-y-2">
-				<label class="text-sm font-medium leading-none" for="admin-role-create-description">Description</label>
+			}
+			@adminField("admin-role-create-description", "Description", "") {
 				<input id="admin-role-create-description" name="description" type="text" autocomplete="off" class={ adminInputClass }/>
-			</div>
+			}
 			<button id="admin-role-create-submit" type="submit" class={ adminSubmitClass }>Create role</button>
 		</form>
 	</div>
@@ -680,7 +679,7 @@ templ adminRole(id string) {
 
 // AdminRoleContent renders the role editor, which the role page loads.
 templ AdminRoleContent(d AdminRoleData) {
-	<div id="admin-role" class="space-y-6">
+	<div id="admin-role" class="space-y-6" hx-sync="this:drop">
 		@AdminRoleHeader(d, false)
 		@AdminRoleForm(d)
 		@AdminRoleGrants(d)
@@ -713,8 +712,7 @@ templ AdminRoleForm(d AdminRoleData) {
 	>
 		<input type="hidden" name="loaded_name" value={ d.Role.Name }/>
 		<input type="hidden" name="loaded_description" value={ d.Role.Description }/>
-		<div class="space-y-2">
-			<label class="text-sm font-medium leading-none" for="admin-role-name">Name</label>
+		@adminField("admin-role-name", "Name", "") {
 			<input
 				id="admin-role-name"
 				name="name"
@@ -726,11 +724,10 @@ templ AdminRoleForm(d AdminRoleData) {
 				spellcheck="false"
 				class={ adminInputClass }
 			/>
-		</div>
-		<div class="space-y-2">
-			<label class="text-sm font-medium leading-none" for="admin-role-description">Description</label>
+		}
+		@adminField("admin-role-description", "Description", "") {
 			<input id="admin-role-description" name="description" type="text" value={ d.Role.Description } autocomplete="off" class={ adminInputClass }/>
-		</div>
+		}
 		<button id="admin-role-save" type="submit" class={ adminSubmitClass }>Save</button>
 	</form>
 }
@@ -745,65 +742,72 @@ templ AdminRoleDelete(d AdminRoleData, oob bool) {
 		type="button"
 		hx-delete={ adminRolePath(d.Role.ID) }
 		hx-confirm={ "Delete the role " + d.Role.Name + "?" }
-		hx-sync="closest #admin-role:drop"
 		class={ adminDangerClass }
 	>
 		Delete role
 	</button>
 }
 
-// AdminRoleGrants renders the granted permissions and the grant form, which htmx swaps in after a change to either.
+// AdminRoleGrants renders the granted permissions and the grant form, which a change swaps by region.
 templ AdminRoleGrants(d AdminRoleData) {
-	<div id="admin-role-grants" class="space-y-6">
-		<div class="space-y-2">
-			<h2 id="admin-role-permissions-title" tabindex="-1" autofocus?={ d.FocusList } class="text-lg font-semibold">Granted permissions</h2>
-			if len(d.Role.Permissions) == 0 {
-				<p id="admin-role-permissions-empty" class={ adminMutedClass }>This role grants no permissions</p>
-			} else {
-				<ul id="admin-role-permissions" class="space-y-2">
-					for _, permission := range d.Role.Permissions {
-						<li class="space-y-2 rounded-lg border border-input p-3">
-							<div class="flex items-start justify-between gap-3">
-								@adminTextBlock(permission.Node, permission.Description)
-								<button
-									type="button"
-									aria-label={ "Remove " + permission.Node }
-									hx-post={ adminRolePermissionPath(d.Role.ID, permission.ID) + "/remove" }
-									hx-target="#admin-role-grants"
-									hx-swap="outerHTML"
-									hx-sync="closest #admin-role:drop"
-									hx-include="#admin-role-grants"
-									class={ adminButtonClass }
-								>
-									Remove
-								</button>
-							</div>
-							if permission.ValueType != "" {
-								<form
-									class="flex items-start gap-2"
-									hx-post={ adminRolePermissionPath(d.Role.ID, permission.ID) }
-									hx-target="#admin-role-grants"
-									hx-swap="outerHTML"
-									hx-sync="closest #admin-role:drop"
-									hx-include="#admin-role-grants"
-								>
-									@adminValueField(permission.Permission, d.Draft(permission), "value_"+permission.ID)
-									<button type="submit" aria-label={ "Save value of " + permission.Node } class={ adminButtonClass }>Save value</button>
-								</form>
-							}
-						</li>
-					}
-				</ul>
-			}
-		</div>
+	<div id="admin-role-grants" class="space-y-6" hx-target="#admin-role-granted" hx-swap="outerHTML">
+		@AdminRoleGranted(d)
+		@AdminRoleGrantForm(d, false)
+	</div>
+}
+
+// AdminRoleGranted renders the granted permissions, which htmx swaps in after a change to one of them.
+templ AdminRoleGranted(d AdminRoleData) {
+	<div id="admin-role-granted" class="space-y-2">
+		<h2 id="admin-role-permissions-title" tabindex="-1" autofocus?={ d.FocusList } class="text-lg font-semibold">Granted permissions</h2>
+		if len(d.Role.Permissions) == 0 {
+			<p id="admin-role-permissions-empty" class={ adminMutedClass }>This role grants no permissions</p>
+		} else {
+			<ul id="admin-role-permissions" class="space-y-2">
+				for _, permission := range d.Role.Permissions {
+					<li class="space-y-2 rounded-lg border border-input p-3">
+						<div class="flex items-start justify-between gap-3">
+							@adminTextBlock(permission.Node, permission.Description)
+							<button
+								type="button"
+								aria-label={ "Remove " + permission.Node }
+								hx-post={ adminRolePermissionPath(d.Role.ID, permission.ID) + "/remove" }
+								hx-include="#admin-role-grants"
+								class={ adminButtonClass }
+							>
+								Remove
+							</button>
+						</div>
+						if permission.ValueType != "" {
+							<form
+								class="flex items-start gap-2"
+								hx-post={ adminRolePermissionPath(d.Role.ID, permission.ID) }
+								hx-include="#admin-role-grants"
+							>
+								@adminValueField(permission.Permission, d.Draft(permission), "value_"+permission.ID)
+								<button type="submit" aria-label={ "Save value of " + permission.Node } class={ adminButtonClass }>Save value</button>
+							</form>
+						}
+					</li>
+				}
+			</ul>
+		}
+	</div>
+}
+
+// AdminRoleGrantForm renders the form that grants a permission, or the out-of-band copy of it a grant or a removal sends.
+templ AdminRoleGrantForm(d AdminRoleData, oob bool) {
+	<div
+		id="admin-role-grant"
+		if oob {
+			hx-swap-oob="true"
+		}
+	>
 		if selected, ok := d.Selected(); ok {
 			<form
 				id="admin-role-grant-form"
 				class="space-y-3 rounded-lg border border-input p-4"
 				hx-post={ adminRolePath(d.Role.ID) + "/permissions" }
-				hx-target="#admin-role-grants"
-				hx-swap="outerHTML"
-				hx-sync="closest #admin-role:drop"
 				hx-include="#admin-role-grants"
 			>
 				<h2 class="text-lg font-semibold">Grant a permission</h2>
@@ -815,6 +819,7 @@ templ AdminRoleGrants(d AdminRoleData) {
 					hx-trigger="change"
 					hx-target="#admin-role-grant-value"
 					hx-swap="innerHTML"
+					hx-sync="this:replace"
 					class={ adminSelectClass }
 				>
 					for _, permission := range d.Available() {
@@ -855,7 +860,7 @@ templ adminPermissions() {
 
 // AdminPermissionsContent renders the permission list and the form that creates one.
 templ AdminPermissionsContent(d AdminPermissionsData) {
-	<div id="admin-permissions-root" class="space-y-6">
+	<div id="admin-permissions-root" class="space-y-6" hx-sync="this:drop" hx-target="#admin-permissions-list" hx-swap="outerHTML">
 		@AdminPermissionList(d)
 		@AdminPermissionForm(false)
 	</div>
@@ -882,9 +887,6 @@ templ AdminPermissionList(d AdminPermissionsData) {
 							aria-label={ "Delete " + permission.Node }
 							hx-delete={ "/admin/permissions/" + url.PathEscape(permission.ID) }
 							hx-confirm={ "Delete the permission " + permission.Node + "?" }
-							hx-target="#admin-permissions-list"
-							hx-swap="outerHTML"
-							hx-sync="closest #admin-permissions-root:drop"
 							class={ adminButtonClass }
 						>
 							Delete
@@ -905,13 +907,9 @@ templ AdminPermissionForm(oob bool) {
 		}
 		class="group space-y-4 rounded-lg border border-input p-4"
 		hx-post="/admin/permissions"
-		hx-target="#admin-permissions-list"
-		hx-swap="outerHTML"
-		hx-sync="closest #admin-permissions-root:drop"
 	>
 		<h2 class="text-lg font-semibold">New permission</h2>
-		<div class="space-y-2">
-			<label class="text-sm font-medium leading-none" for="admin-permission-create-node">Node</label>
+		@adminField("admin-permission-create-node", "Node", "Lower-case words of letters, digits and underscores joined by dots") {
 			<input
 				id="admin-permission-create-node"
 				name="node"
@@ -923,21 +921,18 @@ templ AdminPermissionForm(oob bool) {
 				placeholder="petpictures.admin"
 				class={ adminInputClass }
 			/>
-			<p class="text-xs text-gray-500 dark:text-gray-400">Lower-case words of letters, digits and underscores joined by dots</p>
-		</div>
-		<div class="space-y-2">
-			<label class="text-sm font-medium leading-none" for="admin-permission-create-description">Description</label>
+		}
+		@adminField("admin-permission-create-description", "Description", "") {
 			<input id="admin-permission-create-description" name="description" type="text" autocomplete="off" class={ adminInputClass }/>
-		</div>
-		<div class="space-y-2">
-			<label class="text-sm font-medium leading-none" for="admin-permission-create-type">Value</label>
+		}
+		@adminField("admin-permission-create-type", "Value", "") {
 			<select id="admin-permission-create-type" name="value_type" class={ adminSelectClass }>
 				<option value="">None (granted as is)</option>
 				<option value="int">Whole number</option>
 				<option value="string">Text</option>
 				<option value="string_list">List of text</option>
 			</select>
-		</div>
+		}
 		<div id="admin-permission-create-merge-field" class="hidden space-y-2 group-has-[option[value=int]:checked]:block">
 			<label class="text-sm font-medium leading-none" for="admin-permission-create-merge">When an account holds it through several roles</label>
 			<select id="admin-permission-create-merge" name="merge" class={ adminSelectClass }>

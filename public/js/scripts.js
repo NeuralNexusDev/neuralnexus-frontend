@@ -548,22 +548,6 @@ function reviewBeeSuggestion(name, accept, row) {
         });
 }
 
-/** Cosmetic only - the admin endpoints enforce the permission. */
-function showBeeAdminLink() {
-    fetch(`${apiBaseUrl()}/api/v1/users/me/permissions`, {
-        credentials: 'include'
-    })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((permissions) => {
-            if ((permissions || []).includes('beenamegenerator|*')) {
-                document.getElementById('bee-admin-link').hidden = false;
-            }
-        })
-        .catch((error) => {
-            console.error('Error:', error);
-        });
-}
-
 const MC_STATUS_PATH = '/project/mc-status';
 const MC_STATUS_TIMEOUT_MS = 30000;
 let mcStatusController = null;

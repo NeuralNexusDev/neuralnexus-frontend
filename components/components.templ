@@ -16,6 +16,11 @@ func steamOpenIDLoginURL() string {
 
 var STEAM_OPENID_LOGIN_URL = steamOpenIDLoginURL()
 
+templ htmxHead() {
+	<meta name="htmx-config" content={ adminHTMXConfig }/>
+	<script src={ adminHTMXURL } defer></script>
+}
+
 templ WrapContents(contents templ.Component) {
 	@WrapContentsWithHead("NeuralNexus", nil, contents)
 }
@@ -263,22 +268,23 @@ templ BeeNameGenerator() {
 			</button>
 			<p id="suggest-bee-status" role="status" hidden class="text-center text-sm text-gray-500 dark:text-gray-400"></p>
 		</form>
-		<a
-			id="bee-admin-link"
-			hidden
-			href="/project/bee-name-generator/admin"
-			class="border border-input hover:bg-accent hover:text-accent-foreground inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 h-10 px-4 py-2 w-full"
-		>
-			Review suggestions
-		</a>
+		<div hx-get="/project/bee-name-generator/admin-link" hx-trigger="load" hx-swap="outerHTML"></div>
 	</div>
-	<script>
-		showBeeAdminLink();
-	</script>
+}
+
+// BeeNameGeneratorAdminLink is the link to the suggestion review page, which accounts that may review suggestions get.
+templ BeeNameGeneratorAdminLink() {
+	<a
+		id="bee-admin-link"
+		href="/project/bee-name-generator/admin"
+		class="border border-input hover:bg-accent hover:text-accent-foreground inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 h-10 px-4 py-2 w-full"
+	>
+		Review suggestions
+	</a>
 }
 
 templ BeeNameGeneratorPage() {
-	@WrapContents(BeeNameGenerator())
+	@WrapContentsWithHead("NeuralNexus", htmxHead(), BeeNameGenerator())
 }
 
 templ BeeNameGeneratorAdmin() {

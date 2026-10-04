@@ -165,8 +165,21 @@ func roleDrafts(form url.Values, except string) map[string]string {
 	return drafts
 }
 
-// renderGrants reloads the role and answers with its granted permissions, which keep the drafts typed in them.
-func renderGrants(w http.ResponseWriter, r *http.Request, a adminAPI, drafts map[string]string, grantPermission string, grantValue string, focusList bool) {
+// renderValueSaved answers a saved value with the granted list alone, since a value does not change which permissions can be granted.
+func renderValueSaved(w http.ResponseWriter, r *http.Request, a adminAPI, drafts map[string]string) {
+	data, err := loadRole(a, r.PathValue("id"))
+	if err != nil {
+		failFragment(w, r, afterWrite(err))
+		return
+	}
+	data.Drafts = drafts
+	data.FocusList = true
+	renderAll(w, r, components.AdminRoleGranted(data), components.AdminStatus("admin-role-status", ""))
+}
+
+// renderGrantsChanged answers a grant or a removal with the granted list and the grant form, whose choices changed.
+// The granted list keeps the drafts typed in it, and the grant form what was typed in it.
+func renderGrantsChanged(w http.ResponseWriter, r *http.Request, a adminAPI, drafts map[string]string, grantPermission string, grantValue string, focusList bool) {
 	data, err := loadRoleEditor(a, r.PathValue("id"))
 	if err != nil {
 		failFragment(w, r, afterWrite(err))
@@ -176,7 +189,7 @@ func renderGrants(w http.ResponseWriter, r *http.Request, a adminAPI, drafts map
 	data.GrantPermission = grantPermission
 	data.GrantValue = grantValue
 	data.FocusList = focusList || len(data.Available()) == 0
-	renderAll(w, r, components.AdminRoleGrants(data), components.AdminStatus("admin-role-status", ""))
+	renderAll(w, r, components.AdminRoleGranted(data), components.AdminRoleGrantForm(data, true), components.AdminStatus("admin-role-status", ""))
 }
 
 // putGrant grants the permission to the role with the value typed for it.
@@ -201,14 +214,14 @@ func putGrant(w http.ResponseWriter, r *http.Request, a adminAPI, permissionID s
 
 func adminRoleGrantHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	if putGrant(w, r, a, r.PostForm.Get("grant_permission"), r.PostForm.Get("grant_value")) {
-		renderGrants(w, r, a, roleDrafts(r.PostForm, ""), "", "", false)
+		renderGrantsChanged(w, r, a, roleDrafts(r.PostForm, ""), "", "", false)
 	}
 }
 
 func adminRoleValueHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	permissionID := r.PathValue("permission")
 	if putGrant(w, r, a, permissionID, r.PostForm.Get("value_"+permissionID)) {
-		renderGrants(w, r, a, roleDrafts(r.PostForm, permissionID), r.PostForm.Get("grant_permission"), r.PostForm.Get("grant_value"), true)
+		renderValueSaved(w, r, a, roleDrafts(r.PostForm, permissionID))
 	}
 }
 
@@ -219,7 +232,7 @@ func adminRoleRemoveHandler(w http.ResponseWriter, r *http.Request, a adminAPI) 
 		failFragment(w, r, err)
 		return
 	}
-	renderGrants(w, r, a, roleDrafts(r.PostForm, permissionID), r.PostForm.Get("grant_permission"), r.PostForm.Get("grant_value"), true)
+	renderGrantsChanged(w, r, a, roleDrafts(r.PostForm, permissionID), r.PostForm.Get("grant_permission"), r.PostForm.Get("grant_value"), true)
 }
 
 func adminRoleGrantValueHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {

@@ -680,3 +680,45 @@ func TestAdminActionsRefuseAFormThatCannotBeRead(t *testing.T) {
 		})
 	}
 }
+
+func TestBeeAdminLinkShowsForTheBeeAdminPermission(t *testing.T) {
+	for _, permissions := range []string{`["beenamegenerator.admin"]`, `["ratelimit:5","beenamegenerator.admin:1"]`} {
+		t.Run(permissions, func(t *testing.T) {
+			f := newFakeAdmin(t)
+			f.on("GET /users/me/permissions", 200, permissions)
+			rec := getPage("/project/bee-name-generator/admin-link")
+			assertStatus(t, rec, http.StatusOK)
+			assertBody(t, rec, `id="bee-admin-link"`, `href="/project/bee-name-generator/admin"`)
+		})
+	}
+}
+
+func TestBeeAdminLinkIsEmptyWithoutTheBeeAdminPermission(t *testing.T) {
+	for _, permissions := range []string{`[]`, `["users.admin","roles.admin"]`, `["beenamegenerator|*"]`, `["beenamegenerator.administrator"]`, `["xbeenamegenerator.admin"]`} {
+		t.Run(permissions, func(t *testing.T) {
+			f := newFakeAdmin(t)
+			f.on("GET /users/me/permissions", 200, permissions)
+			rec := getPage("/project/bee-name-generator/admin-link")
+			assertStatus(t, rec, http.StatusOK)
+			if rec.Body.Len() != 0 {
+				t.Errorf("body = %q, want empty", rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestBeeAdminLinkIsEmptyWhenThePermissionsCannotBeRead(t *testing.T) {
+	f := newFakeAdmin(t)
+	f.problem("GET /users/me/permissions", 500, "down")
+	rec := getPage("/project/bee-name-generator/admin-link")
+	assertStatus(t, rec, http.StatusOK)
+	if rec.Body.Len() != 0 {
+		t.Errorf("body = %q, want empty", rec.Body.String())
+	}
+}
+
+func TestBeeNameGeneratorPageLoadsTheAdminLinkThroughHTMX(t *testing.T) {
+	rec := getPage("/project/bee-name-generator")
+	assertBody(t, rec, `hx-get="/project/bee-name-generator/admin-link"`, `hx-trigger="load"`, "htmx.v1.9.5.min.js")
+	assertNoBody(t, rec, "showBeeAdminLink", `id="bee-admin-link"`)
+}

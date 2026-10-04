@@ -134,14 +134,21 @@ func secondary(err error) (string, error) {
 	return message, nil
 }
 
-// accountAdminLinkHandler answers the account page with the link to the dashboard, or with nothing for an account without admin permissions.
+// permissionLink answers a page's placeholder with the link when the account holds one of the permissions, and with nothing otherwise.
 // The link is a convenience, so a failed lookup shows no link.
-func accountAdminLinkHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
-	permissions, err := adminGet[[]string](a, "/users/me/permissions", "Failed to load your permissions")
-	if err != nil || !(hasPermission(permissions, "users.admin") || hasPermission(permissions, "roles.admin")) {
-		return
+func permissionLink(link templ.Component, nodes ...string) func(http.ResponseWriter, *http.Request, adminAPI) {
+	return func(w http.ResponseWriter, r *http.Request, a adminAPI) {
+		permissions, err := adminGet[[]string](a, "/users/me/permissions", "Failed to load your permissions")
+		if err != nil {
+			return
+		}
+		for _, node := range nodes {
+			if hasPermission(permissions, node) {
+				templ.Handler(link).ServeHTTP(w, r)
+				return
+			}
+		}
 	}
-	templ.Handler(components.AdminDashboardLink()).ServeHTTP(w, r)
 }
 
 func adminCardsHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {

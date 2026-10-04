@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -93,4 +94,15 @@ func TestAdminPermissionDeleteRefusedShowsTheAPIMessage(t *testing.T) {
 	if got := bannerText(rec); got != "The permission is granted by a role" {
 		t.Errorf("body = %q", got)
 	}
+}
+
+func TestAdminPermissionsRootQueuesActionsAndNamesTheTarget(t *testing.T) {
+	f := newFakeAdmin(t)
+	f.on("GET /permissions", 200, permissionsJSON)
+	rec := getPage("/admin/permissions/list")
+	assertBody(t, rec, `id="admin-permissions-root" class="space-y-6" hx-sync="this:drop" hx-target="#admin-permissions-list" hx-swap="outerHTML"`)
+	if got := strings.Count(rec.Body.String(), "hx-sync="); got != 1 {
+		t.Errorf("hx-sync appears %d times, want only the root", got)
+	}
+	assertNoBody(t, rec, "closest")
 }
