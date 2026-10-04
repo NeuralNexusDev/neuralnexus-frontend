@@ -24,7 +24,7 @@ func TestAccountPageIsAShellThatLoadsItsContent(t *testing.T) {
 	f := newFakeAdmin(t)
 	rec := getPage("/account")
 	assertStatus(t, rec, http.StatusOK)
-	assertBody(t, rec, `hx-get="/account/content"`, `hx-trigger="load"`, "htmx.v4.0.0.min.js", `id="admin-error"`, `id="auth-error"`,
+	assertBody(t, rec, `hx-get="/account/content"`, `hx-trigger="load"`, "htmx/v4.0.0/htmx.min.js", `id="admin-error"`, `id="auth-error"`,
 		`id="link-discord-oauth-base"`, `id="link-xboxlive-oauth-base"`, "const linkRedirect", "showAuthErrorFromQuery()")
 	assertNoBody(t, rec, `id="account-username"`, "loadAccountProfile")
 	if len(f.uris()) != 0 {

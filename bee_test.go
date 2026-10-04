@@ -141,7 +141,7 @@ func TestBeeAdminPageIsAShell(t *testing.T) {
 	f := newFakeAdmin(t)
 	rec := getPage("/project/bee-name-generator/admin")
 	assertStatus(t, rec, http.StatusOK)
-	assertBody(t, rec, `hx-get="/project/bee-name-generator/admin/suggestions"`, `hx-trigger="load"`, "htmx.v4.0.0.min.js", `id="admin-error"`)
+	assertBody(t, rec, `hx-get="/project/bee-name-generator/admin/suggestions"`, `hx-trigger="load"`, "htmx/v4.0.0/htmx.min.js", `id="admin-error"`)
 	assertNoBody(t, rec, "loadBeeSuggestions")
 	if len(f.uris()) != 0 {
 		t.Errorf("the shell called the API: %v", f.uris())

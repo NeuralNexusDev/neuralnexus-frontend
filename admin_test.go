@@ -246,7 +246,7 @@ func TestAdminShellsHoldNoDataAndLoadTheirContent(t *testing.T) {
 			rec := getPage(tc.path)
 			assertStatus(t, rec, http.StatusOK)
 			assertBody(t, rec, `hx-get="`+tc.loads+`"`, `hx-trigger="load"`, `hx-swap="outerHTML"`, `id="admin-error"`,
-				`<script src="https://cdn.neuralnexus.dev/htmx/htmx.v4.0.0.min.js" integrity="sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc" crossorigin="anonymous" defer>`, `&#34;mode&#34;:&#34;same-origin&#34;`, `&#34;history&#34;:false`)
+				`<script src="https://s3.neuralnexus.dev/cdn/htmx/v4.0.0/htmx.min.js" integrity="sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc" crossorigin="anonymous" defer>`, `&#34;mode&#34;:&#34;same-origin&#34;`, `&#34;history&#34;:false`)
 			if len(f.uris()) != 0 {
 				t.Errorf("a shell called the API: %v", f.uris())
 			}
@@ -554,7 +554,7 @@ func TestAdminHTMXIsLoadedFromTheCDNWithHardenedConfig(t *testing.T) {
 	f.on("GET /users/me/permissions", 200, `["users.admin"]`)
 	rec := getPage("/admin")
 	assertBody(t, rec,
-		`<script src="https://cdn.neuralnexus.dev/htmx/htmx.v4.0.0.min.js" integrity="sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc" crossorigin="anonymous" defer>`,
+		`<script src="https://s3.neuralnexus.dev/cdn/htmx/v4.0.0/htmx.min.js" integrity="sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc" crossorigin="anonymous" defer>`,
 		`&#34;mode&#34;:&#34;same-origin&#34;`, `&#34;history&#34;:false`,
 	)
 }
@@ -721,6 +721,6 @@ func TestBeeAdminLinkIsEmptyWhenThePermissionsCannotBeRead(t *testing.T) {
 
 func TestBeeNameGeneratorPageLoadsTheAdminLinkThroughHTMX(t *testing.T) {
 	rec := getPage("/project/bee-name-generator")
-	assertBody(t, rec, `hx-get="/project/bee-name-generator/admin-link"`, `hx-trigger="load"`, "htmx.v4.0.0.min.js")
+	assertBody(t, rec, `hx-get="/project/bee-name-generator/admin-link"`, `hx-trigger="load"`, "htmx/v4.0.0/htmx.min.js")
 	assertNoBody(t, rec, "showBeeAdminLink", `id="bee-admin-link"`)
 }
