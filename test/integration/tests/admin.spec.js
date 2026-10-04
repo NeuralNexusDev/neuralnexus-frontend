@@ -27,6 +27,7 @@ test.describe('admin - access', () => {
   test('a server that cannot be reached shows a message in the banner', async ({ page }) => {
     await signIn(page);
     await page.goto('/admin/permissions');
+    await expect(page.locator('#admin-permissions li').first()).toBeVisible();
     await page.route('**/admin/permissions/*', (route) => route.abort('failed'));
     page.once('dialog', (dialog) => dialog.accept());
     await page.locator('#admin-permissions li').first().getByRole('button', { name: 'Delete' }).click();

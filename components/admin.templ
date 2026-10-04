@@ -195,7 +195,7 @@ func (d AdminRoleData) Draft(p RolePermission) string {
 const (
 	adminHTMXURL       = "https://s3.neuralnexus.dev/cdn/htmx/v4.0.0/htmx.min.js"
 	adminHTMXIntegrity = "sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc"
-	adminHTMXConfig    = `{"mode":"same-origin","history":false}`
+	adminHTMXConfig    = `{"mode":"same-origin","history":false,"allowEmptySwapAfterOOB":true}`
 	adminInputClass    = "text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
 	adminSelectClass   = "text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
 	adminSubmitClass   = "border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"

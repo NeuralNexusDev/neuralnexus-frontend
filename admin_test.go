@@ -246,7 +246,7 @@ func TestAdminShellsHoldNoDataAndLoadTheirContent(t *testing.T) {
 			rec := getPage(tc.path)
 			assertStatus(t, rec, http.StatusOK)
 			assertBody(t, rec, `hx-get="`+tc.loads+`"`, `hx-trigger="load"`, `hx-swap="outerHTML"`, `id="admin-error"`,
-				`<script src="https://s3.neuralnexus.dev/cdn/htmx/v4.0.0/htmx.min.js" integrity="sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc" crossorigin="anonymous" defer>`, `&#34;mode&#34;:&#34;same-origin&#34;`, `&#34;history&#34;:false`)
+				`<script src="https://s3.neuralnexus.dev/cdn/htmx/v4.0.0/htmx.min.js" integrity="sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc" crossorigin="anonymous" defer>`, `&#34;mode&#34;:&#34;same-origin&#34;`, `&#34;history&#34;:false`, `&#34;allowEmptySwapAfterOOB&#34;:true`)
 			if len(f.uris()) != 0 {
 				t.Errorf("a shell called the API: %v", f.uris())
 			}

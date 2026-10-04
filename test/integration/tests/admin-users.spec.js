@@ -69,6 +69,16 @@ test.describe('admin - user list', () => {
     await expect(search(page)).toHaveValue('user1099');
   });
 
+  test('Load more with nothing left to find removes the button', async ({ page }) => {
+    await signIn(page, { generateUsers: 1100 });
+    await page.goto('/admin/users');
+    await search(page).fill('zzz');
+    await expect(page.locator('#admin-users-empty')).toHaveText('No matches in the first 1000 users');
+    await page.locator('#admin-users-more-button').click();
+    await expect(page.locator('#admin-users-more-button')).toHaveCount(0);
+    await expect(rows(page)).toHaveCount(0);
+  });
+
   test('Load more adds the next page and the button goes when the list ends', async ({ page }) => {
     await signIn(page, { generateUsers: 247 });
     await page.goto('/admin/users');
