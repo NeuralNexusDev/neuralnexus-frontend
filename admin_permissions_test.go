@@ -10,7 +10,7 @@ import (
 func TestAdminPermissionListShowsTypesAndMerge(t *testing.T) {
 	f := newFakeAdmin(t)
 	f.on("GET /permissions", 200, permissionsJSON)
-	rec := getPage("/admin/permissions")
+	rec := getPage("/admin/permissions/list")
 	assertStatus(t, rec, http.StatusOK)
 	assertBody(t, rec,
 		">beenamegenerator.admin<", ">int, merge max<", ">string_list, merge union<", ">string, merge first<",
@@ -23,10 +23,10 @@ func TestAdminPermissionListShowsTypesAndMerge(t *testing.T) {
 func TestAdminPermissionListEmptyAndRefused(t *testing.T) {
 	f := newFakeAdmin(t)
 	f.on("GET /permissions", 200, `[]`)
-	assertBody(t, getPage("/admin/permissions"), `id="admin-permissions-empty"`, `id="admin-permission-create-form"`)
+	assertBody(t, getPage("/admin/permissions/list"), `id="admin-permissions-empty"`, `id="admin-permission-create-form"`)
 
 	f.problem("GET /permissions", 403, "no access")
-	rec := getPage("/admin/permissions")
+	rec := getPage("/admin/permissions/list")
 	assertStatus(t, rec, http.StatusForbidden)
 	assertBody(t, rec, "no access")
 	assertNoBody(t, rec, `id="admin-permission-create-form"`)
@@ -36,7 +36,7 @@ func TestAdminPermissionListEscapesAPIText(t *testing.T) {
 	f := newFakeAdmin(t)
 	f.on("GET /permissions", 200, fmt.Sprintf(`[{"id":%q,"node":%q,"description":%q,"value_type":%q,"merge":%q}]`,
 		hostile+"id", hostile+"node", hostile+"description", hostile+"type", hostile+"merge"))
-	rec := getPage("/admin/permissions")
+	rec := getPage("/admin/permissions/list")
 	assertNoBody(t, rec, "<img src=x")
 }
 

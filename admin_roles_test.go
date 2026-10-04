@@ -16,7 +16,7 @@ func TestAdminRoleListShowsRolesWithTheirPermissions(t *testing.T) {
 			{"id":"`+idPRate+`","node":"ratelimit","description":"d","value_type":"int","merge":"max","value":100},
 			{"id":"`+idPPets+`","node":"petpictures.pets","description":"d","value_type":"string_list","merge":"union","value":["rex","fido"]}
 		]}]`)
-	rec := getPage("/admin/roles")
+	rec := getPage("/admin/roles/list")
 	assertStatus(t, rec, http.StatusOK)
 	assertBody(t, rec, `href="/admin/roles/`+idBee+`"`, "bee_admin", "Bee Name Generator Admin",
 		">beenamegenerator.admin<", ">ratelimit: 100<", ">petpictures.pets: rex, fido<",
@@ -27,7 +27,7 @@ func TestAdminRoleListShowsRolesWithTheirPermissions(t *testing.T) {
 func TestAdminRoleListRefusedHidesTheCreateForm(t *testing.T) {
 	f := newFakeAdmin(t)
 	f.problem("GET /roles", 403, "You do not have permission to manage roles and permissions")
-	rec := getPage("/admin/roles")
+	rec := getPage("/admin/roles/list")
 	assertStatus(t, rec, http.StatusForbidden)
 	assertBody(t, rec, "You do not have permission to manage roles and permissions")
 	assertNoBody(t, rec, `id="admin-role-create-form"`)
@@ -40,7 +40,7 @@ func TestAdminRoleListEscapesAPIText(t *testing.T) {
 		{"id":"2","node":"ratelimit","description":"d","value_type":"int","value":%q},
 		{"id":"3","node":"x","description":"d","value_type":"string_list","value":[%q]}]}]`,
 		hostile+"id", hostile+"name", hostile+"description", hostile+"node", hostile+"number-looking", hostile+"item"))
-	rec := getPage("/admin/roles")
+	rec := getPage("/admin/roles/list")
 	assertNoBody(t, rec, "<img src=x")
 }
 
@@ -75,7 +75,7 @@ func seedRoleEditor(f *fakeAdmin) {
 func TestAdminRoleEditorShowsTheRole(t *testing.T) {
 	f := newFakeAdmin(t)
 	seedRoleEditor(f)
-	rec := getPage("/admin/roles/" + idBee)
+	rec := getPage("/admin/roles/" + idBee + "/editor")
 	assertStatus(t, rec, http.StatusOK)
 	assertBody(t, rec,
 		`id="admin-role-title"`, ">bee_admin<", ">"+idBee+"<",
@@ -98,7 +98,7 @@ func TestAdminRoleEditorWithoutPermissionsOrGrantsLeft(t *testing.T) {
 	f := newFakeAdmin(t)
 	f.on("GET /roles/"+idSystem, 200, `{"id":"`+idSystem+`","name":"system","description":"System","permissions":[]}`)
 	f.on("GET /permissions", 200, `[]`)
-	rec := getPage("/admin/roles/" + idSystem)
+	rec := getPage("/admin/roles/" + idSystem + "/editor")
 	assertBody(t, rec, `id="admin-role-permissions-empty"`, `id="admin-role-grant-empty"`)
 	assertNoBody(t, rec, `id="admin-role-grant-form"`)
 }
@@ -106,7 +106,7 @@ func TestAdminRoleEditorWithoutPermissionsOrGrantsLeft(t *testing.T) {
 func TestAdminRoleEditorUnknownRoleShowsTheMessageAndNothingFromTheURL(t *testing.T) {
 	f := newFakeAdmin(t)
 	f.problem("GET /roles/404", 404, "Role not found")
-	rec := getPage("/admin/roles/404")
+	rec := getPage("/admin/roles/404/editor")
 	assertStatus(t, rec, http.StatusNotFound)
 	assertBody(t, rec, "Role not found")
 	assertNoBody(t, rec, `id="admin-role-form"`, ">404<")
@@ -116,7 +116,7 @@ func TestAdminRoleEditorFailedPermissionLookupIsAnError(t *testing.T) {
 	f := newFakeAdmin(t)
 	seedRoleEditor(f)
 	f.problem("GET /permissions", 500, "permissions are down")
-	rec := getPage("/admin/roles/" + idBee)
+	rec := getPage("/admin/roles/" + idBee + "/editor")
 	assertStatus(t, rec, http.StatusInternalServerError)
 	assertBody(t, rec, "permissions are down")
 	assertNoBody(t, rec, `id="admin-role-form"`)
@@ -132,7 +132,7 @@ func TestAdminRoleEditorEscapesIDsAndAPIText(t *testing.T) {
 		{"id":"3","node":"x","description":"d","value_type":"string_list","value":[%q]}]}`,
 		id, hostile+"name", hostile+"description", hostile+"node", hostile+"node description", hostile+"value", hostile+"item"))
 	f.on("GET /permissions", 200, fmt.Sprintf(`[{"id":"9","node":%q,"description":"d"}]`, hostile+"ungranted"))
-	rec := getPage("/admin/roles/" + escaped)
+	rec := getPage("/admin/roles/" + escaped + "/editor")
 	assertStatus(t, rec, http.StatusOK)
 	assertNoBody(t, rec, "<img src=x")
 	assertBody(t, rec, "&lt;img src=x")

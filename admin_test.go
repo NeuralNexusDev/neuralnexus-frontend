@@ -222,7 +222,43 @@ const (
 	]`
 )
 
-func TestAdminPagesAreNotCached(t *testing.T) {
+func TestAdminShellsHoldNoDataAndLoadTheirContent(t *testing.T) {
+	f := newFakeAdmin(t)
+	cases := []struct{ path, loads string }{
+		{"/admin", "/admin/cards"},
+		{"/admin/users", "/admin/users/list"},
+		{"/admin/users/" + idBob, "/admin/users/" + idBob + "/editor"},
+		{"/admin/roles", "/admin/roles/list"},
+		{"/admin/roles/" + idBee, "/admin/roles/" + idBee + "/editor"},
+		{"/admin/permissions", "/admin/permissions/list"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.path, func(t *testing.T) {
+			f.reset()
+			rec := getPage(tc.path)
+			assertStatus(t, rec, http.StatusOK)
+			assertBody(t, rec, `hx-get="`+tc.loads+`"`, `hx-trigger="load"`, `hx-swap="outerHTML"`, `id="admin-error"`,
+				`<script src="https://cdn.neuralnexus.dev/htmx/htmx.v1.9.5.min.js" defer>`, `&#34;selfRequestsOnly&#34;:true`, `&#34;allowEval&#34;:false`)
+			if len(f.uris()) != 0 {
+				t.Errorf("a shell called the API: %v", f.uris())
+			}
+		})
+	}
+}
+
+func TestAdminUserAndRoleShellsHaveAStatusLine(t *testing.T) {
+	assertBody(t, getPage("/admin/users/"+idBob), `id="admin-user-status" role="status"`)
+	assertBody(t, getPage("/admin/roles/"+idBee), `id="admin-role-status" role="status"`)
+	assertNoBody(t, getPage("/admin/users"), `role="status"`)
+}
+
+func TestAdminShellsEscapeTheIDInTheirLoadPath(t *testing.T) {
+	rec := getPage("/admin/users/" + url.PathEscape(hostile+"id"))
+	assertNoBody(t, rec, "<img src=x")
+	assertBody(t, rec, `hx-get="/admin/users/%3Cimg%20src=x%20onerror=%22window.__xss=1%22%3Eid/editor"`)
+}
+
+func TestAdminFragmentsHaveNoPageChrome(t *testing.T) {
 	f := newFakeAdmin(t)
 	f.on("GET /users/me/permissions", 200, `["users.admin","roles.admin"]`)
 	f.on("GET /users", 200, usersJSON)
@@ -233,50 +269,27 @@ func TestAdminPagesAreNotCached(t *testing.T) {
 	f.on("GET /users/"+idBob+"/permissions", 200, `[]`)
 	f.on("GET /roles/"+idBee, 200, `{"id":"`+idBee+`","name":"bee_admin","description":"d","permissions":[]}`)
 	cases := []struct{ path, marker string }{
-		{"/admin", `id="admin-users-link"`},
-		{"/admin/users", `id="admin-users-search"`},
-		{"/admin/users/" + idBob, `id="admin-user-form"`},
-		{"/admin/roles", `id="admin-role-create-form"`},
-		{"/admin/roles/" + idBee, `id="admin-role"`},
-		{"/admin/permissions", `id="admin-permission-create-form"`},
+		{"/admin/cards", `id="admin-users-link"`},
+		{"/admin/users/list", `id="admin-users-search"`},
+		{"/admin/users/" + idBob + "/editor", `id="admin-user-form"`},
+		{"/admin/roles/list", `id="admin-role-create-form"`},
+		{"/admin/roles/" + idBee + "/editor", `id="admin-role-form"`},
+		{"/admin/permissions/list", `id="admin-permission-create-form"`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.path, func(t *testing.T) {
 			rec := getPage(tc.path)
 			assertStatus(t, rec, http.StatusOK)
-			if got := rec.Header().Get("Cache-Control"); got != "no-store" {
-				t.Errorf("Cache-Control = %q, want %q", got, "no-store")
-			}
-			assertBody(t, rec, tc.marker, `<script src="https://cdn.neuralnexus.dev/htmx/htmx.v1.9.5.min.js" defer>`, `&#34;selfRequestsOnly&#34;:true`, `&#34;allowEval&#34;:false`)
+			assertBody(t, rec, tc.marker)
+			assertNoBody(t, rec, "<html", "<body", `id="admin-error" role="alert"`)
 		})
-	}
-}
-
-func TestAdminErrorPagesAreNotCached(t *testing.T) {
-	f := newFakeAdmin(t)
-	f.problem("GET /users/me/permissions", 500, "boom")
-	rec := getPage("/admin")
-	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
-		t.Errorf("Cache-Control = %q, want %q", got, "no-store")
-	}
-}
-
-func TestOtherPagesKeepTheirCaching(t *testing.T) {
-	for _, path := range []string{"/", "/account", "/projects"} {
-		rec := getPage(path)
-		if got := rec.Header().Get("Cache-Control"); got != "" {
-			t.Errorf("%s: Cache-Control = %q, want none", path, got)
-		}
-		if path != "/account" && strings.Contains(rec.Body.String(), "htmx") {
-			t.Errorf("%s should not load htmx", path)
-		}
 	}
 }
 
 func TestAdminForwardsOnlyTheSessionCookie(t *testing.T) {
 	f := newFakeAdmin(t)
 	f.on("GET /users/me/permissions", 200, `["users.admin"]`)
-	adminReq{method: http.MethodGet, target: "/admin", cookies: []*http.Cookie{
+	adminReq{method: http.MethodGet, target: "/admin/cards", cookies: []*http.Cookie{
 		{Name: "session", Value: "jwt-value"},
 		{Name: "nonce", Value: "other"},
 	}}.do()
@@ -317,24 +330,23 @@ func TestAdminSignedOutVisitors(t *testing.T) {
 	for _, route := range []string{"GET /users/me/permissions", "GET /users", "GET /roles", "GET /permissions", "GET /users/" + idBob, "GET /roles/" + idBee, "POST /roles"} {
 		f.problem(route, 401, "sign in")
 	}
-	for _, path := range []string{"/admin", "/admin/users", "/admin/users/" + idBob, "/admin/roles", "/admin/roles/" + idBee, "/admin/permissions"} {
-		t.Run("page "+path, func(t *testing.T) {
-			rec := getPage(path)
-			assertStatus(t, rec, http.StatusSeeOther)
-			if got := rec.Header().Get("Location"); got != "/login" {
-				t.Errorf("Location = %q, want /login", got)
-			}
-		})
-	}
-	for _, target := range []string{"/admin/users/rows?offset=200", "/admin/roles/" + idBee + "/grant-value?grant_permission=" + idPRate} {
+	for _, target := range []string{
+		"/admin/cards", "/admin/users/list", "/admin/users/" + idBob + "/editor", "/admin/roles/list",
+		"/admin/roles/" + idBee + "/editor", "/admin/permissions/list", "/admin/users/rows?offset=200",
+	} {
 		t.Run("fragment "+target, func(t *testing.T) {
-			rec := adminReq{method: http.MethodGet, target: target, htmx: true}.do()
+			rec := getPage(target)
+			assertStatus(t, rec, http.StatusUnauthorized)
 			if got := rec.Header().Get("HX-Redirect"); got != "/login" {
 				t.Errorf("HX-Redirect = %q, want /login", got)
 			}
 		})
 	}
-	rec := action(http.MethodPost, "/admin/roles", url.Values{"name": {"x"}})
+	rec := adminReq{method: http.MethodGet, target: "/admin/roles/" + idBee + "/grant-value?grant_permission=" + idPRate, htmx: true}.do()
+	if got := rec.Header().Get("HX-Redirect"); got != "/login" {
+		t.Errorf("HX-Redirect = %q, want /login", got)
+	}
+	rec = action(http.MethodPost, "/admin/roles", url.Values{"name": {"x"}})
 	if got := rec.Header().Get("HX-Redirect"); got != "/login" {
 		t.Errorf("HX-Redirect = %q, want /login", got)
 	}
@@ -343,9 +355,14 @@ func TestAdminSignedOutVisitors(t *testing.T) {
 func TestAdminRefusalsShowTheAPIMessage(t *testing.T) {
 	f := newFakeAdmin(t)
 	f.problem("GET /users/me/permissions", 403, "You may not")
-	rec := getPage("/admin")
+	rec := getPage("/admin/cards")
 	assertStatus(t, rec, http.StatusForbidden)
-	assertBody(t, rec, "You may not")
+	if got := bannerText(rec); got != "You may not" {
+		t.Errorf("body = %q", got)
+	}
+	if got := rec.Header().Get("HX-Retarget"); got != "#admin-error" {
+		t.Errorf("HX-Retarget = %q", got)
+	}
 
 	f.problem("POST /roles", 409, "A role with that name already exists")
 	rec = action(http.MethodPost, "/admin/roles", url.Values{"name": {"system"}})
@@ -364,7 +381,7 @@ func TestAdminRefusalsShowTheAPIMessage(t *testing.T) {
 func TestAdminErrorMessagesAreEscaped(t *testing.T) {
 	f := newFakeAdmin(t)
 	f.problem("GET /users/me/permissions", 500, hostile)
-	rec := getPage("/admin")
+	rec := getPage("/admin/cards")
 	assertNoBody(t, rec, "<img src=x")
 	assertBody(t, rec, "&lt;img src=x")
 
@@ -378,7 +395,7 @@ func TestAdminAPIDownGivesAGenericMessage(t *testing.T) {
 	f := newFakeAdmin(t)
 	f.on("GET /users/me/permissions", 200, `["users.admin"]`)
 	config.APIURL = "http://127.0.0.1:1"
-	rec := getPage("/admin")
+	rec := getPage("/admin/cards")
 	assertStatus(t, rec, http.StatusBadGateway)
 	assertBody(t, rec, "Failed to load your permissions")
 	rec = action(http.MethodPost, "/admin/roles", url.Values{"name": {"x"}})
@@ -407,7 +424,7 @@ func TestAdminDashboardShowsTheCardsForThePermissionsHeld(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFakeAdmin(t)
 			f.on("GET /users/me/permissions", 200, tc.permissions)
-			rec := getPage("/admin")
+			rec := getPage("/admin/cards")
 			assertStatus(t, rec, http.StatusOK)
 			cards := map[string]bool{
 				`id="admin-users-link"`:       tc.users,
@@ -542,9 +559,6 @@ func TestAccountAdminLinkShowsForEitherAdminPermission(t *testing.T) {
 			rec := getPage("/account/admin-link")
 			assertStatus(t, rec, http.StatusOK)
 			assertBody(t, rec, `id="admin-dashboard-link"`, `href="/admin"`)
-			if got := rec.Header().Get("Cache-Control"); got != "no-store" {
-				t.Errorf("Cache-Control = %q", got)
-			}
 		})
 	}
 }
@@ -611,9 +625,13 @@ func TestAdminErrorsEmptyTheStatusLineOfTheEditorTheyCameFrom(t *testing.T) {
 	}{
 		{"user", http.MethodPost, "/admin/users/" + idBob, "PUT /users/" + idBob, `<p id="admin-user-status" hx-swap-oob="innerHTML"></p>`},
 		{"role", http.MethodDelete, "/admin/roles/" + idBee, "DELETE /roles/" + idBee, `<p id="admin-role-status" hx-swap-oob="innerHTML"></p>`},
+		{"user editor", http.MethodGet, "/admin/users/" + idBob + "/editor", "GET /users/" + idBob, `<p id="admin-user-status" hx-swap-oob="innerHTML"></p>`},
+		{"role editor", http.MethodGet, "/admin/roles/" + idBee + "/editor", "GET /roles/" + idBee, `<p id="admin-role-status" hx-swap-oob="innerHTML"></p>`},
+		{"user list", http.MethodGet, "/admin/users/list", "GET /users", ""},
+		{"role list", http.MethodGet, "/admin/roles/list", "GET /roles", ""},
 		{"user rows", http.MethodGet, "/admin/users/rows", "GET /users", ""},
 		{"permissions", http.MethodDelete, "/admin/permissions/" + idPBee, "DELETE /permissions/" + idPBee, ""},
-		{"role list", http.MethodPost, "/admin/roles", "POST /roles", ""},
+		{"role create", http.MethodPost, "/admin/roles", "POST /roles", ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

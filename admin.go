@@ -47,14 +47,17 @@ func errorStatus(err error) (int, string) {
 	return http.StatusInternalServerError, "Something went wrong"
 }
 
-// failPage answers a page request with the page showing the error, or sends a signed-out visitor to the login page.
-func failPage(w http.ResponseWriter, r *http.Request, err error, page func(message string) templ.Component) {
-	if errors.Is(err, errUnauthorized) {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
-		return
-	}
-	status, message := errorStatus(err)
-	templ.Handler(page(message), templ.WithStatus(status)).ServeHTTP(w, r)
+// adminShell serves a page shell that loads its content. A shell holds no data, but it is not cached
+// so a page left open after sign-out is not restored with what it loaded.
+func adminShell(page templ.Component) http.Handler {
+	return noStoreHandler(templ.Handler(page))
+}
+
+// adminShellFor serves the shell of a page for the record named by the ID in the path.
+func adminShellFor(page func(id string) templ.Component) http.Handler {
+	return noStoreHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		templ.Handler(page(r.PathValue("id"))).ServeHTTP(w, r)
+	}))
 }
 
 // failFragment answers an htmx request with the error for the banner, or sends a signed-out visitor to the login page.
@@ -78,12 +81,14 @@ func failFragment(w http.ResponseWriter, r *http.Request, err error) {
 
 // statusLineID returns the status line of the editor a path belongs to, which a failed change empties.
 func statusLineID(path string) string {
-	switch {
-	case path == "/admin/users/rows":
+	segments := strings.Split(strings.TrimPrefix(path, "/admin/"), "/")
+	if len(segments) < 2 {
 		return ""
-	case strings.HasPrefix(path, "/admin/users/"):
+	}
+	switch {
+	case segments[0] == "users" && segments[1] != "list" && segments[1] != "rows":
 		return "admin-user-status"
-	case strings.HasPrefix(path, "/admin/roles/"):
+	case segments[0] == "roles" && segments[1] != "list":
 		return "admin-role-status"
 	}
 	return ""
@@ -139,18 +144,16 @@ func accountAdminLinkHandler(w http.ResponseWriter, r *http.Request, a adminAPI)
 	templ.Handler(components.AdminDashboardLink()).ServeHTTP(w, r)
 }
 
-func adminDashboardHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
+func adminCardsHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	permissions, err := adminGet[[]string](a, "/users/me/permissions", "Failed to load your permissions")
 	if err != nil {
-		failPage(w, r, err, func(message string) templ.Component {
-			return components.AdminDashboardPage(components.AdminDashboardData{Error: message})
-		})
+		failFragment(w, r, err)
 		return
 	}
-	templ.Handler(components.AdminDashboardPage(components.AdminDashboardData{
+	renderAll(w, r, components.AdminCards(components.AdminDashboardData{
 		Users: hasPermission(permissions, "users.admin"),
 		Roles: hasPermission(permissions, "roles.admin"),
-	})).ServeHTTP(w, r)
+	}))
 }
 
 // afterWrite words a failure to reload what was just changed so it is not mistaken for a failure to change it.

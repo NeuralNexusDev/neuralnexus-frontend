@@ -74,7 +74,6 @@ func (p RolePermission) Label() string {
 type AdminDashboardData struct {
 	Users bool
 	Roles bool
-	Error string
 }
 
 // AdminUsersData is a page of the user list.
@@ -90,9 +89,6 @@ type AdminUsersData struct {
 	More       bool
 	// FocusFirst moves focus to the first row, which replaces the button that loaded the page.
 	FocusFirst bool
-	// Loaded is false until the first page was fetched, which keeps the search box hidden.
-	Loaded bool
-	Error  string
 }
 
 // AdminUserData is the user editor.
@@ -105,15 +101,11 @@ type AdminUserData struct {
 	LinksError     string
 	Permissions    []string
 	PermissionsErr string
-	Loaded         bool
-	Error          string
 }
 
 // AdminRolesData is the role list.
 type AdminRolesData struct {
-	Roles  []Role
-	Loaded bool
-	Error  string
+	Roles []Role
 }
 
 // AdminRoleData is the role editor.
@@ -128,16 +120,12 @@ type AdminRoleData struct {
 	GrantValue      string
 	// FocusList moves focus to the permission list heading, which replaces the button that was used.
 	FocusList bool
-	Loaded    bool
-	Error     string
 }
 
 // AdminPermissionsData is the permission list.
 type AdminPermissionsData struct {
 	Permissions []Permission
 	FocusList   bool
-	Loaded      bool
-	Error       string
 }
 
 // HeldRole reports whether the user holds the role.
@@ -266,8 +254,12 @@ templ adminPage(contents templ.Component) {
 	@WrapContentsWithHead("NeuralNexus", adminHead(), contents)
 }
 
-templ adminError(message string) {
-	<div id="admin-error" role="alert" class="empty:hidden rounded-md border border-destructive bg-destructive/10 p-3 text-center text-sm text-destructive">{ message }</div>
+templ adminError() {
+	<div id="admin-error" role="alert" class="empty:hidden rounded-md border border-destructive bg-destructive/10 p-3 text-center text-sm text-destructive"></div>
+}
+
+templ adminLoad(path string) {
+	<div hx-get={ path } hx-trigger="load" hx-swap="outerHTML"></div>
 }
 
 templ adminStatus(id string) {
@@ -321,56 +313,66 @@ templ adminHeading(title string, description string) {
 	</div>
 }
 
-templ adminDashboard(d AdminDashboardData) {
+templ adminDashboard() {
 	<div class="mx-auto max-w-md space-y-6">
 		@adminHeading("Admin Dashboard", "Manage accounts, roles and permissions")
-		@adminError(d.Error)
-		<div class="space-y-3">
-			if d.Users {
-				@adminCard("admin-users-link", "/admin/users", "Users", "Browse accounts and edit their username and roles")
-			}
-			if d.Roles {
-				@adminCard("admin-roles-link", "/admin/roles", "Roles", "Create roles and choose which permissions they grant")
-				@adminCard("admin-permissions-link", "/admin/permissions", "Permissions", "Create and delete the permissions roles can grant")
-			}
-			if d.Error == "" && !d.Users && !d.Roles {
-				<p id="admin-denied" class="text-center text-sm text-gray-500 dark:text-gray-400">Your account has no admin permissions</p>
-			}
-		</div>
+		@adminError()
+		@adminLoad("/admin/cards")
 	</div>
 }
 
-// AdminDashboardPage serves the admin dashboard that links to the user, role and permission pages.
-templ AdminDashboardPage(d AdminDashboardData) {
-	@adminPage(adminDashboard(d))
+// AdminCards renders the cards for the admin pages the account may use.
+templ AdminCards(d AdminDashboardData) {
+	<div class="space-y-3">
+		if d.Users {
+			@adminCard("admin-users-link", "/admin/users", "Users", "Browse accounts and edit their username and roles")
+		}
+		if d.Roles {
+			@adminCard("admin-roles-link", "/admin/roles", "Roles", "Create roles and choose which permissions they grant")
+			@adminCard("admin-permissions-link", "/admin/permissions", "Permissions", "Create and delete the permissions roles can grant")
+		}
+		if !d.Users && !d.Roles {
+			<p id="admin-denied" class="text-center text-sm text-gray-500 dark:text-gray-400">Your account has no admin permissions</p>
+		}
+	</div>
 }
 
-templ adminUsers(d AdminUsersData) {
+// AdminDashboardPage serves the admin dashboard shell, which loads its cards.
+templ AdminDashboardPage() {
+	@adminPage(adminDashboard())
+}
+
+templ adminUsers() {
 	<div class="mx-auto max-w-xl space-y-6">
 		@adminHeading("Users", "Select an account to edit it")
 		<a href="/admin" class="text-sm text-gray-500 underline dark:text-gray-400">Back to the admin dashboard</a>
-		@adminError(d.Error)
-		if d.Loaded {
-			<div class="space-y-2">
-				<label class="text-sm font-medium leading-none" for="admin-users-search">Search</label>
-				<input
-					id="admin-users-search"
-					type="search"
-					autocomplete="off"
-					placeholder="Username or user ID"
-					name="search"
-					hx-get="/admin/users/rows"
-					hx-trigger="input changed delay:250ms, search"
-					hx-target="#admin-users"
-					hx-swap="innerHTML"
-					hx-sync="this:replace"
-					class={ adminInputClass }
-				/>
-			</div>
-			<ul id="admin-users" class="space-y-2">
-				@AdminUserRows(d)
-			</ul>
-		}
+		@adminError()
+		@adminLoad("/admin/users/list")
+	</div>
+}
+
+// AdminUsersList renders the search box and the first page of users.
+templ AdminUsersList(d AdminUsersData) {
+	<div class="space-y-6">
+		<div class="space-y-2">
+			<label class="text-sm font-medium leading-none" for="admin-users-search">Search</label>
+			<input
+				id="admin-users-search"
+				type="search"
+				autocomplete="off"
+				placeholder="Username or user ID"
+				name="search"
+				hx-get="/admin/users/rows"
+				hx-trigger="input changed delay:250ms, search"
+				hx-target="#admin-users"
+				hx-swap="innerHTML"
+				hx-sync="this:replace"
+				class={ adminInputClass }
+			/>
+		</div>
+		<ul id="admin-users" class="space-y-2">
+			@AdminUserRows(d)
+		</ul>
 	</div>
 }
 
@@ -419,24 +421,27 @@ templ AdminUserRows(d AdminUsersData) {
 	}
 }
 
-// AdminUsersPage serves the searchable list of user accounts.
-templ AdminUsersPage(d AdminUsersData) {
-	@adminPage(adminUsers(d))
+// AdminUsersPage serves the user list shell, which loads the list.
+templ AdminUsersPage() {
+	@adminPage(adminUsers())
 }
 
-templ adminUser(d AdminUserData) {
+templ adminUser(id string) {
 	<div class="mx-auto max-w-md space-y-6">
 		<a href="/admin/users" class="text-sm text-gray-500 underline dark:text-gray-400">Back to users</a>
-		@adminError(d.Error)
+		@adminError()
 		@adminStatus("admin-user-status")
-		if d.Loaded {
-			<div id="admin-user" class="space-y-6">
-				@AdminUserHeader(d, false)
-				@AdminUserForm(d)
-				@adminUserLinks(d)
-				@AdminUserPermissions(d, false)
-			</div>
-		}
+		@adminLoad(adminUserPath(id) + "/editor")
+	</div>
+}
+
+// AdminUserContent renders the user editor, which the user page loads.
+templ AdminUserContent(d AdminUserData) {
+	<div id="admin-user" class="space-y-6">
+		@AdminUserHeader(d, false)
+		@AdminUserForm(d)
+		@adminUserLinks(d)
+		@AdminUserPermissions(d, false)
 	</div>
 }
 
@@ -559,67 +564,72 @@ templ AdminUserPermissions(d AdminUserData, oob bool) {
 	</div>
 }
 
-// AdminUserPage serves the editor for one user account.
-templ AdminUserPage(d AdminUserData) {
-	@adminPage(adminUser(d))
+// AdminUserPage serves the shell for the editor of one user account, which loads the editor.
+templ AdminUserPage(id string) {
+	@adminPage(adminUser(id))
 }
 
-templ adminRoles(d AdminRolesData) {
+templ adminRoles() {
 	<div class="mx-auto max-w-xl space-y-6">
 		@adminHeading("Roles", "Select a role to edit the permissions it grants")
 		<div class="flex justify-between text-sm text-gray-500 dark:text-gray-400">
 			<a href="/admin" class="underline">Back to the admin dashboard</a>
 			<a href="/admin/permissions" class="underline">Permissions</a>
 		</div>
-		@adminError(d.Error)
-		if d.Loaded {
-			<ul id="admin-roles" class="space-y-2">
-				for _, role := range d.Roles {
-					<li>
-						<a href={ templ.SafeURL(adminRolePath(role.ID)) } class={ adminCardClass }>
-							@adminTextBlock(role.Name, role.Description)
-							if len(role.Permissions) > 0 {
-								<span class="mt-2 flex flex-wrap gap-2">
-									for _, permission := range role.Permissions {
-										<span class={ adminChipClass }>{ permission.Label() }</span>
-									}
-								</span>
-							}
-						</a>
-					</li>
-				}
-			</ul>
-			<p id="admin-roles-empty" hidden?={ len(d.Roles) > 0 } class="text-center text-sm text-gray-500 dark:text-gray-400">No roles</p>
-			<form id="admin-role-create-form" class="space-y-4 rounded-lg border border-input p-4" hx-post="/admin/roles" hx-sync="this:drop">
-				<h2 class="text-lg font-semibold">New role</h2>
-				<div class="space-y-2">
-					<label class="text-sm font-medium leading-none" for="admin-role-create-name">Name</label>
-					<input
-						id="admin-role-create-name"
-						name="name"
-						type="text"
-						required
-						autocomplete="off"
-						autocapitalize="off"
-						spellcheck="false"
-						placeholder="moderator"
-						class={ adminInputClass }
-					/>
-					<p class="text-xs text-gray-500 dark:text-gray-400">Lower-case letters, digits and underscores, starting with a letter</p>
-				</div>
-				<div class="space-y-2">
-					<label class="text-sm font-medium leading-none" for="admin-role-create-description">Description</label>
-					<input id="admin-role-create-description" name="description" type="text" autocomplete="off" class={ adminInputClass }/>
-				</div>
-				<button id="admin-role-create-submit" type="submit" class={ adminSubmitClass }>Create role</button>
-			</form>
-		}
+		@adminError()
+		@adminLoad("/admin/roles/list")
 	</div>
 }
 
-// AdminRolesPage serves the list of roles and the form that creates one.
-templ AdminRolesPage(d AdminRolesData) {
-	@adminPage(adminRoles(d))
+// AdminRolesContent renders the list of roles and the form that creates one.
+templ AdminRolesContent(d AdminRolesData) {
+	<div class="space-y-6">
+		<ul id="admin-roles" class="space-y-2">
+			for _, role := range d.Roles {
+				<li>
+					<a href={ templ.SafeURL(adminRolePath(role.ID)) } class={ adminCardClass }>
+						@adminTextBlock(role.Name, role.Description)
+						if len(role.Permissions) > 0 {
+							<span class="mt-2 flex flex-wrap gap-2">
+								for _, permission := range role.Permissions {
+									<span class={ adminChipClass }>{ permission.Label() }</span>
+								}
+							</span>
+						}
+					</a>
+				</li>
+			}
+		</ul>
+		<p id="admin-roles-empty" hidden?={ len(d.Roles) > 0 } class="text-center text-sm text-gray-500 dark:text-gray-400">No roles</p>
+		<form id="admin-role-create-form" class="space-y-4 rounded-lg border border-input p-4" hx-post="/admin/roles" hx-sync="this:drop">
+			<h2 class="text-lg font-semibold">New role</h2>
+			<div class="space-y-2">
+				<label class="text-sm font-medium leading-none" for="admin-role-create-name">Name</label>
+				<input
+					id="admin-role-create-name"
+					name="name"
+					type="text"
+					required
+					autocomplete="off"
+					autocapitalize="off"
+					spellcheck="false"
+					placeholder="moderator"
+					class={ adminInputClass }
+				/>
+				<p class="text-xs text-gray-500 dark:text-gray-400">Lower-case letters, digits and underscores, starting with a letter</p>
+			</div>
+			<div class="space-y-2">
+				<label class="text-sm font-medium leading-none" for="admin-role-create-description">Description</label>
+				<input id="admin-role-create-description" name="description" type="text" autocomplete="off" class={ adminInputClass }/>
+			</div>
+			<button id="admin-role-create-submit" type="submit" class={ adminSubmitClass }>Create role</button>
+		</form>
+	</div>
+}
+
+// AdminRolesPage serves the role list shell, which loads the list.
+templ AdminRolesPage() {
+	@adminPage(adminRoles())
 }
 
 templ adminValueField(permission Permission, value string, name string) {
@@ -659,17 +669,22 @@ templ AdminGrantValue(permission Permission, value string) {
 	@adminValueField(permission, value, "grant_value")
 }
 
-templ adminRole(d AdminRoleData) {
-	<div id="admin-role" class="mx-auto max-w-md space-y-6">
+templ adminRole(id string) {
+	<div class="mx-auto max-w-md space-y-6">
 		<a href="/admin/roles" class="text-sm text-gray-500 underline dark:text-gray-400">Back to roles</a>
-		@adminError(d.Error)
+		@adminError()
 		@adminStatus("admin-role-status")
-		if d.Loaded {
-			@AdminRoleHeader(d, false)
-			@AdminRoleForm(d)
-			@AdminRoleGrants(d)
-			@AdminRoleDelete(d, false)
-		}
+		@adminLoad(adminRolePath(id) + "/editor")
+	</div>
+}
+
+// AdminRoleContent renders the role editor, which the role page loads.
+templ AdminRoleContent(d AdminRoleData) {
+	<div id="admin-role" class="space-y-6">
+		@AdminRoleHeader(d, false)
+		@AdminRoleForm(d)
+		@AdminRoleGrants(d)
+		@AdminRoleDelete(d, false)
 	</div>
 }
 
@@ -821,25 +836,28 @@ templ AdminRoleGrants(d AdminRoleData) {
 	</div>
 }
 
-// AdminRolePage serves the editor for one role and the permissions it grants.
-templ AdminRolePage(d AdminRoleData) {
-	@adminPage(adminRole(d))
+// AdminRolePage serves the shell for the editor of one role, which loads the editor.
+templ AdminRolePage(id string) {
+	@adminPage(adminRole(id))
 }
 
-templ adminPermissions(d AdminPermissionsData) {
+templ adminPermissions() {
 	<div class="mx-auto max-w-xl space-y-6">
 		@adminHeading("Permissions", "The permissions roles can grant")
 		<div class="flex justify-between text-sm text-gray-500 dark:text-gray-400">
 			<a href="/admin" class="underline">Back to the admin dashboard</a>
 			<a href="/admin/roles" class="underline">Roles</a>
 		</div>
-		@adminError(d.Error)
-		if d.Loaded {
-			<div id="admin-permissions-root" class="space-y-6">
-				@AdminPermissionList(d)
-				@AdminPermissionForm(false)
-			</div>
-		}
+		@adminError()
+		@adminLoad("/admin/permissions/list")
+	</div>
+}
+
+// AdminPermissionsContent renders the permission list and the form that creates one.
+templ AdminPermissionsContent(d AdminPermissionsData) {
+	<div id="admin-permissions-root" class="space-y-6">
+		@AdminPermissionList(d)
+		@AdminPermissionForm(false)
 	</div>
 }
 
@@ -931,7 +949,7 @@ templ AdminPermissionForm(oob bool) {
 	</form>
 }
 
-// AdminPermissionsPage serves the list of permissions and the form that creates one.
-templ AdminPermissionsPage(d AdminPermissionsData) {
-	@adminPage(adminPermissions(d))
+// AdminPermissionsPage serves the permission list shell, which loads the list and the create form.
+templ AdminPermissionsPage() {
+	@adminPage(adminPermissions())
 }

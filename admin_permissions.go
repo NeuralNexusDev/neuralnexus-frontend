@@ -5,19 +5,16 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/a-h/templ"
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/components"
 )
 
-func adminPermissionsHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
+func adminPermissionsListHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	permissions, err := adminGet[[]components.Permission](a, "/permissions", "Failed to load permissions")
 	if err != nil {
-		failPage(w, r, err, func(message string) templ.Component {
-			return components.AdminPermissionsPage(components.AdminPermissionsData{Error: message})
-		})
+		failFragment(w, r, err)
 		return
 	}
-	templ.Handler(components.AdminPermissionsPage(components.AdminPermissionsData{Permissions: permissions, Loaded: true})).ServeHTTP(w, r)
+	renderAll(w, r, components.AdminPermissionsContent(components.AdminPermissionsData{Permissions: permissions}))
 }
 
 func loadPermissions(a adminAPI, focusList bool) (components.AdminPermissionsData, error) {
@@ -25,7 +22,7 @@ func loadPermissions(a adminAPI, focusList bool) (components.AdminPermissionsDat
 	if err != nil {
 		return components.AdminPermissionsData{}, err
 	}
-	return components.AdminPermissionsData{Permissions: permissions, FocusList: focusList, Loaded: true}, nil
+	return components.AdminPermissionsData{Permissions: permissions, FocusList: focusList}, nil
 }
 
 func adminPermissionCreateHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {

@@ -13,7 +13,7 @@ func TestAdminUserListPagesAndNamesRoles(t *testing.T) {
 	f := newFakeAdmin(t)
 	f.on("GET /users", 200, usersJSON)
 	f.on("GET /roles", 200, rolesJSON)
-	rec := getPage("/admin/users")
+	rec := getPage("/admin/users/list")
 	assertStatus(t, rec, http.StatusOK)
 	assertBody(t, rec,
 		`id="admin-users-search"`,
@@ -45,7 +45,7 @@ func TestAdminUserListOffersMoreOnlyAfterAFullPage(t *testing.T) {
 			f := newFakeAdmin(t)
 			f.on("GET /users", 200, fullPage(tc.rows))
 			f.on("GET /roles", 200, `[]`)
-			rec := getPage("/admin/users")
+			rec := getPage("/admin/users/list")
 			if got := strings.Contains(rec.Body.String(), `id="admin-users-more"`); got != tc.wantMore {
 				t.Errorf("load more present = %v, want %v", got, tc.wantMore)
 			}
@@ -90,7 +90,7 @@ func TestAdminUserListShowsRoleIDsWithoutRoleAccess(t *testing.T) {
 	f := newFakeAdmin(t)
 	f.on("GET /users", 200, usersJSON)
 	f.problem("GET /roles", 403, "forbidden")
-	rec := getPage("/admin/users")
+	rec := getPage("/admin/users/list")
 	assertStatus(t, rec, http.StatusOK)
 	assertBody(t, rec, ">"+idBee+"<")
 }
@@ -99,7 +99,7 @@ func TestAdminUserListFailedRolesLookupIsAnError(t *testing.T) {
 	f := newFakeAdmin(t)
 	f.on("GET /users", 200, usersJSON)
 	f.problem("GET /roles", 500, "roles are down")
-	rec := getPage("/admin/users")
+	rec := getPage("/admin/users/list")
 	assertStatus(t, rec, http.StatusInternalServerError)
 	assertBody(t, rec, "roles are down")
 	assertNoBody(t, rec, `id="admin-users-search"`)
@@ -108,7 +108,7 @@ func TestAdminUserListFailedRolesLookupIsAnError(t *testing.T) {
 func TestAdminUserListRefusedHidesTheSearch(t *testing.T) {
 	f := newFakeAdmin(t)
 	f.problem("GET /users", 403, "You do not have permission to list users")
-	rec := getPage("/admin/users")
+	rec := getPage("/admin/users/list")
 	assertStatus(t, rec, http.StatusForbidden)
 	assertBody(t, rec, "You do not have permission to list users")
 	assertNoBody(t, rec, `id="admin-users-search"`, `id="admin-users"`)
@@ -118,7 +118,7 @@ func TestAdminUserListEscapesAPIText(t *testing.T) {
 	f := newFakeAdmin(t)
 	f.on("GET /users", 200, fmt.Sprintf(`[{"user_id":%q,"username":%q,"roles":[%q]}]`, hostile+"id", hostile+"name", idBee))
 	f.on("GET /roles", 200, fmt.Sprintf(`[{"id":%q,"name":%q,"description":"d","permissions":[]}]`, idBee, hostile+"role"))
-	rec := getPage("/admin/users")
+	rec := getPage("/admin/users/list")
 	assertNoBody(t, rec, "<img src=x")
 	assertBody(t, rec, "&lt;img src=x", "role", "%3Cimg")
 }
@@ -135,7 +135,7 @@ func seedUserEditor(f *fakeAdmin) {
 func TestAdminUserEditorShowsTheAccount(t *testing.T) {
 	f := newFakeAdmin(t)
 	seedUserEditor(f)
-	rec := getPage("/admin/users/" + idBob)
+	rec := getPage("/admin/users/" + idBob + "/editor")
 	assertStatus(t, rec, http.StatusOK)
 	assertBody(t, rec,
 		`id="admin-user-title"`, ">bob<", ">"+idBob+"<",
@@ -160,7 +160,7 @@ func TestAdminUserEditorShowsEmptyStates(t *testing.T) {
 	seedUserEditor(f)
 	f.on("GET /users/"+idBob+"/links", 200, `[]`)
 	f.on("GET /users/"+idBob+"/permissions", 200, `[]`)
-	rec := getPage("/admin/users/" + idBob)
+	rec := getPage("/admin/users/" + idBob + "/editor")
 	assertBody(t, rec, `id="admin-user-links-empty"`, `id="admin-user-permissions-empty"`)
 }
 
@@ -169,7 +169,7 @@ func TestAdminUserEditorShowsRefusedSectionsAsErrors(t *testing.T) {
 	seedUserEditor(f)
 	f.problem("GET /users/"+idBob+"/links", 403, "links are off limits")
 	f.problem("GET /users/"+idBob+"/permissions", 500, "permissions are down")
-	rec := getPage("/admin/users/" + idBob)
+	rec := getPage("/admin/users/" + idBob + "/editor")
 	assertStatus(t, rec, http.StatusOK)
 	assertBody(t, rec, `id="admin-user-links-error"`, "links are off limits", `id="admin-user-permissions-error"`, "permissions are down", `id="admin-user-form"`)
 	assertNoBody(t, rec, `id="admin-user-links-empty"`, `id="admin-user-permissions-empty"`)
@@ -179,7 +179,7 @@ func TestAdminUserEditorWithoutRoleAccessIsReadOnly(t *testing.T) {
 	f := newFakeAdmin(t)
 	seedUserEditor(f)
 	f.problem("GET /roles", 403, "forbidden")
-	rec := getPage("/admin/users/" + idBob)
+	rec := getPage("/admin/users/" + idBob + "/editor")
 	assertStatus(t, rec, http.StatusOK)
 	assertBody(t, rec, `id="admin-user-roles-note"`, ">"+idBee+"<")
 	assertNoBody(t, rec, `name="roles_editable"`, `name="roles"`)
@@ -189,7 +189,7 @@ func TestAdminUserEditorFailedRolesLookupIsAnError(t *testing.T) {
 	f := newFakeAdmin(t)
 	seedUserEditor(f)
 	f.problem("GET /roles", 500, "roles are down")
-	rec := getPage("/admin/users/" + idBob)
+	rec := getPage("/admin/users/" + idBob + "/editor")
 	assertStatus(t, rec, http.StatusInternalServerError)
 	assertBody(t, rec, "roles are down")
 	assertNoBody(t, rec, `id="admin-user-form"`, `id="admin-user-roles-note"`)
@@ -198,7 +198,7 @@ func TestAdminUserEditorFailedRolesLookupIsAnError(t *testing.T) {
 func TestAdminUserEditorUnknownUserShowsTheMessageAndNothingFromTheURL(t *testing.T) {
 	f := newFakeAdmin(t)
 	f.problem("GET /users/999", 404, "User not found")
-	rec := getPage("/admin/users/999")
+	rec := getPage("/admin/users/999/editor")
 	assertStatus(t, rec, http.StatusNotFound)
 	assertBody(t, rec, "User not found")
 	assertNoBody(t, rec, `id="admin-user-form"`, `id="admin-user-id"`, ">999<")
@@ -212,17 +212,17 @@ func TestAdminUserEditorEscapesIDsAndAPIText(t *testing.T) {
 	f.on("GET /users/"+escaped+"/links", 200, fmt.Sprintf(`[{"platform":%q,"platform_username":%q,"platform_id":%q}]`, hostile+"platform", hostile+"user", hostile+"pid"))
 	f.on("GET /users/"+escaped+"/permissions", 200, fmt.Sprintf(`[%q]`, hostile+"permission"))
 	f.on("GET /roles", 200, fmt.Sprintf(`[{"id":%q,"name":%q,"description":%q,"permissions":[]}]`, idBee, hostile+"role", hostile+"description"))
-	rec := getPage("/admin/users/" + escaped)
+	rec := getPage("/admin/users/" + escaped + "/editor")
 	assertStatus(t, rec, http.StatusOK)
 	assertNoBody(t, rec, "<img src=x")
 	assertBody(t, rec, "&lt;img src=x", "platform", "permission", "role", "description")
 
 	f.problem("GET /users/"+escaped+"/links", 500, hostile+"links detail")
-	rec = getPage("/admin/users/" + escaped)
+	rec = getPage("/admin/users/" + escaped + "/editor")
 	assertNoBody(t, rec, "<img src=x")
 
 	f.problem("GET /roles", 403, "forbidden")
-	rec = getPage("/admin/users/" + escaped)
+	rec = getPage("/admin/users/" + escaped + "/editor")
 	assertNoBody(t, rec, "<img src=x")
 }
 
@@ -382,7 +382,7 @@ func TestAdminUserEditorKeepsRolesWithoutACheckbox(t *testing.T) {
 	f.on("GET /users/"+idBob+"/links", 200, `[]`)
 	f.on("GET /users/"+idBob+"/permissions", 200, `[]`)
 	f.on("GET /roles", 200, rolesJSON)
-	rec := getPage("/admin/users/" + idBob)
+	rec := getPage("/admin/users/" + idBob + "/editor")
 	assertBody(t, rec, `name="kept_roles" value="`+idUnlisted+`"`, `name="loaded_roles" value="`+idUnlisted+`"`)
 	assertNoBody(t, rec, `name="kept_roles" value="`+idBee+`"`)
 }
@@ -435,7 +435,7 @@ func TestAdminUserRowsFocusTheFirstNewRowAfterTheFirstPage(t *testing.T) {
 	if got := strings.Count(rec.Body.String(), "autofocus"); got != 1 {
 		t.Errorf("autofocus appears %d times, want once", got)
 	}
-	assertNoBody(t, getPage("/admin/users"), "autofocus")
+	assertNoBody(t, getPage("/admin/users/list"), "autofocus")
 }
 
 func TestAdminUserRowsFromTheStartDoNotTakeFocus(t *testing.T) {
@@ -454,7 +454,7 @@ func TestAdminUserEditorEscapesTheIDInEveryCall(t *testing.T) {
 	f.on("GET /users/"+escaped+"/links", 200, `[]`)
 	f.on("GET /users/"+escaped+"/permissions", 200, `[]`)
 	f.on("GET /roles", 200, rolesJSON)
-	rec := getPage("/admin/users/" + escaped)
+	rec := getPage("/admin/users/" + escaped + "/editor")
 	assertStatus(t, rec, http.StatusOK)
 	assertBody(t, rec, `hx-post="/admin/users/`+escaped+`"`)
 }
@@ -542,7 +542,7 @@ func TestAdminUserListWithoutASearchReadsOnePage(t *testing.T) {
 	f := newFakeAdmin(t)
 	f.on("GET /roles", 200, `[]`)
 	f.on("GET /users", 200, fullPage(200))
-	rec := getPage("/admin/users")
+	rec := getPage("/admin/users/list")
 	if got := len(f.uris()); got != 2 {
 		t.Errorf("calls = %v, want one page and the roles", f.uris())
 	}
@@ -554,10 +554,10 @@ func TestAdminUserSearchBoxQueriesTheServer(t *testing.T) {
 	f := newFakeAdmin(t)
 	f.on("GET /users", 200, usersJSON)
 	f.on("GET /roles", 200, `[]`)
-	assertBody(t, getPage("/admin/users"),
+	assertBody(t, getPage("/admin/users/list"),
 		`name="search"`, `hx-get="/admin/users/rows"`, `hx-trigger="input changed delay:250ms, search"`,
 		`hx-target="#admin-users"`, `hx-sync="this:replace"`)
-	assertNoBody(t, getPage("/admin/users"), "oninput", "filterAdminUsers")
+	assertNoBody(t, getPage("/admin/users/list"), "oninput", "filterAdminUsers")
 }
 
 func TestAdminUserSaveDoesNotReloadTheLinkedAccounts(t *testing.T) {
@@ -576,7 +576,7 @@ func TestAdminUserSaveDoesNotReloadTheLinkedAccounts(t *testing.T) {
 func TestAdminUserPageShowsEveryRegion(t *testing.T) {
 	f := newFakeAdmin(t)
 	seedUserEditor(f)
-	rec := getPage("/admin/users/" + idBob)
+	rec := getPage("/admin/users/" + idBob + "/editor")
 	assertBody(t, rec, `id="admin-user"`, `id="admin-user-header"`, `id="admin-user-form"`, `id="admin-user-permissions-section"`,
 		`hx-target="#admin-user-form"`, `hx-sync="closest #admin-user:drop"`)
 	assertNoBody(t, rec, `hx-swap-oob`)

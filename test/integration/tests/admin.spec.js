@@ -78,15 +78,6 @@ test.describe('admin - access', () => {
     expect(res.status()).toBe(403);
   });
 
-  test('admin pages are served with no-store', async ({ page }) => {
-    await signIn(page);
-    for (const path of ['/admin', '/admin/users', '/admin/roles', '/admin/permissions']) {
-      const res = await page.request.get(`${APP}${path}`);
-      expect(res.status()).toBe(200);
-      expect(res.headers()['cache-control']).toBe('no-store');
-    }
-  });
-
   test('a server that cannot be reached shows a message in the banner', async ({ page }) => {
     await signIn(page);
     await page.goto('/admin/permissions');

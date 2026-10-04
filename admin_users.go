@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/a-h/templ"
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/components"
 )
 
@@ -93,19 +92,16 @@ func loadUsersPage(a adminAPI, offset int, search string) (components.AdminUsers
 		Start:      offset,
 		NextOffset: next,
 		More:       more,
-		Loaded:     true,
 	}, nil
 }
 
-func adminUsersHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
+func adminUsersListHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	data, err := loadUsersPage(a, 0, "")
 	if err != nil {
-		failPage(w, r, err, func(message string) templ.Component {
-			return components.AdminUsersPage(components.AdminUsersData{Error: message})
-		})
+		failFragment(w, r, err)
 		return
 	}
-	templ.Handler(components.AdminUsersPage(data)).ServeHTTP(w, r)
+	renderAll(w, r, components.AdminUsersList(data))
 }
 
 func adminUserRowsHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
@@ -140,7 +136,7 @@ func loadUserEditor(a adminAPI, id string, user *components.UserAccount, withLin
 	if err != nil {
 		return components.AdminUserData{}, err
 	}
-	data := components.AdminUserData{User: *user, Roles: roles, RolesReadable: readable, Loaded: true}
+	data := components.AdminUserData{User: *user, Roles: roles, RolesReadable: readable}
 	if withLinks {
 		links, err := adminGet[[]components.LinkedAccount](a, path+"/links", "Failed to load the linked accounts")
 		if data.LinksError, err = secondary(err); err != nil {
@@ -156,15 +152,13 @@ func loadUserEditor(a adminAPI, id string, user *components.UserAccount, withLin
 	return data, nil
 }
 
-func adminUserHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
+func adminUserEditorHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	data, err := loadUserEditor(a, r.PathValue("id"), nil, true)
 	if err != nil {
-		failPage(w, r, err, func(message string) templ.Component {
-			return components.AdminUserPage(components.AdminUserData{Error: message})
-		})
+		failFragment(w, r, err)
 		return
 	}
-	templ.Handler(components.AdminUserPage(data)).ServeHTTP(w, r)
+	renderAll(w, r, components.AdminUserContent(data))
 }
 
 // renderUserSave answers a save with the form, and with the header and permissions, which the save can change.

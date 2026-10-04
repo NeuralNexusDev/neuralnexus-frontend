@@ -7,22 +7,19 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/a-h/templ"
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/components"
 )
 
 // maxGrantInt is the largest whole number the API accepts as a granted value, in either direction.
 const maxGrantInt = 1 << 53
 
-func adminRolesHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
+func adminRolesListHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	roles, err := adminGet[[]components.Role](a, "/roles", "Failed to load roles")
 	if err != nil {
-		failPage(w, r, err, func(message string) templ.Component {
-			return components.AdminRolesPage(components.AdminRolesData{Error: message})
-		})
+		failFragment(w, r, err)
 		return
 	}
-	templ.Handler(components.AdminRolesPage(components.AdminRolesData{Roles: roles, Loaded: true})).ServeHTTP(w, r)
+	renderAll(w, r, components.AdminRolesContent(components.AdminRolesData{Roles: roles}))
 }
 
 func adminRoleCreateHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
@@ -43,7 +40,7 @@ func loadRole(a adminAPI, id string) (components.AdminRoleData, error) {
 	if err != nil {
 		return components.AdminRoleData{}, err
 	}
-	return components.AdminRoleData{Role: role, Loaded: true}, nil
+	return components.AdminRoleData{Role: role}, nil
 }
 
 func loadRoleEditor(a adminAPI, id string) (components.AdminRoleData, error) {
@@ -58,15 +55,13 @@ func loadRoleEditor(a adminAPI, id string) (components.AdminRoleData, error) {
 	return data, nil
 }
 
-func adminRoleHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
+func adminRoleEditorHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	data, err := loadRoleEditor(a, r.PathValue("id"))
 	if err != nil {
-		failPage(w, r, err, func(message string) templ.Component {
-			return components.AdminRolePage(components.AdminRoleData{Error: message})
-		})
+		failFragment(w, r, err)
 		return
 	}
-	templ.Handler(components.AdminRolePage(data)).ServeHTTP(w, r)
+	renderAll(w, r, components.AdminRoleContent(data))
 }
 
 func adminRoleSaveHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
