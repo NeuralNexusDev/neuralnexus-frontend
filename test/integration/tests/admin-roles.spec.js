@@ -325,6 +325,39 @@ test.describe('admin - role changes while other edits are open', () => {
     ]);
   });
 
+  test('a field outside the redrawn region changed during a rename leaves the status at Saved', async ({ page }) => {
+    const { writes } = await signIn(page, { delays: { [`PATCH /roles/${ID.bee}`]: 600 } });
+    await page.goto(roleEditor);
+    await page.locator('#admin-role-name').fill('bee_manager');
+    await page.locator('#admin-role-name').press('Enter');
+    await expect(page.locator('#admin-role')).toHaveAttribute('aria-busy', 'true');
+    await page.getByRole('spinbutton', { name: 'Value of ratelimit' }).fill('99');
+    await expect(page.locator('#admin-role-status')).toHaveText('Saved');
+    await expect(page.getByRole('spinbutton', { name: 'Value of ratelimit' })).toHaveValue('99');
+    expect(await writes()).toEqual([{ method: 'PATCH', path: `/roles/${ID.bee}`, body: { name: 'bee_manager' } }]);
+  });
+
+  test('quick changes of the grant select while its value loads end on the last choice without a message', async ({ page }) => {
+    await signIn(page, { delays: { 'GET /permissions': 500 } });
+    await page.addInitScript(() => {
+      window.__banner = [];
+      new MutationObserver(() => {
+        const text = document.getElementById('admin-error')?.textContent;
+        if (text) window.__banner.push(text);
+      }).observe(document, { subtree: true, childList: true, characterData: true });
+    });
+    await page.goto(roleEditor);
+    const select = page.locator('#admin-role-grant-permission');
+    await expect(select).toBeVisible();
+    await select.selectOption({ label: 'motd' });
+    await select.selectOption({ label: 'datastore.admin' });
+    await select.selectOption({ label: 'motd' });
+    await expect(page.locator('#admin-role-grant-value input[type="text"]')).toBeVisible();
+    await expect(page.locator('#admin-role-grant-permission option:checked')).toHaveText('motd');
+    await expect(error(page)).toHaveText('');
+    expect(await page.evaluate(() => window.__banner)).toEqual([]);
+  });
+
   test('a grant select that finishes while a removal is in flight leaves the editor busy', async ({ page }) => {
     await signIn(page, { delays: { [`DELETE /roles/${ID.bee}/permissions/${ID.pBee}`]: 1200 } });
     await page.goto(roleEditor);

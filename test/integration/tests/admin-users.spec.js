@@ -213,6 +213,51 @@ test.describe('admin - user editor', () => {
     expect(await writes()).toEqual([{ method: 'PUT', path: `/users/${ID.bob}`, body: { username: 'robert' } }]);
   });
 
+  test('the next save sends the tick that was made during a save and clears the note', async ({ page }) => {
+    const { writes } = await signIn(page, { delays: { [`PUT /users/${ID.bob}`]: 400 } });
+    await page.goto(editor);
+    await username(page).fill('robert');
+    await username(page).press('Enter');
+    await expect(page.locator('#admin-user')).toHaveAttribute('aria-busy', 'true');
+    await page.locator(`#admin-user-roles input[value="${ID.owner}"]`).focus();
+    await page.keyboard.press('Space');
+    await expect(status(page)).toHaveText('Saved. Changes made while saving are not saved yet.');
+    await save(page).click();
+    await expect(status(page)).toHaveText('Saved');
+    await expect(page.locator(`#admin-user-roles input[value="${ID.owner}"]`)).toBeChecked();
+    expect(await writes()).toEqual([
+      { method: 'PUT', path: `/users/${ID.bob}`, body: { username: 'robert' } },
+      { method: 'PUT', path: `/users/${ID.bob}`, body: { roles: [ID.owner, ID.bee] } },
+    ]);
+  });
+
+  test('a save that changes nothing during the request leaves the status at exactly Saved', async ({ page }) => {
+    await signIn(page, { delays: { [`PUT /users/${ID.bob}`]: 400 } });
+    await page.goto(editor);
+    await username(page).fill('robert');
+    await username(page).press('Enter');
+    await expect(page.locator('#admin-user')).toHaveAttribute('aria-busy', 'true');
+    await expect(status(page)).toHaveText('Saved');
+    await expect(page.locator('#admin-user')).not.toHaveAttribute('aria-busy', 'true');
+  });
+
+  test('a refused save keeps the tick and the text without the note', async ({ page }) => {
+    await signIn(page, {
+      delays: { [`PUT /users/${ID.bob}`]: 400 },
+      failures: { [`PUT /users/${ID.bob}`]: { status: 409, detail: 'An account with this username already exists', times: 1 } },
+    });
+    await page.goto(editor);
+    await username(page).fill('alice');
+    await username(page).press('Enter');
+    await expect(page.locator('#admin-user')).toHaveAttribute('aria-busy', 'true');
+    await page.locator(`#admin-user-roles input[value="${ID.owner}"]`).focus();
+    await page.keyboard.press('Space');
+    await expect(error(page)).toHaveText('An account with this username already exists');
+    await expect(username(page)).toHaveValue('alice');
+    await expect(page.locator(`#admin-user-roles input[value="${ID.owner}"]`)).toBeChecked();
+    await expect(status(page)).toHaveText('');
+  });
+
   test('the caret stays where it was in a field typed in while a save is in flight', async ({ page }) => {
     await signIn(page, { delays: { [`PUT /users/${ID.bob}`]: 600 } });
     await page.goto(editor);

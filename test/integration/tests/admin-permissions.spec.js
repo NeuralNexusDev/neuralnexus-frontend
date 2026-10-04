@@ -34,6 +34,18 @@ test.describe('admin - permissions', () => {
     await expect(rows(page).last()).toContainText('pets.write');
   });
 
+  test('changing the create form while a delete is in flight keeps the choice without a message', async ({ page }) => {
+    await signIn(page, { delays: { [`DELETE /permissions/${ID.pStore}`]: 600 } });
+    await page.goto('/admin/permissions');
+    page.once('dialog', (dialog) => dialog.accept());
+    await rows(page).nth(4).getByRole('button', { name: 'Delete' }).click();
+    await expect(page.locator('#admin-permissions-root')).toHaveAttribute('aria-busy', 'true');
+    await page.locator('#admin-permission-create-type').selectOption('int');
+    await expect(rows(page)).toHaveCount(4);
+    await expect(page.locator('#admin-permission-create-type')).toHaveValue('int');
+    await expect(error(page)).toHaveText('');
+  });
+
   test('the merge rule only appears for a whole-number permission, and is sent with it', async ({ page }) => {
     const { writes } = await signIn(page);
     await page.goto('/admin/permissions');
