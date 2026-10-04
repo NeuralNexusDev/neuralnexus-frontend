@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/a-h/templ"
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/components"
 )
 
@@ -116,7 +117,7 @@ func adminUserRowsHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 		return
 	}
 	data.FocusFirst = offset > 0
-	renderAll(w, r, components.AdminUserRows(data))
+	renderAll(w, r, components.AdminUserRows(data), components.AdminUsersCount(data, true))
 }
 
 func loadUserEditor(a adminAPI, id string, user *components.UserAccount, withLinks bool) (components.AdminUserData, error) {
@@ -172,7 +173,7 @@ func adminUserSaveHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	if raw := r.Form.Get("username"); raw != r.Form.Get("loaded_username") {
 		username := strings.TrimSpace(raw)
 		if username == "" {
-			failEditor(w, r, components.AdminUserStatusID, invalidInput("Enter a username"))
+			failEditor(w, r, components.AdminUserStatusID, invalidInput("Enter a username"), components.AdminUserUsername(raw, "Enter a username", true))
 			return
 		}
 		body["username"] = username
@@ -189,7 +190,11 @@ func adminUserSaveHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	}
 	saved, err := adminSend[components.UserAccount](a, http.MethodPut, "/users/"+url.PathEscape(id), body, "Failed to save the user")
 	if err != nil {
-		failEditor(w, r, components.AdminUserStatusID, err)
+		var restore []templ.Component
+		if message := fieldRefusal(err); message != "" && body["username"] != nil {
+			restore = append(restore, components.AdminUserUsername(r.Form.Get("username"), message, true))
+		}
+		failEditor(w, r, components.AdminUserStatusID, err, restore...)
 		return
 	}
 	data, err := loadUserEditor(a, id, &saved, false)

@@ -192,6 +192,9 @@ const (
 	AdminPermissionRowPrefix = "permission-"
 	// AdminGrantRowPrefix starts the id of each row in a role's granted permissions.
 	AdminGrantRowPrefix = "granted-"
+
+	roleNameHelp       = "Lower-case letters, digits and underscores, starting with a letter"
+	permissionNodeHelp = "Lower-case words of letters, digits and underscores joined by dots"
 )
 
 func adminUserRowsPath(offset int, search string) string {
@@ -299,7 +302,7 @@ templ AdminCards(d AdminDashboardData) {
 
 // AdminDashboardPage serves the admin dashboard shell, which loads its cards.
 templ AdminDashboardPage() {
-	@htmxPage(adminDashboard())
+	@htmxPage("Admin - NeuralNexus", adminDashboard())
 }
 
 templ adminUsers() {
@@ -327,10 +330,51 @@ templ AdminUsersList(d AdminUsersData) {
 				class={ inputClass }
 			/>
 		}
+		@AdminUsersCount(d, false)
 		<ul id="admin-users" class="space-y-2">
 			@AdminUserRows(d)
 		</ul>
 	</div>
+}
+
+// AdminUsersCount renders the line that says how many users a response listed, or its out-of-band copy.
+templ AdminUsersCount(d AdminUsersData, oob bool) {
+	<p
+		id="admin-users-count"
+		role="status"
+		if oob {
+			hx-swap-oob="innerHTML"
+		}
+		class={ mutedSmallClass }
+	>{ usersSummary(d) }</p>
+}
+
+func usersSummary(d AdminUsersData) string {
+	count := len(d.Users)
+	switch {
+	case count == 0 && d.Start > 0:
+		return "No more users"
+	case count == 0 && d.Search != "" && d.More:
+		return "No matches in the first " + strconv.Itoa(d.NextOffset) + " users"
+	case count == 0 && d.Search != "":
+		return "No matches"
+	case count == 0:
+		return "No users found"
+	}
+	text := strconv.Itoa(count) + " users"
+	if count == 1 {
+		text = "1 user"
+	}
+	if d.Start > 0 {
+		text = strconv.Itoa(count) + " more users"
+		if count == 1 {
+			text = "1 more user"
+		}
+	}
+	if d.Search != "" && d.More {
+		text += ". Searched the first " + strconv.Itoa(d.NextOffset) + " users"
+	}
+	return text
 }
 
 // AdminUserRows renders a page of user rows, followed by the button that loads the next page when there is one.
@@ -384,7 +428,7 @@ templ AdminUserRows(d AdminUsersData) {
 
 // AdminUsersPage serves the user list shell, which loads the list.
 templ AdminUsersPage() {
-	@htmxPage(adminUsers())
+	@htmxPage("Users - NeuralNexus", adminUsers())
 }
 
 templ adminUser(id string) {
@@ -401,6 +445,13 @@ templ AdminUserContent(d AdminUserData) {
 		@adminUserLinks(d)
 		@AdminUserPermissions(d, false)
 	</div>
+}
+
+// AdminUserUsername renders the username field, or its out-of-band copy with the message the username was refused with.
+templ AdminUserUsername(value string, errText string, oob bool) {
+	@fieldWithError("admin-user-username", "Username", "", errText, oob) {
+		@textInput("admin-user-username", "username", value, "", false, fieldDescription("admin-user-username", "", errText), errText != "")
+	}
 }
 
 // AdminUserHeader renders the account's name and ID, or the out-of-band copy of them a save sends.
@@ -445,9 +496,7 @@ templ AdminUserForm(d AdminUserData) {
 				<input type="hidden" name="kept_roles" value={ roleID }/>
 			}
 		}
-		@formField("admin-user-username", "Username", "") {
-			@textInput("admin-user-username", "username", d.User.Username, "", false)
-		}
+		@AdminUserUsername(d.User.Username, "", false)
 		<fieldset class="space-y-2">
 			<legend class="text-sm font-medium leading-none">Roles</legend>
 			<ul id="admin-user-roles" class="space-y-2">
@@ -455,7 +504,7 @@ templ AdminUserForm(d AdminUserData) {
 					for _, role := range d.Roles {
 						<li>
 							<label class="flex cursor-pointer items-start gap-3 rounded-md border border-input px-3 py-2 text-sm">
-								<input type="checkbox" name="roles" value={ role.ID } checked?={ d.HeldRole(role.ID) } class="mt-1"/>
+								<input type="checkbox" name="roles" value={ role.ID } checked?={ d.HeldRole(role.ID) } class={ checkboxClass + " mt-1" }/>
 								@adminTextBlock(role.Name, role.Description)
 							</label>
 						</li>
@@ -522,7 +571,7 @@ templ AdminUserPermissions(d AdminUserData, oob bool) {
 
 // AdminUserPage serves the shell for the editor of one user account, which loads the editor.
 templ AdminUserPage(id string) {
-	@htmxPage(adminUser(id))
+	@htmxPage("Edit user - NeuralNexus", adminUser(id))
 }
 
 templ adminRoles() {
@@ -556,9 +605,7 @@ templ AdminRolesContent(d AdminRolesData) {
 		}
 		<form id="admin-role-create-form" class="space-y-4 rounded-lg border border-input p-4" hx-post="/admin/roles" hx-sync="this:drop">
 			<h2 class="text-lg font-semibold">New role</h2>
-			@formField("admin-role-create-name", "Name", "Lower-case letters, digits and underscores, starting with a letter") {
-				@textInput("admin-role-create-name", "name", "", "moderator", true)
-			}
+			@AdminRoleCreateName("", "", false)
 			@formField("admin-role-create-description", "Description", "") {
 				@proseInput("admin-role-create-description", "description", "")
 			}
@@ -569,7 +616,7 @@ templ AdminRolesContent(d AdminRolesData) {
 
 // AdminRolesPage serves the role list shell, which loads the list.
 templ AdminRolesPage() {
-	@htmxPage(adminRoles())
+	@htmxPage("Roles - NeuralNexus", adminRoles())
 }
 
 func valueInputType(valueType string) string {
@@ -642,13 +689,20 @@ templ AdminRoleForm(d AdminRoleData) {
 		<input type="hidden" name="loaded_name" value={ d.Role.Name }/>
 		<input type="hidden" name="loaded_description" value={ d.Role.Description }/>
 		@formField("admin-role-name", "Name", "") {
-			@textInput("admin-role-name", "name", d.Role.Name, "", true)
+			@textInput("admin-role-name", "name", d.Role.Name, "", true, "", false)
 		}
 		@formField("admin-role-description", "Description", "") {
 			@proseInput("admin-role-description", "description", d.Role.Description)
 		}
 		<button id="admin-role-save" type="submit" class={ submitClass }>Save</button>
 	</form>
+}
+
+// AdminRoleCreateName renders the name field of the create form, or its out-of-band copy with the message the API refused the name with.
+templ AdminRoleCreateName(value string, errText string, oob bool) {
+	@fieldWithError("admin-role-create-name", "Name", roleNameHelp, errText, oob) {
+		@textInput("admin-role-create-name", "name", value, "moderator", true, fieldDescription("admin-role-create-name", roleNameHelp, errText), errText != "")
+	}
 }
 
 // AdminRoleDelete renders the button that deletes the role, or the out-of-band copy of it a rename sends.
@@ -772,7 +826,7 @@ templ AdminRoleGrantUnavailable() {
 
 // AdminRolePage serves the shell for the editor of one role, which loads the editor.
 templ AdminRolePage(id string) {
-	@htmxPage(adminRole(id))
+	@htmxPage("Edit role - NeuralNexus", adminRole(id))
 }
 
 templ adminPermissions() {
@@ -833,6 +887,13 @@ templ AdminPermissionAdded(permission Permission) {
 	<div hx-swap-oob="delete:#admin-permissions-empty"></div>
 }
 
+// AdminPermissionCreateNode renders the node field of the create form, or its out-of-band copy with the message the API refused the node with.
+templ AdminPermissionCreateNode(value string, errText string, oob bool) {
+	@fieldWithError("admin-permission-create-node", "Node", permissionNodeHelp, errText, oob) {
+		@textInput("admin-permission-create-node", "node", value, "petpictures.admin", true, fieldDescription("admin-permission-create-node", permissionNodeHelp, errText), errText != "")
+	}
+}
+
 // AdminPermissionForm renders the form that creates a permission, or the out-of-band fresh copy of it a create sends.
 templ AdminPermissionForm(oob bool) {
 	<form
@@ -844,9 +905,7 @@ templ AdminPermissionForm(oob bool) {
 		hx-post="/admin/permissions"
 	>
 		<h2 class="text-lg font-semibold">New permission</h2>
-		@formField("admin-permission-create-node", "Node", "Lower-case words of letters, digits and underscores joined by dots") {
-			@textInput("admin-permission-create-node", "node", "", "petpictures.admin", true)
-		}
+		@AdminPermissionCreateNode("", "", false)
 		@formField("admin-permission-create-description", "Description", "") {
 			@proseInput("admin-permission-create-description", "description", "")
 		}
@@ -871,5 +930,5 @@ templ AdminPermissionForm(oob bool) {
 
 // AdminPermissionsPage serves the permission list shell, which loads the list and the create form.
 templ AdminPermissionsPage() {
-	@htmxPage(adminPermissions())
+	@htmxPage("Permissions - NeuralNexus", adminPermissions())
 }

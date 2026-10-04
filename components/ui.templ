@@ -1,5 +1,7 @@
 package components
 
+import "strings"
+
 const (
 	htmxURL       = "https://s3.neuralnexus.dev/cdn/htmx/v4.0.0/htmx.min.js"
 	htmxIntegrity = "sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc"
@@ -11,15 +13,17 @@ const (
 	mutedSmallClass = mutedClass + " text-sm"
 	emptyClass      = mutedSmallClass + " text-center"
 	errorTextClass  = "text-sm text-red-600 dark:text-red-400"
-	bannerClass     = "rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive"
+	bannerClass     = "rounded-md border border-red-700 bg-red-700/10 p-3 text-sm text-red-700 dark:border-red-400 dark:bg-red-400/10 dark:text-red-400"
 
 	cardClass   = "block rounded-lg border border-input p-3 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 	chipClass   = "rounded-full border border-input px-2.5 py-0.5 text-xs"
-	toggleClass = "relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full bg-gray-300 transition-colors has-[:checked]:bg-primary has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 dark:bg-gray-600"
+	toggleClass = "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full bg-control ring-offset-background transition-colors has-[:checked]:bg-primary has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50"
+
+	checkboxClass = "h-4 w-4 shrink-0 appearance-none rounded border border-control bg-background ring-offset-background checked:border-primary checked:bg-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
 
 	labelClass  = "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-	inputClass  = "text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-	selectClass = "text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+	inputClass  = "text-foreground flex h-10 w-full rounded-md border border-control bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+	selectClass = "text-foreground flex h-10 w-full rounded-md border border-control bg-background px-3 py-2 text-sm"
 
 	buttonBaseClass = "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 	buttonClass     = buttonBaseClass + " border border-input hover:bg-accent hover:text-accent-foreground h-9 px-3"
@@ -41,14 +45,15 @@ templ htmxHead() {
 	<script src="/public/js/htmx-glue.js" defer></script>
 }
 
-templ htmxPage(contents templ.Component) {
-	@WrapContentsWithHead("NeuralNexus", htmxHead(), contents)
+templ htmxPage(title string, contents templ.Component) {
+	@WrapContentsWithHead(title, htmxHead(), contents)
 }
 
 templ pageShell(width string, statusID string, loadPath string) {
 	<div class={ "mx-auto space-y-6 " + width }>
 		{ children... }
 		@pageError()
+		<p id="page-status" role="status" class="sr-only"></p>
 		if statusID != "" {
 			@pageStatus(statusID)
 		}
@@ -64,7 +69,7 @@ templ pageHeading(title string, description string) {
 }
 
 templ pageError() {
-	<div id="admin-error" role="alert" class={ bannerClass + " empty:hidden text-center" }></div>
+	<div id="admin-error" role="alert" class={ bannerClass + " text-center empty:m-0 empty:border-0 empty:p-0" }></div>
 }
 
 templ pageStatus(id string) {
@@ -72,8 +77,8 @@ templ pageStatus(id string) {
 }
 
 templ pageLoad(path string) {
-	<div hx-get={ path } hx-trigger="load" hx-swap="outerHTML">
-		<p role="status" class={ emptyClass }>Loading…</p>
+	<div hx-get={ path } hx-trigger="load" hx-swap="outerHTML" data-page-load>
+		<p class={ emptyClass }>Loading…</p>
 	</div>
 }
 
@@ -101,16 +106,44 @@ templ mutedNote(id string, text string) {
 }
 
 templ formField(id string, label string, help string) {
-	<div class="space-y-2">
+	@fieldWithError(id, label, help, "", false) {
+		{ children... }
+	}
+}
+
+// fieldWithError renders a labelled field. Help and error text get ids built from the field id, which the input
+// names in aria-describedby through fieldDescription. A server error replaces the field out of band.
+templ fieldWithError(id string, label string, help string, errText string, oob bool) {
+	<div
+		id={ id + "-field" }
+		if oob {
+			hx-swap-oob="true"
+		}
+		class="space-y-2"
+	>
 		<label class={ labelClass } for={ id }>{ label }</label>
 		{ children... }
 		if help != "" {
-			<p class={ mutedXsClass }>{ help }</p>
+			<p id={ id + "-help" } class={ mutedXsClass }>{ help }</p>
+		}
+		if errText != "" {
+			<p id={ id + "-error" } class={ errorTextClass }>{ errText }</p>
 		}
 	</div>
 }
 
-templ textInput(id string, name string, value string, placeholder string, required bool) {
+func fieldDescription(id string, help string, errText string) string {
+	var ids []string
+	if errText != "" {
+		ids = append(ids, id+"-error")
+	}
+	if help != "" {
+		ids = append(ids, id+"-help")
+	}
+	return strings.Join(ids, " ")
+}
+
+templ textInput(id string, name string, value string, placeholder string, required bool, describedBy string, invalid bool) {
 	<input
 		id={ id }
 		name={ name }
@@ -121,6 +154,13 @@ templ textInput(id string, name string, value string, placeholder string, requir
 		}
 		if placeholder != "" {
 			placeholder={ placeholder }
+		}
+		if describedBy != "" {
+			aria-describedby={ describedBy }
+		}
+		if invalid {
+			aria-invalid="true"
+			autofocus
 		}
 		autocomplete="off"
 		autocapitalize="off"
@@ -145,7 +185,7 @@ templ proseInput(id string, name string, value string) {
 templ toggle() {
 	<label class={ toggleClass }>
 		{ children... }
-		<span class="pointer-events-none inline-block h-4 w-4 translate-x-0.5 rounded-full bg-background shadow transition-transform peer-checked:translate-x-4"></span>
+		<span class="pointer-events-none inline-block h-5 w-5 translate-x-0.5 rounded-full bg-background shadow transition-transform peer-checked:translate-x-[22px]"></span>
 	</label>
 }
 

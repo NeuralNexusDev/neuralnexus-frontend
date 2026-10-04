@@ -30,7 +30,11 @@ func adminRoleCreateHandler(w http.ResponseWriter, r *http.Request, a adminAPI) 
 	}
 	role, err := adminSend[components.Role](a, http.MethodPost, "/roles", body, "Failed to create the role")
 	if err != nil {
-		failFragment(w, r, err)
+		var restore []templ.Component
+		if message := fieldRefusal(err); message != "" {
+			restore = append(restore, components.AdminRoleCreateName(r.Form.Get("name"), message, true))
+		}
+		failFragment(w, r, err, restore...)
 		return
 	}
 	redirectHTMX(w, "/admin/roles/"+url.PathEscape(role.ID))

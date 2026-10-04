@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -215,4 +216,86 @@ func TestLinksRenderTheirPaths(t *testing.T) {
 			assertBody(t, getPage(tc.target), tc.want)
 		})
 	}
+}
+
+func TestRefusedCreateFormsFlagTheFieldAndKeepTheBanner(t *testing.T) {
+	cases := []struct {
+		name, target, route, field, value string
+		form                              url.Values
+	}{
+		{"role", "/admin/roles", "POST /roles", "admin-role-create-name", "Bad Name", url.Values{"name": {"Bad Name"}}},
+		{"permission", "/admin/permissions", "POST /permissions", "admin-permission-create-node", "Bad Node", url.Values{"node": {"Bad Node"}}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name+" refused", func(t *testing.T) {
+			f := newFakeAdmin(t)
+			f.problem(tc.route, 409, "Already exists")
+			rec := action(http.MethodPost, tc.target, tc.form)
+			assertStatus(t, rec, http.StatusConflict)
+			if got := bannerText(rec); got != "Already exists" {
+				t.Errorf("banner = %q", got)
+			}
+			assertBody(t, rec,
+				`id="`+tc.field+`-field" hx-swap-oob="true"`,
+				`aria-describedby="`+tc.field+`-error `+tc.field+`-help"`,
+				`aria-invalid="true"`, ` autofocus`,
+				`value="Bad `, `<p id="`+tc.field+`-error" class="`, `>Already exists</p>`)
+		})
+		t.Run(tc.name+" failed server side", func(t *testing.T) {
+			f := newFakeAdmin(t)
+			f.problem(tc.route, 500, "database down")
+			captureLog(t)
+			rec := action(http.MethodPost, tc.target, tc.form)
+			assertStatus(t, rec, http.StatusInternalServerError)
+			assertNoBody(t, rec, `aria-invalid`, `-error"`)
+		})
+	}
+}
+
+func TestRefusedUsernamesFlagTheUsernameField(t *testing.T) {
+	t.Run("emptied", func(t *testing.T) {
+		f := newFakeAdmin(t)
+		seedUserEditor(f)
+		rec := saveUser(userForm(url.Values{"username": {"  "}}))
+		assertBody(t, rec, `id="admin-user-username-field" hx-swap-oob="true"`, `aria-invalid="true"`, `aria-describedby="admin-user-username-error"`, `<p id="admin-user-username-error"`, ">Enter a username</p>")
+	})
+	t.Run("taken", func(t *testing.T) {
+		f := newFakeAdmin(t)
+		seedUserEditor(f)
+		f.problem("PUT /users/"+idBob, 409, "An account with this username already exists")
+		rec := saveUser(userForm(url.Values{"username": {"alice"}}))
+		assertStatus(t, rec, http.StatusConflict)
+		assertBody(t, rec, `id="admin-user-username-field" hx-swap-oob="true"`, `value="alice"`, ">An account with this username already exists</p>")
+	})
+	t.Run("a refused role change leaves the username field alone", func(t *testing.T) {
+		f := newFakeAdmin(t)
+		seedUserEditor(f)
+		f.problem("PUT /users/"+idBob, 409, "That role cannot be held with another")
+		rec := saveUser(userForm(url.Values{"roles": {idBee, idSystem}}))
+		assertStatus(t, rec, http.StatusConflict)
+		assertNoBody(t, rec, `admin-user-username-field`, `aria-invalid`)
+	})
+}
+
+func TestFieldHelpIsTiedToItsInput(t *testing.T) {
+	f := newFakeAdmin(t)
+	f.on("GET /roles", 200, `[]`)
+	f.on("GET /permissions", 200, `[]`)
+	assertBody(t, getPage("/admin/roles/list"), `id="admin-role-create-name-help"`, `aria-describedby="admin-role-create-name-help"`)
+	assertNoBody(t, getPage("/admin/roles/list"), `aria-invalid`)
+	assertBody(t, getPage("/admin/permissions/list"), `id="admin-permission-create-node-help"`, `aria-describedby="admin-permission-create-node-help"`)
+}
+
+func TestUserListTellsHowManyUsersEachResponseHolds(t *testing.T) {
+	f := newFakeAdmin(t)
+	f.on("GET /users", 200, usersJSON)
+	f.on("GET /roles", 200, `[]`)
+	assertBody(t, getPage("/admin/users/list"), `id="admin-users-count" role="status"`, ">3 users</p>")
+	rec := adminReq{method: http.MethodGet, target: "/admin/users/rows?search=bob", htmx: true}.do()
+	assertBody(t, rec, `id="admin-users-count" role="status" hx-swap-oob="innerHTML"`, ">1 user</p>")
+	rec = adminReq{method: http.MethodGet, target: "/admin/users/rows?search=zzz", htmx: true}.do()
+	assertBody(t, rec, ">No matches</p>")
+	f.on("GET /users", 200, fullPage(200))
+	rec = adminReq{method: http.MethodGet, target: "/admin/users/rows?offset=200&search=u", htmx: true}.do()
+	assertBody(t, rec, "more users. Searched the first ")
 }

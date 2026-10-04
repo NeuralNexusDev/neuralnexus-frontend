@@ -597,7 +597,7 @@ func TestShellsShowALoadingLineWhileTheirContentLoads(t *testing.T) {
 	newFakeAdmin(t)
 	for _, target := range []string{"/admin", "/admin/users", "/admin/roles", "/admin/permissions", "/account", "/project/bee-name-generator/admin"} {
 		t.Run(target, func(t *testing.T) {
-			assertBody(t, getPage(target), `hx-trigger="load" hx-swap="outerHTML"><p role="status"`, ">Loading…<")
+			assertBody(t, getPage(target), `hx-trigger="load" hx-swap="outerHTML" data-page-load><p class=`, ">Loading…<", `<p id="page-status" role="status" class="sr-only"></p>`)
 		})
 	}
 }
@@ -656,7 +656,7 @@ func TestAdminErrorsEmptyTheStatusLineOfTheEditorTheyCameFrom(t *testing.T) {
 		{"role list", http.MethodGet, "/admin/roles/list", "GET /roles", ""},
 		{"user rows", http.MethodGet, "/admin/users/rows", "GET /users", ""},
 		{"permissions", http.MethodDelete, "/admin/permissions/" + idPBee, "DELETE /permissions/" + idPBee, ""},
-		{"role create", http.MethodPost, "/admin/roles", "POST /roles", ""},
+		{"role create", http.MethodPost, "/admin/roles", "POST /roles", `<div id="admin-role-create-name-field" hx-swap-oob="true"`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -738,4 +738,54 @@ func TestBeeNameGeneratorPageLoadsTheAdminLinkThroughHTMX(t *testing.T) {
 	rec := getPage("/project/bee-name-generator")
 	assertBody(t, rec, `hx-get="/project/bee-name-generator/admin-link"`, `hx-trigger="load"`, "htmx/v4.0.0/htmx.min.js")
 	assertNoBody(t, rec, "showBeeAdminLink", `id="bee-admin-link"`)
+}
+
+func TestShellsHaveATitleEach(t *testing.T) {
+	newFakeAdmin(t)
+	cases := []struct{ target, title string }{
+		{"/admin", "Admin - NeuralNexus"},
+		{"/admin/users", "Users - NeuralNexus"},
+		{"/admin/users/" + idBob, "Edit user - NeuralNexus"},
+		{"/admin/roles", "Roles - NeuralNexus"},
+		{"/admin/roles/" + idBee, "Edit role - NeuralNexus"},
+		{"/admin/permissions", "Permissions - NeuralNexus"},
+		{"/account", "Account - NeuralNexus"},
+		{"/project/bee-name-generator", "Bee name generator - NeuralNexus"},
+		{"/project/bee-name-generator/admin", "Bee name review - NeuralNexus"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.target, func(t *testing.T) {
+			assertBody(t, getPage(tc.target), "<title>"+tc.title+"</title>")
+		})
+	}
+}
+
+func TestPagesHaveLandmarksAndASkipLink(t *testing.T) {
+	newFakeAdmin(t)
+	for _, target := range []string{"/", "/login", "/register", "/admin", "/account"} {
+		t.Run(target, func(t *testing.T) {
+			rec := getPage(target)
+			assertBody(t, rec, `<a href="#main" class="sr-only focus:not-sr-only`, "Skip to main content", `<header class=`, `<nav aria-label="Main"`, `<main id="main" class="relative isolate px-6 pt-14 lg:px-8">`)
+			body := rec.Body.String()
+			if strings.Index(body, `href="#main"`) > strings.Index(body, "<header") {
+				t.Errorf("the skip link comes after the header")
+			}
+			if strings.Contains(body, "</head><script") {
+				t.Errorf("a script sits between the head and the body")
+			}
+		})
+	}
+}
+
+func TestToggleIsASwitchWithAVisibleFocusRing(t *testing.T) {
+	f := newFakeAdmin(t)
+	seedAccount(f)
+	f.on("GET /users/me/permissions", 200, `[]`)
+	rec := getPage("/account/content")
+	assertBody(t, rec, `id="password-auth-enabled"`, `role="switch"`, `id="link-discord-login-enabled"`, "has-[:focus-visible]:ring-2", "h-6 w-11", "bg-control")
+}
+
+func TestBannerColoursPassContrastInBothThemes(t *testing.T) {
+	assertBody(t, getPage("/admin"), `border-red-700 bg-red-700/10`, `text-red-700 dark:border-red-400 dark:bg-red-400/10 dark:text-red-400`, `empty:m-0 empty:border-0 empty:p-0`)
+	assertNoBody(t, getPage("/admin"), "empty:hidden", "text-destructive")
 }

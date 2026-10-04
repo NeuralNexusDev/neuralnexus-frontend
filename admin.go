@@ -114,6 +114,18 @@ func nothingToSave(w http.ResponseWriter, r *http.Request, statusID string) {
 	renderAll(w, r, components.AdminStatus(statusID, "Nothing to save"))
 }
 
+// fieldRefusal returns the API's message when it refused input that the user can correct.
+func fieldRefusal(err error) string {
+	var failure *adminError
+	if errors.As(err, &failure) {
+		switch failure.Status {
+		case http.StatusBadRequest, http.StatusConflict, http.StatusUnprocessableEntity:
+			return failure.Message
+		}
+	}
+	return ""
+}
+
 func logFailure(r *http.Request, status int, err error) {
 	if errors.Is(r.Context().Err(), context.Canceled) {
 		return

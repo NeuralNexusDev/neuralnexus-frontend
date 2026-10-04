@@ -12,6 +12,13 @@
         }
     };
 
+    const setPageStatus = (text) => {
+        const status = document.getElementById('page-status');
+        if (status) {
+            status.textContent = text;
+        }
+    };
+
     const isChoice = (field) => field.type === 'checkbox' || field.type === 'radio';
     const fieldKey = (field) => (isChoice(field) ? `${field.name}=${field.value}` : field.name);
     const fieldState = (field) => (isChoice(field) ? field.checked : field.value);
@@ -48,6 +55,9 @@
         const request = { start: performance.now(), element: event.target, region, values: null, typed: new Map(), active: null, dropped: false };
         requests.set(event.detail.ctx, request);
         markBusy(event.target);
+        if (event.target.dataset.pageLoad !== undefined) {
+            setPageStatus('Loading…');
+        }
         if (region && region !== event.target) {
             markBusy(region);
         }
@@ -132,6 +142,9 @@
             return;
         }
         clearBusy(request.element);
+        if (request.element.dataset.pageLoad !== undefined) {
+            setPageStatus('Loaded');
+        }
         const region = request.region;
         if (!region) {
             return;
@@ -152,6 +165,25 @@
             showBanner('The change made while saving was not sent. Make it again.');
         }
         state.dropped = false;
+    });
+
+    document.addEventListener('input', (event) => {
+        const field = event.target;
+        const statusID = field.closest?.('[data-status]')?.dataset.status;
+        if (statusID) {
+            document.getElementById(statusID).textContent = '';
+        }
+        if (field.getAttribute?.('aria-invalid') !== 'true') {
+            return;
+        }
+        field.removeAttribute('aria-invalid');
+        document.getElementById(`${field.id}-error`)?.remove();
+        const remaining = (field.getAttribute('aria-describedby') ?? '').split(' ').filter((id) => id && id !== `${field.id}-error`);
+        if (remaining.length > 0) {
+            field.setAttribute('aria-describedby', remaining.join(' '));
+        } else {
+            field.removeAttribute('aria-describedby');
+        }
     });
 
     const busyRegionOf = (target) => target.closest?.('[data-busy-region][aria-busy="true"]');

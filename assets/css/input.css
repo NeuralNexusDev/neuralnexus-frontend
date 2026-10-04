@@ -5,6 +5,7 @@
 @theme inline {
     --color-border: var(--border);
     --color-input: var(--input);
+    --color-control: var(--control);
     --color-background: var(--background);
     --color-foreground: var(--foreground);
     --color-primary: var(--primary);
@@ -49,6 +50,7 @@
     --card-foreground: hsl(240 10% 3.9%);
     --border: hsl(240 5.9% 90%);
     --input: hsl(240 5.9% 90%);
+    --control: hsl(240 4% 54%);
     --primary: hsl(240 5.9% 10%);
     --primary-foreground: hsl(0 0% 98%);
     --secondary: hsl(240 4.8% 95.9%);
@@ -72,6 +74,7 @@
     --card-foreground: hsl(0 0% 98%);
     --border: hsl(240 3.7% 15.9%);
     --input: hsl(240 3.7% 15.9%);
+    --control: hsl(240 4% 44%);
     --primary: hsl(0 0% 98%);
     --primary-foreground: hsl(240 5.9% 10%);
     --secondary: hsl(240 3.7% 15.9%);

@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/a-h/templ"
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/components"
 )
 
@@ -39,7 +40,11 @@ func adminPermissionCreateHandler(w http.ResponseWriter, r *http.Request, a admi
 	}
 	created, err := adminSend[components.Permission](a, http.MethodPost, "/permissions", body, "Failed to create the permission")
 	if err != nil {
-		failFragment(w, r, err)
+		var restore []templ.Component
+		if message := fieldRefusal(err); message != "" {
+			restore = append(restore, components.AdminPermissionCreateNode(r.Form.Get("node"), message, true))
+		}
+		failFragment(w, r, err, restore...)
 		return
 	}
 	data, err := loadPermissions(a, false)

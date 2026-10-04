@@ -33,19 +33,20 @@ templ WrapContentsWithHead(title string, head templ.Component, contents templ.Co
 			<link rel="manifest" href="/public/site.webmanifest"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 			<title>{ title }</title>
+			<script src="/public/js/scripts.js"></script>
+			<script src="/public/js/theming.js"></script>
 			if head != nil {
 				@head
 			}
 		</head>
-		<script src="/public/js/scripts.js"></script>
-		<script src="/public/js/theming.js"></script>
 		<body>
+			<a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-md focus:bg-background focus:px-4 focus:py-2 focus:text-foreground focus:ring-2 focus:ring-ring">Skip to main content</a>
 			<div hidden id="api-base-url">{ config.APIURL }</div>
 			<div hidden id="steam-openid-login-url">{ STEAM_OPENID_LOGIN_URL }</div>
 			@Header()
-			<div class="relative isolate px-6 pt-14 lg:px-8">
+			<main id="main" class="relative isolate px-6 pt-14 lg:px-8">
 				@contents
-			</div>
+			</main>
 		</body>
 	</html>
 }
@@ -88,18 +89,18 @@ templ ThemeToggle() {
 }
 
 templ Header() {
-	<div class="p-8 flex items-center justify-between mb-8 text-lg text-red-600">
-		<div class="flex items-center gap-4">
+	<header class="p-8 flex items-center justify-between mb-8 text-lg text-red-600">
+		<nav aria-label="Main" class="flex items-center gap-4">
 			<a href="/">NeuralNexus</a>
 			<a href="/about">About</a>
 			<a href="/contact">Contact</a>
 			<a href="/projects">Projects</a>
-		</div>
+		</nav>
 		<div class="flex items-center gap-4">
 			@ThemeToggle()
 			@LoginButton()
 		</div>
-	</div>
+	</header>
 }
 
 templ projectCardBody(icon string, title string, description string) {
@@ -259,7 +260,7 @@ templ BeeNameGeneratorAdminLink() {
 }
 
 templ BeeNameGeneratorPage() {
-	@htmxPage(BeeNameGenerator())
+	@htmxPage("Bee name generator - NeuralNexus", BeeNameGenerator())
 }
 
 templ BeeNameGeneratorAdmin() {
@@ -313,7 +314,7 @@ templ BeeSuggestions(d BeeSuggestionsData) {
 
 // BeeNameGeneratorAdminPage serves the suggestion review shell, which loads the suggestions.
 templ BeeNameGeneratorAdminPage() {
-	@htmxPage(BeeNameGeneratorAdmin())
+	@htmxPage("Bee name review - NeuralNexus", BeeNameGeneratorAdmin())
 }
 
 templ McStatus() {
@@ -347,14 +348,14 @@ templ McStatus() {
 			<details id="mc-status-advanced" class="text-sm">
 				<summary class={ mutedClass + " cursor-pointer" }>Advanced</summary>
 				<label class="mt-2 flex items-center gap-2">
-					<input id="mc-status-query" type="checkbox" onchange="mcQueryPreference = this.checked; syncMcStatusQueryOption()" checked/>
+					<input id="mc-status-query" type="checkbox" class={ checkboxClass } onchange="mcQueryPreference = this.checked; syncMcStatusQueryOption()" checked/>
 					Use the query protocol (Java only, if the server has it enabled)
 				</label>
 				<label class="mt-2 flex items-center gap-2">
 					Query port
 					<input
 						id="mc-status-query-port"
-						class="h-9 w-32 rounded-md border border-input bg-transparent px-2 disabled:opacity-50"
+						class="h-9 w-32 rounded-md border border-control bg-transparent px-2 disabled:opacity-50"
 						type="text"
 						inputmode="numeric"
 						autocomplete="off"
