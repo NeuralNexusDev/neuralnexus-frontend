@@ -106,6 +106,21 @@ templ OAuthButtons(labelPrefix string) {
 			<div class="mt-2"></div>
 		}
 	}
+	if false {
+		<div class="mt-2"></div>
+		<a href="" id="minecraft-oauth" class="flex justify-center" onclick="startOAuthLogin('minecraft', document.getElementById('xboxlive-oauth-base').innerText); return false;">
+			<button
+				class="bg-minecraft_apple hover:bg-green-700 rounded-md h-10 px-4 flex items-center justify-center ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 w-full"
+			>
+				<span class="mr-2 text-white">{ labelPrefix }</span>
+				<img
+					src="/public/MinecraftLogo.svg"
+					alt="Minecraft"
+					class="h-6 w-auto"
+				/>
+			</button>
+		</a>
+	}
 	<div class="mt-2 flex justify-center">
 		<a href="" id="steam-oauth" onclick="startOAuthLogin('steam', null); return false;">
 			<img src="/public/SteamSignIn.png" alt="Sign in through Steam"/>

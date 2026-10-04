@@ -72,6 +72,9 @@ templ AccountContent(d AccountData) {
 					for _, platform := range AccountPlatforms {
 						@AccountLinkRow(platform, d.Links[platform.ID], d.HasLink(platform.ID), false)
 					}
+					if false {
+						@AccountLinkRow(AccountPlatform{ID: "minecraft", Name: "Minecraft"}, LinkedAccount{}, false, false)
+					}
 				</div>
 			}
 		</div>
@@ -216,6 +219,8 @@ templ accountPlatformIcon(platform string) {
 	switch platform {
 		case "microsoft":
 			<img src="/public/MicrosoftLogo.svg" alt="Microsoft Logo" class="w-5 h-5 shrink-0"/>
+		case "minecraft":
+			<img src="/public/MinecraftLogo.svg" alt="Minecraft Logo" class="h-5 w-auto shrink-0"/>
 		case "steam":
 			<img src="/public/SteamLogo.svg" alt="Steam Logo" class="w-5 h-5 shrink-0 dark:hidden"/>
 			<img src="/public/SteamLogoWhite.svg" alt="Steam Logo" class="w-5 h-5 shrink-0 hidden dark:block"/>
