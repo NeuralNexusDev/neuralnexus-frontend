@@ -46,7 +46,23 @@ export async function signIn(page, state = {}) {
       .map(({ method, path, body }) => ({ method, path, body: body ?? null }));
   const api = (method, path, data) =>
     page.request.fetch(`${STUB}/api/v1${path}`, { method, data, headers: { Cookie: `session=${session}` } });
-  return { session, calls, writes, api };
+  /** Holds the stub's answer to `key` ("METHOD /path") once `skip` calls have passed, so a test can act while the request is in flight. */
+  const gate = async (key, { skip = 0 } = {}) => {
+    const registered = await page.request.post(`${STUB}/__admin/gate`, { data: { session, key, skip } });
+    expect(registered.ok()).toBe(true);
+    return {
+      arrived: (count = 1) =>
+        expect
+          .poll(async () => (await (await page.request.get(`${STUB}/__admin/gate?session=${session}&key=${encodeURIComponent(key)}`)).json()).arrived)
+          .toBeGreaterThanOrEqual(count),
+      /** Answers `outcome.index`, or every held call when it is absent. */
+      release: async (outcome = {}) => {
+        const released = await page.request.post(`${STUB}/__admin/gate/release`, { data: { session, key, ...outcome } });
+        expect(released.ok()).toBe(true);
+      },
+    };
+  };
+  return { session, calls, writes, api, gate };
 }
 
 export async function expectNoInjection(page) {

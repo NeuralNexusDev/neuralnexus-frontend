@@ -75,6 +75,8 @@ test.describe('admin - settings link', () => {
   test('the account page has no admin link without an admin permission', async ({ page }) => {
     await openAccount(page, ['ratelimit:1000']);
     await expect(page.locator('#account-username')).toHaveText('admin');
+    await expect(page.locator('#account-password')).toBeVisible();
+    await expect(page.locator('[hx-get="/account/content"]')).toHaveCount(0);
     await expect(page.locator('#admin-dashboard-link')).toHaveCount(0);
   });
 });
@@ -91,8 +93,8 @@ test.describe('bee name generator - admin link', () => {
     const answered = page.waitForResponse('**/project/bee-name-generator/admin-link');
     await page.goto('/project/bee-name-generator');
     await answered;
-    await expect(page.locator('#bee-admin-link')).toHaveCount(0);
     await expect(page.locator('[hx-get="/project/bee-name-generator/admin-link"]')).toHaveCount(0);
+    await expect(page.locator('#bee-admin-link')).toHaveCount(0);
   });
 });
 

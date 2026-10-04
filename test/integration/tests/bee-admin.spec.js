@@ -43,14 +43,14 @@ test.describe('bee name generator - suggestion review', () => {
   });
 
   test('a second review while one is in flight is dropped', async ({ page }) => {
-    const { writes } = await signIn(page, {
-      me: ['beenamegenerator.admin'],
-      delays: { 'PUT /bee-name-generator/suggestion/buzz': 600 },
-    });
+    const { writes, gate } = await signIn(page, { me: ['beenamegenerator.admin'] });
     await page.goto(page_);
+    const review = await gate('PUT /bee-name-generator/suggestion/buzz');
     await page.getByRole('button', { name: 'Accept buzz' }).click();
+    await review.arrived();
     await expect(page.locator('#bee-suggestions-root[aria-busy="true"]')).toHaveCount(1);
     await page.getByRole('button', { name: 'Reject honey' }).dispatchEvent('click');
+    await review.release();
     await expect(rows(page)).toHaveText([/honey/, /wax/]);
     expect(await writes()).toEqual([{ method: 'PUT', path: '/bee-name-generator/suggestion/buzz', body: null }]);
   });

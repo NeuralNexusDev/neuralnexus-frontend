@@ -45,6 +45,7 @@ function defaultState() {
     suggestions: ['buzz', 'honey', 'wax'],
     failures: {},
     delays: {},
+    gates: {},
     nextId: '3541025163146800000',
     calls: [],
   };
@@ -137,7 +138,9 @@ const NODE = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$/;
 /**
  * Serves /api/v1/users, /roles and /permissions from per-session state; the test seeds it through /__admin/state.
  * A seeded failure answers "METHOD /path" with its status and detail after letting `skip` calls through, `times` times (default always).
- * A seeded delay holds the answer to "METHOD /path" for that many milliseconds.
+ * A seeded delay holds the answer to "METHOD /path" for that many milliseconds, which only the htmx timeout specs need.
+ * A gate holds the answer to "METHOD /path" until the test releases it, after letting `skip` calls through.
+ * Releasing with an index answers only the call that arrived in that position.
  */
 export async function handleState(req, res, pathname, searchParams) {
   const cookie = /(?:^|;\s*)session=([^;]+)/.exec(req.headers.cookie || '');
@@ -150,6 +153,18 @@ export async function handleState(req, res, pathname, searchParams) {
   const body = req.method === 'GET' || req.method === 'DELETE' ? undefined : await readBody(req);
   state.calls.push({ method: req.method, path, query: searchParams.toString(), body });
 
+  const gate = state.gates[`${req.method} ${path}`];
+  if (gate && !gate.open) {
+    if (gate.skip > 0) {
+      gate.skip -= 1;
+    } else {
+      gate.arrived += 1;
+      const outcome = await new Promise((resolve) => gate.held.push(resolve));
+      if (outcome.status) {
+        return problem(res, outcome.status, outcome.detail);
+      }
+    }
+  }
   const delay = state.delays[`${req.method} ${path}`];
   if (delay) {
     await new Promise((resolve) => setTimeout(resolve, delay));
@@ -373,6 +388,28 @@ export async function handleControl(req, res, pathname, searchParams) {
       seeded.users.push({ user_id: String(3541025163146700000n + BigInt(i + 1)), username: `user${i + 1}`, roles: [] });
     }
     sessions.set(session, seeded);
+    return send(res, 200, {});
+  }
+  if (pathname === '/__admin/gate' && req.method === 'POST') {
+    const { session, key, skip } = await readBody(req);
+    stateFor(session).gates[key] = { skip: skip || 0, arrived: 0, open: false, held: [] };
+    return send(res, 200, {});
+  }
+  if (pathname === '/__admin/gate' && req.method === 'GET') {
+    const gate = stateFor(searchParams.get('session')).gates[searchParams.get('key')];
+    return send(res, 200, { arrived: gate ? gate.arrived : 0 });
+  }
+  if (pathname === '/__admin/gate/release' && req.method === 'POST') {
+    const { session, key, status, detail, index } = await readBody(req);
+    const gate = stateFor(session).gates[key];
+    if (index !== undefined) {
+      gate.held[index]({ status, detail });
+      return send(res, 200, {});
+    }
+    gate.open = true;
+    for (const resolve of gate.held.splice(0)) {
+      resolve({ status, detail });
+    }
     return send(res, 200, {});
   }
   if (pathname === '/__admin/calls' && req.method === 'GET') {

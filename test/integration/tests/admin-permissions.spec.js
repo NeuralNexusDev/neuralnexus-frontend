@@ -35,12 +35,15 @@ test.describe('admin - permissions', () => {
   });
 
   test('changing the create form while a delete is in flight keeps the choice without a message', async ({ page }) => {
-    await signIn(page, { delays: { [`DELETE /permissions/${ID.pStore}`]: 600 } });
+    const { gate } = await signIn(page);
     await page.goto('/admin/permissions');
+    const deletion = await gate(`DELETE /permissions/${ID.pStore}`);
     page.once('dialog', (dialog) => dialog.accept());
     await rows(page).nth(4).getByRole('button', { name: 'Delete' }).click();
+    await deletion.arrived();
     await expect(page.locator('#admin-permissions-root')).toHaveAttribute('aria-busy', 'true');
     await page.locator('#admin-permission-create-type').selectOption('int');
+    await deletion.release();
     await expect(rows(page)).toHaveCount(4);
     await expect(page.locator('#admin-permission-create-type')).toHaveValue('int');
     await expect(page.locator('#admin-permissions-root')).not.toHaveAttribute('aria-busy', 'true');

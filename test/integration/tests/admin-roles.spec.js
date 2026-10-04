@@ -16,13 +16,16 @@ test.describe('admin - roles', () => {
   });
 
   test('creating a role dims its button and shows a progress cursor while the request runs', async ({ page }) => {
-    await signIn(page, { delays: { 'POST /roles': 600 } });
+    const { gate } = await signIn(page);
     await page.goto('/admin/roles');
+    const post = await gate('POST /roles');
     await page.locator('#admin-role-create-name').fill('moderator');
     await page.locator('#admin-role-create-submit').click();
+    await post.arrived();
     await expect(page.locator('#admin-role-create-form')).toHaveAttribute('aria-busy', 'true');
     await expect(page.locator('#admin-role-create-form')).toHaveCSS('cursor', 'progress');
     await expect(page.locator('#admin-role-create-submit')).toHaveCSS('opacity', '0.6');
+    await post.release();
     await expect(page).toHaveURL(/\/admin\/roles\/\d{19}$/);
   });
 
@@ -264,23 +267,29 @@ test.describe('admin - role changes while other edits are open', () => {
   });
 
   test('repeated clicks while a save is in flight send one write', async ({ page }) => {
-    const { writes } = await signIn(page, { delays: { [`PATCH /roles/${ID.bee}`]: 600 } });
+    const { writes, gate } = await signIn(page);
     await page.goto(roleEditor);
+    const patch = await gate(`PATCH /roles/${ID.bee}`);
     await page.locator('#admin-role-name').fill('bee_manager');
     await page.locator('#admin-role-save').click({ clickCount: 3 });
+    await patch.arrived();
+    await patch.release();
     await expect(page.locator('#admin-role-status')).toHaveText('Saved');
     expect(await writes()).toEqual([{ method: 'PATCH', path: `/roles/${ID.bee}`, body: { name: 'bee_manager' } }]);
   });
 
   test('the editor looks busy while a change is in flight and drops a second one', async ({ page }) => {
-    const { writes } = await signIn(page, { delays: { [`DELETE /roles/${ID.bee}/permissions/${ID.pBee}`]: 600 } });
+    const { writes, gate } = await signIn(page);
     await page.goto(roleEditor);
+    const removal = await gate(`DELETE /roles/${ID.bee}/permissions/${ID.pBee}`);
     await grantedRows(page).nth(0).getByRole('button', { name: 'Remove beenamegenerator.admin' }).click();
+    await removal.arrived();
     await expect(page.locator('#admin-role[aria-busy="true"]')).toHaveCount(1);
     await expect(page.locator('#admin-role')).toHaveCSS('pointer-events', 'none');
     await expect(page.locator('#admin-role')).toHaveAttribute('aria-busy', 'true');
     await grantedRows(page).nth(1).getByRole('button', { name: 'Remove ratelimit' }).dispatchEvent('click');
     await expect(error(page)).toHaveText('The last change is still being saved. Try again in a moment.');
+    await removal.release();
     await expect(grantedRows(page)).toHaveCount(1);
     await expect(page.locator('#admin-role[aria-busy="true"]')).toHaveCount(0);
     await expect(page.locator('#admin-role')).not.toHaveAttribute('aria-busy', 'true');
@@ -289,13 +298,16 @@ test.describe('admin - role changes while other edits are open', () => {
   });
 
   test('pressing Enter in a value field while another change is in flight says it was dropped', async ({ page }) => {
-    const { writes } = await signIn(page, { delays: { [`DELETE /roles/${ID.bee}/permissions/${ID.pBee}`]: 600 } });
+    const { writes, gate } = await signIn(page);
     await page.goto(roleEditor);
+    const removal = await gate(`DELETE /roles/${ID.bee}/permissions/${ID.pBee}`);
     await grantedRows(page).nth(0).getByRole('button', { name: 'Remove beenamegenerator.admin' }).click();
+    await removal.arrived();
     await expect(page.locator('#admin-role')).toHaveAttribute('aria-busy', 'true');
     await page.getByRole('spinbutton', { name: 'Value of ratelimit' }).fill('250');
     await page.getByRole('spinbutton', { name: 'Value of ratelimit' }).press('Enter');
     await expect(error(page)).toHaveText('The last change is still being saved. Try again in a moment.');
+    await removal.release();
     await expect(grantedRows(page)).toHaveCount(1);
     await expect(page.getByRole('spinbutton', { name: 'Value of ratelimit' })).toHaveValue('250');
     await expect(error(page)).toHaveText('The change made while saving was not sent. Make it again.');
@@ -303,12 +315,15 @@ test.describe('admin - role changes while other edits are open', () => {
   });
 
   test('a grant form changed while a removal is in flight is dropped as a whole and says so', async ({ page }) => {
-    const { writes } = await signIn(page, { delays: { [`DELETE /roles/${ID.bee}/permissions/${ID.pBee}`]: 800 } });
+    const { writes, gate } = await signIn(page);
     await page.goto(roleEditor);
+    const removal = await gate(`DELETE /roles/${ID.bee}/permissions/${ID.pBee}`);
     await grantedRows(page).nth(0).getByRole('button', { name: 'Remove beenamegenerator.admin' }).click();
+    await removal.arrived();
     await expect(page.locator('#admin-role')).toHaveAttribute('aria-busy', 'true');
     await page.locator('#admin-role-grant-permission').selectOption({ label: 'motd' });
     await page.locator('#admin-role-grant-value input[type="text"]').fill('hello');
+    await removal.release();
     await expect(grantedRows(page)).toHaveCount(1);
     await expect(page.locator('#admin-role-grant-permission option:checked')).toHaveText('petpictures.pets');
     await expect(page.locator('#admin-role-grant-value textarea')).toHaveValue('');
@@ -317,13 +332,16 @@ test.describe('admin - role changes while other edits are open', () => {
   });
 
   test('a grant form changed while a rename is in flight keeps what was chosen and typed without a message', async ({ page }) => {
-    const { writes } = await signIn(page, { delays: { [`PATCH /roles/${ID.bee}`]: 800 } });
+    const { writes, gate } = await signIn(page);
     await page.goto(roleEditor);
+    const patch = await gate(`PATCH /roles/${ID.bee}`);
     await page.locator('#admin-role-name').fill('bee_manager');
     await page.locator('#admin-role-name').press('Enter');
+    await patch.arrived();
     await expect(page.locator('#admin-role')).toHaveAttribute('aria-busy', 'true');
     await page.locator('#admin-role-grant-permission').selectOption({ label: 'motd' });
     await page.locator('#admin-role-grant-value input[type="text"]').fill('hello');
+    await patch.release();
     await expect(page.locator('#admin-role-status')).toHaveText('Saved');
     await expect(page.locator('#admin-role-grant-permission option:checked')).toHaveText('motd');
     await expect(page.locator('#admin-role-grant-value input[type="text"]')).toHaveValue('hello');
@@ -337,12 +355,15 @@ test.describe('admin - role changes while other edits are open', () => {
   });
 
   test('a field outside the redrawn region changed during a rename leaves the status at Saved', async ({ page }) => {
-    const { writes } = await signIn(page, { delays: { [`PATCH /roles/${ID.bee}`]: 600 } });
+    const { writes, gate } = await signIn(page);
     await page.goto(roleEditor);
+    const patch = await gate(`PATCH /roles/${ID.bee}`);
     await page.locator('#admin-role-name').fill('bee_manager');
     await page.locator('#admin-role-name').press('Enter');
+    await patch.arrived();
     await expect(page.locator('#admin-role')).toHaveAttribute('aria-busy', 'true');
     await page.getByRole('spinbutton', { name: 'Value of ratelimit' }).fill('99');
+    await patch.release();
     await expect(page.locator('#admin-role')).not.toHaveAttribute('aria-busy', 'true');
     await expect(page.locator('#admin-role-status')).toHaveText('Saved');
     await expect(page.getByRole('spinbutton', { name: 'Value of ratelimit' })).toHaveValue('99');
@@ -350,7 +371,7 @@ test.describe('admin - role changes while other edits are open', () => {
   });
 
   test('quick changes of the grant select while its value loads end on the last choice without a message', async ({ page }) => {
-    await signIn(page, { delays: { 'GET /permissions': 700 } });
+    const { gate } = await signIn(page);
     await page.addInitScript(() => {
       window.__banner = [];
       new MutationObserver(() => {
@@ -361,11 +382,12 @@ test.describe('admin - role changes while other edits are open', () => {
     await page.goto(roleEditor);
     const select = page.locator('#admin-role-grant-permission');
     await expect(select).toBeVisible();
-    for (const label of ['datastore.admin', 'petpictures.pets', 'motd']) {
-      const requested = page.waitForRequest((request) => request.url().includes('/grant-value'));
+    const catalogue = await gate('GET /permissions');
+    for (const [index, label] of ['datastore.admin', 'petpictures.pets', 'motd'].entries()) {
       await select.selectOption({ label });
-      await requested;
+      await catalogue.arrived(index + 1);
     }
+    await catalogue.release();
     await expect(page.locator('#admin-role-grant-value input[type="text"]')).toBeVisible();
     await expect(page.locator('#admin-role-grant-permission option:checked')).toHaveText('motd');
     await expect(page.locator('#admin-role')).not.toHaveAttribute('aria-busy', 'true');
@@ -373,10 +395,33 @@ test.describe('admin - role changes while other edits are open', () => {
     expect(await page.evaluate(() => window.__banner)).toEqual([]);
   });
 
-  test('a grant select that finishes while a removal is in flight leaves the editor busy', async ({ page }) => {
-    await signIn(page, { delays: { [`DELETE /roles/${ID.bee}/permissions/${ID.pBee}`]: 1200 } });
+  test('a late answer to an earlier select change does not replace the answer to the last one', async ({ page }) => {
+    const { gate } = await signIn(page);
     await page.goto(roleEditor);
+    const select = page.locator('#admin-role-grant-permission');
+    await expect(select).toBeVisible();
+    const catalogue = await gate('GET /permissions');
+    for (const [index, label] of ['datastore.admin', 'petpictures.pets', 'motd'].entries()) {
+      await select.selectOption({ label });
+      await catalogue.arrived(index + 1);
+    }
+    await catalogue.release({ index: 2 });
+    await expect(page.locator('#admin-role-grant-value input[type="text"]')).toBeVisible();
+    const late = page.waitForResponse((response) => response.url().includes(`grant_permission=${ID.pPets}`));
+    await catalogue.release({ index: 1 });
+    await late;
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await expect(page.locator('#admin-role-grant-value input[type="text"]')).toBeVisible();
+    await expect(page.locator('#admin-role-grant-value textarea')).toHaveCount(0);
+    await catalogue.release();
+  });
+
+  test('a grant select that finishes while a removal is in flight leaves the editor busy', async ({ page }) => {
+    const { gate } = await signIn(page);
+    await page.goto(roleEditor);
+    const removal = await gate(`DELETE /roles/${ID.bee}/permissions/${ID.pBee}`);
     await grantedRows(page).nth(0).getByRole('button', { name: 'Remove beenamegenerator.admin' }).click();
+    await removal.arrived();
     await expect(page.locator('#admin-role')).toHaveAttribute('aria-busy', 'true');
     await page.locator('#admin-role-grant-permission').selectOption({ label: 'motd' });
     await expect(page.locator('#admin-role-grant-value input[type="text"]')).toBeVisible();
@@ -384,16 +429,20 @@ test.describe('admin - role changes while other edits are open', () => {
     await page.getByRole('spinbutton', { name: 'Value of ratelimit' }).fill('88');
     await page.getByRole('spinbutton', { name: 'Value of ratelimit' }).press('Enter');
     await expect(error(page)).toHaveText('The last change is still being saved. Try again in a moment.');
+    await removal.release();
   });
 
   test('a value typed while a removal is in flight keeps focus and its caret', async ({ page }) => {
-    await signIn(page, { delays: { [`DELETE /roles/${ID.bee}/permissions/${ID.pBee}`]: 600 } });
+    const { gate } = await signIn(page);
     await page.goto(roleEditor);
+    const removal = await gate(`DELETE /roles/${ID.bee}/permissions/${ID.pBee}`);
     await grantedRows(page).nth(0).getByRole('button', { name: 'Remove beenamegenerator.admin' }).click();
+    await removal.arrived();
     await expect(page.locator('#admin-role')).toHaveAttribute('aria-busy', 'true');
     const value = page.getByRole('spinbutton', { name: 'Value of ratelimit' });
     await value.fill('7712');
     await value.press('ArrowLeft');
+    await removal.release();
     await expect(grantedRows(page)).toHaveCount(1);
     await expect(value).toHaveValue('7712');
     await expect(value).toBeFocused();

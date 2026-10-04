@@ -106,7 +106,8 @@ test.describe('accessibility - page structure', () => {
   });
 
   test('a shell announces that its content is loading and then loaded through a live region that is already on the page', async ({ page }) => {
-    await signIn(page, { delays: { 'GET /roles': 600 } });
+    const { gate } = await signIn(page);
+    const listed = await gate('GET /roles');
     await page.addInitScript(() => {
       window.__announced = [];
       document.addEventListener('DOMContentLoaded', () => {
@@ -114,6 +115,9 @@ test.describe('accessibility - page structure', () => {
       });
     });
     await page.goto('/admin/roles');
+    await listed.arrived();
+    await expect(page.locator('#page-status')).toHaveText('Loading…');
+    await listed.release();
     await expect(page.locator('#admin-roles li').first()).toBeVisible();
     await expect(page.locator('#page-status')).toHaveText('Loaded');
     expect(await page.evaluate(() => window.__announced)).toEqual(['Loading…', 'Loaded']);
