@@ -1,5 +1,6 @@
 import http from 'node:http';
 import net from 'node:net';
+import { handleAdmin, handleControl } from './stub-admin.mjs';
 
 const PNG_1X1 = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
@@ -64,7 +65,7 @@ function problem(res, status, body, contentType = 'application/problem+json') {
 const received = [];
 
 http
-  .createServer((req, res) => {
+  .createServer(async (req, res) => {
     const { pathname, searchParams } = new URL(req.url, 'http://stub');
     if (pathname === '/health') {
       res.writeHead(200).end('ok');
@@ -72,6 +73,16 @@ http
     }
     if (pathname === '/__requests') {
       res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(received));
+      return;
+    }
+    if (pathname.startsWith('/__admin/')) {
+      if ((await handleControl(req, res, pathname, searchParams)) === false) {
+        res.writeHead(404).end();
+      }
+      return;
+    }
+    if (/^\/api\/v1\/(users|roles|permissions)(\/|$)/.test(pathname)) {
+      await handleAdmin(req, res, pathname, searchParams);
       return;
     }
     received.push(req.url);

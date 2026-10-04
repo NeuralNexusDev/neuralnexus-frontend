@@ -1,376 +1,868 @@
 package components
 
-templ adminError() {
-	<div id="admin-error" role="alert" hidden class="rounded-md border border-destructive bg-destructive/10 p-3 text-center text-sm text-destructive"></div>
+import (
+	"encoding/json"
+	"net/url"
+	"strconv"
+	"strings"
+)
+
+// UserAccount is a user account as the API returns it.
+type UserAccount struct {
+	UserID   string   `json:"user_id"`
+	Username string   `json:"username"`
+	Roles    []string `json:"roles"`
 }
 
-templ adminCardLink(id string, href string, title string, description string) {
-	<a
-		id={ id }
-		hidden
-		href={ templ.SafeURL(href) }
-		class="block rounded-lg border border-input p-4 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-	>
+// LinkedAccount is a platform linked to an account.
+type LinkedAccount struct {
+	Platform         string `json:"platform"`
+	PlatformUsername string `json:"platform_username"`
+	PlatformID       string `json:"platform_id"`
+}
+
+// Permission is a permission node roles can grant.
+type Permission struct {
+	ID          string `json:"id"`
+	Node        string `json:"node"`
+	Description string `json:"description"`
+	ValueType   string `json:"value_type"`
+	Merge       string `json:"merge"`
+}
+
+// RolePermission is a permission as a role grants it.
+type RolePermission struct {
+	Permission
+	Value json.RawMessage `json:"value"`
+}
+
+// Role is a named set of permissions.
+type Role struct {
+	ID          string           `json:"id"`
+	Name        string           `json:"name"`
+	Description string           `json:"description"`
+	Permissions []RolePermission `json:"permissions"`
+}
+
+// ValueText returns the granted value as the text of its input: the number, the text, or one list item per line.
+func (p RolePermission) ValueText() string {
+	switch p.ValueType {
+	case "string":
+		var text string
+		_ = json.Unmarshal(p.Value, &text)
+		return text
+	case "string_list":
+		var items []string
+		_ = json.Unmarshal(p.Value, &items)
+		return strings.Join(items, "\n")
+	case "int":
+		return strings.TrimSpace(string(p.Value))
+	default:
+		return ""
+	}
+}
+
+// Label returns the node, followed by its value when the role grants one.
+func (p RolePermission) Label() string {
+	if p.ValueType == "" {
+		return p.Node
+	}
+	return p.Node + ": " + strings.ReplaceAll(p.ValueText(), "\n", ", ")
+}
+
+// AdminDashboardData is what the admin dashboard shows.
+type AdminDashboardData struct {
+	Users bool
+	Roles bool
+	Error string
+}
+
+// AdminUsersData is a page of the user list.
+type AdminUsersData struct {
+	Users []UserAccount
+	// RoleNames maps role IDs to names, and is nil when the caller cannot read roles.
+	RoleNames  map[string]string
+	NextOffset int
+	More       bool
+	// FocusFirst moves focus to the first row, which replaces the button that loaded the page.
+	FocusFirst bool
+	// Loaded is false until the first page was fetched, which keeps the search box hidden.
+	Loaded bool
+	Error  string
+}
+
+// AdminUserData is the user editor.
+type AdminUserData struct {
+	User UserAccount
+	// Roles is the role catalogue to choose from, which only a caller who may read roles gets.
+	Roles          []Role
+	RolesReadable  bool
+	Links          []LinkedAccount
+	LinksError     string
+	Permissions    []string
+	PermissionsErr string
+	Loaded         bool
+	Error          string
+}
+
+// AdminRolesData is the role list.
+type AdminRolesData struct {
+	Roles  []Role
+	Loaded bool
+	Error  string
+}
+
+// AdminRoleData is the role editor.
+type AdminRoleData struct {
+	Role Role
+	// Catalogue is every permission, granted or not.
+	Catalogue []Permission
+	// Drafts holds what was typed in each granted permission's value field, by permission ID, while another part changes.
+	Drafts map[string]string
+	// GrantPermission and GrantValue keep what was typed in the grant form.
+	GrantPermission string
+	GrantValue      string
+	// FocusList moves focus to the permission list heading, which replaces the button that was used.
+	FocusList bool
+	Loaded    bool
+	Error     string
+}
+
+// AdminPermissionsData is the permission list.
+type AdminPermissionsData struct {
+	Permissions []Permission
+	FocusList   bool
+	Loaded      bool
+	Error       string
+}
+
+// HeldRole reports whether the user holds the role.
+func (d AdminUserData) HeldRole(id string) bool {
+	for _, held := range d.User.Roles {
+		if held == id {
+			return true
+		}
+	}
+	return false
+}
+
+// UnlistedRoles returns the roles the user holds that are not in the catalogue, which have no checkbox.
+func (d AdminUserData) UnlistedRoles() []string {
+	listed := make(map[string]bool, len(d.Roles))
+	for _, role := range d.Roles {
+		listed[role.ID] = true
+	}
+	var unlisted []string
+	for _, held := range d.User.Roles {
+		if !listed[held] {
+			unlisted = append(unlisted, held)
+		}
+	}
+	return unlisted
+}
+
+// Available returns the permissions the role does not grant yet.
+func (d AdminRoleData) Available() []Permission {
+	granted := make(map[string]bool, len(d.Role.Permissions))
+	for _, p := range d.Role.Permissions {
+		granted[p.ID] = true
+	}
+	var available []Permission
+	for _, p := range d.Catalogue {
+		if !granted[p.ID] {
+			available = append(available, p)
+		}
+	}
+	return available
+}
+
+// Selected returns the permission chosen in the grant form, or the first available one.
+func (d AdminRoleData) Selected() (Permission, bool) {
+	available := d.Available()
+	for _, p := range available {
+		if p.ID == d.GrantPermission {
+			return p, true
+		}
+	}
+	if len(available) > 0 {
+		return available[0], true
+	}
+	return Permission{}, false
+}
+
+// Draft returns the text for a granted permission's value field: what was typed, else the granted value.
+func (d AdminRoleData) Draft(p RolePermission) string {
+	if text, ok := d.Drafts[p.ID]; ok {
+		return text
+	}
+	return p.ValueText()
+}
+
+const (
+	adminHTMXURL      = "https://cdn.neuralnexus.dev/htmx/htmx.v1.9.5.min.js"
+	adminHTMXConfig   = `{"allowEval":false,"allowScriptTags":false,"selfRequestsOnly":true,"historyCacheSize":0,"refreshOnHistoryMiss":true}`
+	adminInputClass   = "text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+	adminSelectClass  = "text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+	adminSubmitClass  = "border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
+	adminButtonClass  = "border border-input hover:bg-accent hover:text-accent-foreground inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+	adminDangerClass  = "border border-red-600 text-red-600 hover:bg-red-600/10 dark:border-red-400 dark:text-red-400 dark:hover:bg-red-400/10 inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+	adminCardClass    = "block rounded-lg border border-input p-3 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+	adminChipClass    = "rounded-full border border-input px-2.5 py-0.5 text-xs"
+	adminMutedClass   = "text-sm text-gray-500 dark:text-gray-400"
+	adminSectionError = "text-sm text-red-600 dark:text-red-400"
+)
+
+func adminUserPath(id string) string {
+	return "/admin/users/" + url.PathEscape(id)
+}
+
+func adminRolePath(id string) string {
+	return "/admin/roles/" + url.PathEscape(id)
+}
+
+func adminRolePermissionPath(roleID string, permissionID string) string {
+	return adminRolePath(roleID) + "/permissions/" + url.PathEscape(permissionID)
+}
+
+func adminRoleName(names map[string]string, id string) string {
+	if name, ok := names[id]; ok {
+		return name
+	}
+	return id
+}
+
+func adminUsername(username string) string {
+	if username == "" {
+		return "No username"
+	}
+	return username
+}
+
+func adminLinkName(link LinkedAccount) string {
+	if link.PlatformUsername != "" {
+		return link.PlatformUsername
+	}
+	return link.PlatformID
+}
+
+templ adminHead() {
+	<meta name="htmx-config" content={ adminHTMXConfig }/>
+	<script src={ adminHTMXURL } defer></script>
+}
+
+templ adminPage(contents templ.Component) {
+	@WrapContentsWithHead("NeuralNexus", adminHead(), contents)
+}
+
+templ adminError(message string) {
+	<div id="admin-error" role="alert" class="empty:hidden rounded-md border border-destructive bg-destructive/10 p-3 text-center text-sm text-destructive">{ message }</div>
+}
+
+templ adminStatus(id string) {
+	<p id={ id } role="status" class="text-center text-sm text-gray-500 dark:text-gray-400"></p>
+}
+
+// AdminStatus updates a page's status line out of band, so the line keeps announcing what it says.
+templ AdminStatus(id string, message string) {
+	<p id={ id } hx-swap-oob="innerHTML">{ message }</p>
+}
+
+// AdminErrorText is the body of an error response that htmx swaps into the error banner.
+templ AdminErrorText(message string) {
+	{ message }
+}
+
+templ adminTextBlock(name string, description string) {
+	<span class="min-w-0">
+		<span class="block break-all font-medium">{ name }</span>
+		<span class="block break-all text-xs text-gray-500 dark:text-gray-400">{ description }</span>
+	</span>
+}
+
+templ adminCard(id string, href string, title string, description string) {
+	<a id={ id } href={ templ.SafeURL(href) } class={ adminCardClass }>
 		<span class="block font-semibold">{ title }</span>
 		<span class="block text-sm text-gray-500 dark:text-gray-400">{ description }</span>
 	</a>
 }
 
-templ adminDashboard() {
+templ adminHeading(title string, description string) {
+	<div class="space-y-2 text-center">
+		<h1 class="text-3xl font-bold">{ title }</h1>
+		<p class="text-balance text-gray-500 dark:text-gray-400">{ description }</p>
+	</div>
+}
+
+templ adminDashboard(d AdminDashboardData) {
 	<div class="mx-auto max-w-md space-y-6">
-		<div class="space-y-2 text-center">
-			<h1 class="text-3xl font-bold">Admin Dashboard</h1>
-			<p class="text-balance text-gray-500 dark:text-gray-400">
-				Manage accounts, roles and permissions
-			</p>
-		</div>
-		@adminError()
+		@adminHeading("Admin Dashboard", "Manage accounts, roles and permissions")
+		@adminError(d.Error)
 		<div class="space-y-3">
-			@adminCardLink("admin-users-link", "/admin/users", "Users", "Browse accounts and edit their username and roles")
-			@adminCardLink("admin-roles-link", "/admin/roles", "Roles", "Create roles and choose which permissions they grant")
-			@adminCardLink("admin-permissions-link", "/admin/permissions", "Permissions", "Create and delete the permissions roles can grant")
-			<p id="admin-denied" hidden class="text-center text-sm text-gray-500 dark:text-gray-400">
-				Your account has no admin permissions
-			</p>
+			if d.Users {
+				@adminCard("admin-users-link", "/admin/users", "Users", "Browse accounts and edit their username and roles")
+			}
+			if d.Roles {
+				@adminCard("admin-roles-link", "/admin/roles", "Roles", "Create roles and choose which permissions they grant")
+				@adminCard("admin-permissions-link", "/admin/permissions", "Permissions", "Create and delete the permissions roles can grant")
+			}
+			if d.Error == "" && !d.Users && !d.Roles {
+				<p id="admin-denied" class="text-center text-sm text-gray-500 dark:text-gray-400">Your account has no admin permissions</p>
+			}
 		</div>
 	</div>
-	<script>
-		loadAdminDashboard();
-	</script>
 }
 
 // AdminDashboardPage serves the admin dashboard that links to the user, role and permission pages.
-templ AdminDashboardPage() {
-	@WrapContents(adminDashboard())
+templ AdminDashboardPage(d AdminDashboardData) {
+	@adminPage(adminDashboard(d))
 }
 
-templ adminUsers() {
+templ adminUsers(d AdminUsersData) {
 	<div class="mx-auto max-w-xl space-y-6">
-		<div class="space-y-2 text-center">
-			<h1 class="text-3xl font-bold">Users</h1>
-			<p class="text-balance text-gray-500 dark:text-gray-400">
-				Select an account to edit it
-			</p>
-		</div>
+		@adminHeading("Users", "Select an account to edit it")
 		<a href="/admin" class="text-sm text-gray-500 underline dark:text-gray-400">Back to the admin dashboard</a>
-		@adminError()
-		<div id="admin-users-tools" hidden class="space-y-2">
-			<label class="text-sm font-medium leading-none" for="admin-users-search">Search</label>
-			<input
-				id="admin-users-search"
-				type="search"
-				autocomplete="off"
-				placeholder="Username or user ID"
-				oninput="renderAdminUsers()"
-				class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-			/>
-		</div>
-		<ul id="admin-users" class="space-y-2"></ul>
-		<p id="admin-users-empty" hidden class="text-center text-sm text-gray-500 dark:text-gray-400">
-			No users found
-		</p>
-		<div id="admin-users-more" hidden class="space-y-2 text-center">
+		@adminError(d.Error)
+		if d.Loaded {
+			<div class="space-y-2">
+				<label class="text-sm font-medium leading-none" for="admin-users-search">Search</label>
+				<input
+					id="admin-users-search"
+					type="search"
+					autocomplete="off"
+					placeholder="Username or user ID"
+					oninput="filterAdminUsers()"
+					class={ adminInputClass }
+				/>
+			</div>
+			<ul id="admin-users" class="space-y-2">
+				@AdminUserRows(d)
+			</ul>
+			<p id="admin-users-empty" hidden?={ len(d.Users) > 0 } class="text-center text-sm text-gray-500 dark:text-gray-400">No users found</p>
+		}
+	</div>
+}
+
+// AdminUserRows renders a page of user rows, followed by the button that loads the next page when there is one.
+templ AdminUserRows(d AdminUsersData) {
+	for i, user := range d.Users {
+		<li data-name={ strings.ToLower(user.Username) } data-id={ user.UserID }>
+			<a href={ templ.SafeURL(adminUserPath(user.UserID)) } autofocus?={ d.FocusFirst && i == 0 } class={ adminCardClass }>
+				@adminTextBlock(adminUsername(user.Username), user.UserID)
+				if len(user.Roles) > 0 {
+					<span class="mt-2 flex flex-wrap gap-2">
+						for _, roleID := range user.Roles {
+							<span class={ adminChipClass }>{ adminRoleName(d.RoleNames, roleID) }</span>
+						}
+					</span>
+				}
+			</a>
+		</li>
+	}
+	if d.More {
+		<li id="admin-users-more" class="space-y-2 text-center">
 			<button
 				id="admin-users-more-button"
 				type="button"
-				onclick="loadMoreAdminUsers()"
-				class="border border-input hover:bg-accent hover:text-accent-foreground inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+				hx-get={ "/admin/users/rows?offset=" + strconv.Itoa(d.NextOffset) }
+				hx-target="#admin-users-more"
+				hx-swap="outerHTML"
+				hx-sync="this:drop"
+				class={ adminButtonClass + " w-full" }
 			>
 				Load more
 			</button>
-			<p class="text-xs text-gray-500 dark:text-gray-400">Search covers the users loaded so far</p>
-		</div>
-	</div>
-	<script>
-		loadAdminUsers();
-	</script>
+			<span class="block text-xs text-gray-500 dark:text-gray-400">Search covers the users loaded so far</span>
+		</li>
+	}
 }
 
 // AdminUsersPage serves the searchable list of user accounts.
-templ AdminUsersPage() {
-	@WrapContents(adminUsers())
+templ AdminUsersPage(d AdminUsersData) {
+	@adminPage(adminUsers(d))
 }
 
-templ adminUser() {
+templ adminUser(d AdminUserData) {
 	<div class="mx-auto max-w-md space-y-6">
-		<div class="space-y-2 text-center">
-			<h1 id="admin-user-title" class="text-3xl font-bold">User</h1>
-			<p id="admin-user-id" class="break-all text-sm text-gray-500 dark:text-gray-400"></p>
-		</div>
 		<a href="/admin/users" class="text-sm text-gray-500 underline dark:text-gray-400">Back to users</a>
-		@adminError()
-		<form id="admin-user-form" class="space-y-6" hidden onsubmit="saveAdminUser(event)">
+		@adminError(d.Error)
+		@adminStatus("admin-user-status")
+		if d.Loaded {
+			@AdminUserEditor(d)
+		}
+	</div>
+}
+
+// AdminUserEditor renders the whole user editor, which htmx swaps in after a save.
+templ AdminUserEditor(d AdminUserData) {
+	<div id="admin-user" class="space-y-6">
+		<div class="space-y-2 text-center">
+			<h1 id="admin-user-title" class="text-3xl font-bold">{ adminUsername(d.User.Username) }</h1>
+			<p id="admin-user-id" class="break-all text-sm text-gray-500 dark:text-gray-400">{ d.User.UserID }</p>
+		</div>
+		<form
+			id="admin-user-form"
+			class="space-y-6"
+			hx-post={ adminUserPath(d.User.UserID) }
+			hx-target="#admin-user"
+			hx-swap="outerHTML"
+			hx-sync="this:drop"
+		>
+			<input type="hidden" name="loaded_username" value={ d.User.Username }/>
+			for _, roleID := range d.User.Roles {
+				<input type="hidden" name="loaded_roles" value={ roleID }/>
+			}
+			if d.RolesReadable {
+				<input type="hidden" name="roles_editable" value="1"/>
+				for _, roleID := range d.UnlistedRoles() {
+					<input type="hidden" name="kept_roles" value={ roleID }/>
+				}
+			}
 			<div class="space-y-2">
 				<label class="text-sm font-medium leading-none" for="admin-user-username">Username</label>
 				<input
 					id="admin-user-username"
+					name="username"
 					type="text"
+					value={ d.User.Username }
 					autocomplete="off"
 					autocapitalize="off"
 					spellcheck="false"
-					class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+					class={ adminInputClass }
 				/>
 			</div>
 			<fieldset class="space-y-2">
 				<legend class="text-sm font-medium leading-none">Roles</legend>
-				<ul id="admin-user-roles" class="space-y-2"></ul>
-				<p id="admin-user-roles-note" hidden class="text-sm text-gray-500 dark:text-gray-400">
-					Role names and changes need the roles.admin permission, so the roles are shown by ID and left as they are.
-				</p>
+				<ul id="admin-user-roles" class="space-y-2">
+					if d.RolesReadable {
+						for _, role := range d.Roles {
+							<li>
+								<label class="flex cursor-pointer items-start gap-3 rounded-md border border-input px-3 py-2 text-sm">
+									<input type="checkbox" name="roles" value={ role.ID } checked?={ d.HeldRole(role.ID) } class="mt-1"/>
+									@adminTextBlock(role.Name, role.Description)
+								</label>
+							</li>
+						}
+					} else {
+						for _, roleID := range d.User.Roles {
+							<li class="break-all rounded-md border border-input px-3 py-2 text-sm">{ roleID }</li>
+						}
+					}
+				</ul>
+				if !d.RolesReadable {
+					<p id="admin-user-roles-note" class="text-sm text-gray-500 dark:text-gray-400">
+						Role names and changes need the roles.admin permission, so the roles are shown by ID and left as they are.
+					</p>
+				}
 			</fieldset>
-			<div class="space-y-2">
-				<h2 class="text-sm font-medium leading-none">Linked accounts</h2>
-				<p id="admin-user-links-error" hidden class="text-sm text-red-600 dark:text-red-400"></p>
-				<ul id="admin-user-links" class="space-y-1 text-sm"></ul>
-				<p id="admin-user-links-empty" hidden class="text-sm text-gray-500 dark:text-gray-400">No linked accounts</p>
-			</div>
-			<div class="space-y-2">
-				<h2 class="text-sm font-medium leading-none">Effective permissions</h2>
-				<p id="admin-user-permissions-error" hidden class="text-sm text-red-600 dark:text-red-400"></p>
-				<ul id="admin-user-permissions" class="flex flex-wrap gap-2"></ul>
-				<p id="admin-user-permissions-empty" hidden class="text-sm text-gray-500 dark:text-gray-400">No permissions</p>
-			</div>
-			<button
-				id="admin-user-save"
-				type="submit"
-				class="border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
-			>
-				Save
-			</button>
-			<p id="admin-user-status" role="status" class="text-center text-sm text-gray-500 dark:text-gray-400"></p>
+			<button id="admin-user-save" type="submit" class={ adminSubmitClass }>Save</button>
 		</form>
+		<div class="space-y-2">
+			<h2 class="text-sm font-medium leading-none">Linked accounts</h2>
+			if d.LinksError != "" {
+				<p id="admin-user-links-error" role="alert" class={ adminSectionError }>{ d.LinksError }</p>
+			} else if len(d.Links) == 0 {
+				<p id="admin-user-links-empty" class={ adminMutedClass }>No linked accounts</p>
+			} else {
+				<ul id="admin-user-links" class="space-y-1 text-sm">
+					for _, link := range d.Links {
+						<li class="flex justify-between gap-3 rounded-md border border-input px-3 py-2">
+							<span class="font-medium capitalize">{ link.Platform }</span>
+							<span class="min-w-0 truncate text-gray-500 dark:text-gray-400">{ adminLinkName(link) }</span>
+						</li>
+					}
+				</ul>
+			}
+		</div>
+		<div class="space-y-2">
+			<h2 class="text-sm font-medium leading-none">Effective permissions</h2>
+			if d.PermissionsErr != "" {
+				<p id="admin-user-permissions-error" role="alert" class={ adminSectionError }>{ d.PermissionsErr }</p>
+			} else if len(d.Permissions) == 0 {
+				<p id="admin-user-permissions-empty" class={ adminMutedClass }>No permissions</p>
+			} else {
+				<ul id="admin-user-permissions" class="flex flex-wrap gap-2">
+					for _, permission := range d.Permissions {
+						<li class={ adminChipClass }>{ permission }</li>
+					}
+				</ul>
+			}
+		</div>
 	</div>
-	<script>
-		loadAdminUser();
-	</script>
 }
 
 // AdminUserPage serves the editor for one user account.
-templ AdminUserPage() {
-	@WrapContents(adminUser())
+templ AdminUserPage(d AdminUserData) {
+	@adminPage(adminUser(d))
 }
 
-templ adminRoles() {
+templ adminRoles(d AdminRolesData) {
 	<div class="mx-auto max-w-xl space-y-6">
-		<div class="space-y-2 text-center">
-			<h1 class="text-3xl font-bold">Roles</h1>
-			<p class="text-balance text-gray-500 dark:text-gray-400">
-				Select a role to edit the permissions it grants
-			</p>
-		</div>
+		@adminHeading("Roles", "Select a role to edit the permissions it grants")
 		<div class="flex justify-between text-sm text-gray-500 dark:text-gray-400">
 			<a href="/admin" class="underline">Back to the admin dashboard</a>
 			<a href="/admin/permissions" class="underline">Permissions</a>
 		</div>
-		@adminError()
-		<ul id="admin-roles" class="space-y-2"></ul>
-		<p id="admin-roles-empty" hidden class="text-center text-sm text-gray-500 dark:text-gray-400">No roles</p>
-		<form id="admin-role-create-form" hidden class="space-y-4 rounded-lg border border-input p-4" onsubmit="createAdminRole(event)">
-			<h2 class="text-lg font-semibold">New role</h2>
-			<div class="space-y-2">
-				<label class="text-sm font-medium leading-none" for="admin-role-create-name">Name</label>
-				<input
-					id="admin-role-create-name"
-					type="text"
-					required
-					autocomplete="off"
-					autocapitalize="off"
-					spellcheck="false"
-					placeholder="moderator"
-					class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-				/>
-				<p class="text-xs text-gray-500 dark:text-gray-400">Lower-case letters, digits and underscores, starting with a letter</p>
-			</div>
-			<div class="space-y-2">
-				<label class="text-sm font-medium leading-none" for="admin-role-create-description">Description</label>
-				<input
-					id="admin-role-create-description"
-					type="text"
-					autocomplete="off"
-					class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-				/>
-			</div>
-			<button
-				id="admin-role-create-submit"
-				type="submit"
-				class="border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
-			>
-				Create role
-			</button>
-		</form>
-	</div>
-	<script>
-		loadAdminRolesPage();
-	</script>
-}
-
-// AdminRolesPage serves the list of roles and the form that creates one.
-templ AdminRolesPage() {
-	@WrapContents(adminRoles())
-}
-
-templ adminRole() {
-	<div class="mx-auto max-w-md space-y-6">
-		<div class="space-y-2 text-center">
-			<h1 id="admin-role-title" class="text-3xl font-bold">Role</h1>
-			<p id="admin-role-id" class="break-all text-sm text-gray-500 dark:text-gray-400"></p>
-		</div>
-		<a href="/admin/roles" class="text-sm text-gray-500 underline dark:text-gray-400">Back to roles</a>
-		@adminError()
-		<div id="admin-role-content" class="space-y-6" hidden>
-			<form class="space-y-4" onsubmit="saveAdminRole(event)">
+		@adminError(d.Error)
+		if d.Loaded {
+			<ul id="admin-roles" class="space-y-2">
+				for _, role := range d.Roles {
+					<li>
+						<a href={ templ.SafeURL(adminRolePath(role.ID)) } class={ adminCardClass }>
+							@adminTextBlock(role.Name, role.Description)
+							if len(role.Permissions) > 0 {
+								<span class="mt-2 flex flex-wrap gap-2">
+									for _, permission := range role.Permissions {
+										<span class={ adminChipClass }>{ permission.Label() }</span>
+									}
+								</span>
+							}
+						</a>
+					</li>
+				}
+			</ul>
+			<p id="admin-roles-empty" hidden?={ len(d.Roles) > 0 } class="text-center text-sm text-gray-500 dark:text-gray-400">No roles</p>
+			<form id="admin-role-create-form" class="space-y-4 rounded-lg border border-input p-4" hx-post="/admin/roles" hx-sync="this:drop">
+				<h2 class="text-lg font-semibold">New role</h2>
 				<div class="space-y-2">
-					<label class="text-sm font-medium leading-none" for="admin-role-name">Name</label>
+					<label class="text-sm font-medium leading-none" for="admin-role-create-name">Name</label>
 					<input
-						id="admin-role-name"
+						id="admin-role-create-name"
+						name="name"
 						type="text"
 						required
 						autocomplete="off"
 						autocapitalize="off"
 						spellcheck="false"
-						class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+						placeholder="moderator"
+						class={ adminInputClass }
 					/>
+					<p class="text-xs text-gray-500 dark:text-gray-400">Lower-case letters, digits and underscores, starting with a letter</p>
 				</div>
 				<div class="space-y-2">
-					<label class="text-sm font-medium leading-none" for="admin-role-description">Description</label>
-					<input
-						id="admin-role-description"
-						type="text"
-						autocomplete="off"
-						class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-					/>
+					<label class="text-sm font-medium leading-none" for="admin-role-create-description">Description</label>
+					<input id="admin-role-create-description" name="description" type="text" autocomplete="off" class={ adminInputClass }/>
 				</div>
-				<button
-					id="admin-role-save"
-					type="submit"
-					class="border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
-				>
-					Save
-				</button>
-				<p id="admin-role-status" role="status" class="text-center text-sm text-gray-500 dark:text-gray-400"></p>
+				<button id="admin-role-create-submit" type="submit" class={ adminSubmitClass }>Create role</button>
 			</form>
-			<div class="space-y-2">
-				<h2 id="admin-role-permissions-title" tabindex="-1" class="text-lg font-semibold">Granted permissions</h2>
-				<ul id="admin-role-permissions" class="space-y-2"></ul>
-				<p id="admin-role-permissions-empty" hidden class="text-sm text-gray-500 dark:text-gray-400">This role grants no permissions</p>
-			</div>
-			<form id="admin-role-grant-form" class="space-y-3 rounded-lg border border-input p-4" onsubmit="grantAdminRolePermission(event)">
+		}
+	</div>
+}
+
+// AdminRolesPage serves the list of roles and the form that creates one.
+templ AdminRolesPage(d AdminRolesData) {
+	@adminPage(adminRoles(d))
+}
+
+templ adminValueField(permission Permission, value string, name string) {
+	switch permission.ValueType {
+		case "int":
+			<input
+				type="number"
+				step="1"
+				name={ name }
+				value={ value }
+				autocomplete="off"
+				aria-label={ "Value of " + permission.Node }
+				class={ adminInputClass }
+			/>
+		case "string":
+			<input
+				type="text"
+				name={ name }
+				value={ value }
+				autocomplete="off"
+				aria-label={ "Value of " + permission.Node }
+				class={ adminInputClass }
+			/>
+		case "string_list":
+			<textarea
+				name={ name }
+				rows="3"
+				placeholder="One item per line"
+				aria-label={ "Value of " + permission.Node }
+				class={ adminInputClass + " h-auto" }
+			>{ value }</textarea>
+	}
+}
+
+// AdminGrantValue renders the value input the grant form needs for a permission, and nothing for a permission granted as is.
+templ AdminGrantValue(permission Permission, value string) {
+	@adminValueField(permission, value, "grant_value")
+}
+
+templ adminRole(d AdminRoleData) {
+	<div id="admin-role" class="mx-auto max-w-md space-y-6">
+		<a href="/admin/roles" class="text-sm text-gray-500 underline dark:text-gray-400">Back to roles</a>
+		@adminError(d.Error)
+		@adminStatus("admin-role-status")
+		if d.Loaded {
+			@AdminRoleHeader(d, false)
+			@AdminRoleForm(d)
+			@AdminRoleGrants(d)
+			@AdminRoleDelete(d, false)
+		}
+	</div>
+}
+
+// AdminRoleHeader renders the role's name and ID, or the out-of-band copy of them a rename sends.
+templ AdminRoleHeader(d AdminRoleData, oob bool) {
+	<div
+		id="admin-role-header"
+		if oob {
+			hx-swap-oob="true"
+		}
+		class="space-y-2 text-center"
+	>
+		<h1 id="admin-role-title" class="text-3xl font-bold">{ d.Role.Name }</h1>
+		<p id="admin-role-id" class="break-all text-sm text-gray-500 dark:text-gray-400">{ d.Role.ID }</p>
+	</div>
+}
+
+// AdminRoleForm renders the form that renames the role, which htmx swaps in after a save.
+templ AdminRoleForm(d AdminRoleData) {
+	<form
+		id="admin-role-form"
+		class="space-y-4"
+		hx-post={ adminRolePath(d.Role.ID) }
+		hx-target="#admin-role-form"
+		hx-swap="outerHTML"
+	>
+		<input type="hidden" name="loaded_name" value={ d.Role.Name }/>
+		<input type="hidden" name="loaded_description" value={ d.Role.Description }/>
+		<div class="space-y-2">
+			<label class="text-sm font-medium leading-none" for="admin-role-name">Name</label>
+			<input
+				id="admin-role-name"
+				name="name"
+				type="text"
+				required
+				value={ d.Role.Name }
+				autocomplete="off"
+				autocapitalize="off"
+				spellcheck="false"
+				class={ adminInputClass }
+			/>
+		</div>
+		<div class="space-y-2">
+			<label class="text-sm font-medium leading-none" for="admin-role-description">Description</label>
+			<input id="admin-role-description" name="description" type="text" value={ d.Role.Description } autocomplete="off" class={ adminInputClass }/>
+		</div>
+		<button id="admin-role-save" type="submit" class={ adminSubmitClass }>Save</button>
+	</form>
+}
+
+// AdminRoleDelete renders the button that deletes the role, or the out-of-band copy of it a rename sends.
+templ AdminRoleDelete(d AdminRoleData, oob bool) {
+	<button
+		id="admin-role-delete"
+		if oob {
+			hx-swap-oob="true"
+		}
+		type="button"
+		hx-delete={ adminRolePath(d.Role.ID) }
+		hx-confirm={ "Delete the role " + d.Role.Name + "?" }
+		hx-sync="closest #admin-role:drop"
+		class={ adminDangerClass }
+	>
+		Delete role
+	</button>
+}
+
+// AdminRoleGrants renders the granted permissions and the grant form, which htmx swaps in after a change to either.
+templ AdminRoleGrants(d AdminRoleData) {
+	<div id="admin-role-grants" class="space-y-6">
+		<div class="space-y-2">
+			<h2 id="admin-role-permissions-title" tabindex="-1" autofocus?={ d.FocusList } class="text-lg font-semibold">Granted permissions</h2>
+			if len(d.Role.Permissions) == 0 {
+				<p id="admin-role-permissions-empty" class={ adminMutedClass }>This role grants no permissions</p>
+			} else {
+				<ul id="admin-role-permissions" class="space-y-2">
+					for _, permission := range d.Role.Permissions {
+						<li class="space-y-2 rounded-lg border border-input p-3">
+							<div class="flex items-start justify-between gap-3">
+								@adminTextBlock(permission.Node, permission.Description)
+								<button
+									type="button"
+									aria-label={ "Remove " + permission.Node }
+									hx-post={ adminRolePermissionPath(d.Role.ID, permission.ID) + "/remove" }
+									hx-target="#admin-role-grants"
+									hx-swap="outerHTML"
+									hx-sync="closest #admin-role:drop"
+									hx-include="#admin-role-grants"
+									class={ adminButtonClass }
+								>
+									Remove
+								</button>
+							</div>
+							if permission.ValueType != "" {
+								<form
+									class="flex items-start gap-2"
+									hx-post={ adminRolePermissionPath(d.Role.ID, permission.ID) }
+									hx-target="#admin-role-grants"
+									hx-swap="outerHTML"
+									hx-sync="closest #admin-role:drop"
+									hx-include="#admin-role-grants"
+								>
+									@adminValueField(permission.Permission, d.Draft(permission), "value_"+permission.ID)
+									<button type="submit" aria-label={ "Save value of " + permission.Node } class={ adminButtonClass }>Save value</button>
+								</form>
+							}
+						</li>
+					}
+				</ul>
+			}
+		</div>
+		if selected, ok := d.Selected(); ok {
+			<form
+				id="admin-role-grant-form"
+				class="space-y-3 rounded-lg border border-input p-4"
+				hx-post={ adminRolePath(d.Role.ID) + "/permissions" }
+				hx-target="#admin-role-grants"
+				hx-swap="outerHTML"
+				hx-sync="closest #admin-role:drop"
+				hx-include="#admin-role-grants"
+			>
 				<h2 class="text-lg font-semibold">Grant a permission</h2>
 				<select
 					id="admin-role-grant-permission"
+					name="grant_permission"
 					aria-label="Permission"
-					onchange="renderAdminGrantValue()"
-					class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-				></select>
-				<div id="admin-role-grant-value"></div>
-				<button
-					id="admin-role-grant-submit"
-					type="submit"
-					class="border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
+					hx-get={ adminRolePath(d.Role.ID) + "/grant-value" }
+					hx-trigger="change"
+					hx-target="#admin-role-grant-value"
+					hx-swap="innerHTML"
+					class={ adminSelectClass }
 				>
-					Grant
-				</button>
+					for _, permission := range d.Available() {
+						<option value={ permission.ID } selected?={ permission.ID == selected.ID }>{ permission.Node }</option>
+					}
+				</select>
+				<div id="admin-role-grant-value">
+					if selected.ID == d.GrantPermission {
+						@AdminGrantValue(selected, d.GrantValue)
+					} else {
+						@AdminGrantValue(selected, "")
+					}
+				</div>
+				<button id="admin-role-grant-submit" type="submit" class={ adminSubmitClass }>Grant</button>
 			</form>
-			<p id="admin-role-grant-empty" hidden class="text-sm text-gray-500 dark:text-gray-400">Every permission is already granted</p>
-			<button
-				id="admin-role-delete"
-				type="button"
-				onclick="deleteAdminRole()"
-				class="border border-red-600 text-red-600 hover:bg-red-600/10 dark:border-red-400 dark:text-red-400 dark:hover:bg-red-400/10 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-10 px-4 py-2 w-full"
-			>
-				Delete role
-			</button>
-		</div>
+		} else {
+			<p id="admin-role-grant-empty" class={ adminMutedClass }>Every permission is already granted</p>
+		}
 	</div>
-	<script>
-		loadAdminRole();
-	</script>
 }
 
 // AdminRolePage serves the editor for one role and the permissions it grants.
-templ AdminRolePage() {
-	@WrapContents(adminRole())
+templ AdminRolePage(d AdminRoleData) {
+	@adminPage(adminRole(d))
 }
 
-templ adminPermissions() {
+templ adminPermissions(d AdminPermissionsData) {
 	<div class="mx-auto max-w-xl space-y-6">
-		<div class="space-y-2 text-center">
-			<h1 class="text-3xl font-bold">Permissions</h1>
-			<p class="text-balance text-gray-500 dark:text-gray-400">
-				The permissions roles can grant
-			</p>
-		</div>
+		@adminHeading("Permissions", "The permissions roles can grant")
 		<div class="flex justify-between text-sm text-gray-500 dark:text-gray-400">
 			<a href="/admin" class="underline">Back to the admin dashboard</a>
 			<a href="/admin/roles" class="underline">Roles</a>
 		</div>
-		@adminError()
-		<h2 id="admin-permissions-title" tabindex="-1" class="sr-only">Permission list</h2>
-		<ul id="admin-permissions" class="space-y-2"></ul>
-		<p id="admin-permissions-empty" hidden class="text-center text-sm text-gray-500 dark:text-gray-400">No permissions</p>
-		<form id="admin-permission-create-form" hidden class="space-y-4 rounded-lg border border-input p-4" onsubmit="createAdminPermission(event)">
-			<h2 class="text-lg font-semibold">New permission</h2>
-			<div class="space-y-2">
-				<label class="text-sm font-medium leading-none" for="admin-permission-create-node">Node</label>
-				<input
-					id="admin-permission-create-node"
-					type="text"
-					required
-					autocomplete="off"
-					autocapitalize="off"
-					spellcheck="false"
-					placeholder="petpictures.admin"
-					class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-				/>
-				<p class="text-xs text-gray-500 dark:text-gray-400">Lower-case words of letters, digits and underscores joined by dots</p>
+		@adminError(d.Error)
+		if d.Loaded {
+			<div id="admin-permissions-root" class="space-y-6">
+				@AdminPermissionList(d)
+				@AdminPermissionForm(false)
 			</div>
-			<div class="space-y-2">
-				<label class="text-sm font-medium leading-none" for="admin-permission-create-description">Description</label>
-				<input
-					id="admin-permission-create-description"
-					type="text"
-					autocomplete="off"
-					class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-				/>
-			</div>
-			<div class="space-y-2">
-				<label class="text-sm font-medium leading-none" for="admin-permission-create-type">Value</label>
-				<select
-					id="admin-permission-create-type"
-					onchange="syncAdminPermissionMerge()"
-					class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-				>
-					<option value="">None (granted as is)</option>
-					<option value="int">Whole number</option>
-					<option value="string">Text</option>
-					<option value="string_list">List of text</option>
-				</select>
-			</div>
-			<div id="admin-permission-create-merge-field" class="space-y-2" hidden>
-				<label class="text-sm font-medium leading-none" for="admin-permission-create-merge">When an account holds it through several roles</label>
-				<select
-					id="admin-permission-create-merge"
-					class="text-foreground flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-				>
-					<option value="max">Use the highest value</option>
-					<option value="min">Use the lowest value</option>
-				</select>
-			</div>
-			<button
-				id="admin-permission-create-submit"
-				type="submit"
-				class="border hover:bg-primary-light inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground h-10 px-4 py-2 w-full"
-			>
-				Create permission
-			</button>
-		</form>
+		}
 	</div>
-	<script>
-		loadAdminPermissions();
-	</script>
+}
+
+// AdminPermissionList renders the permission list, which htmx swaps in after a change.
+templ AdminPermissionList(d AdminPermissionsData) {
+	<div id="admin-permissions-list" class="space-y-6">
+		<h2 id="admin-permissions-title" tabindex="-1" autofocus?={ d.FocusList } class="sr-only">Permission list</h2>
+		if len(d.Permissions) == 0 {
+			<p id="admin-permissions-empty" class="text-center text-sm text-gray-500 dark:text-gray-400">No permissions</p>
+		} else {
+			<ul id="admin-permissions" class="space-y-2">
+				for _, permission := range d.Permissions {
+					<li class="flex items-start justify-between gap-3 rounded-lg border border-input p-3">
+						<span class="min-w-0">
+							@adminTextBlock(permission.Node, permission.Description)
+							if permission.ValueType != "" {
+								<span class={ adminChipClass + " mt-2 inline-block" }>{ permission.ValueType + ", merge " + permission.Merge }</span>
+							}
+						</span>
+						<button
+							type="button"
+							aria-label={ "Delete " + permission.Node }
+							hx-delete={ "/admin/permissions/" + url.PathEscape(permission.ID) }
+							hx-confirm={ "Delete the permission " + permission.Node + "?" }
+							hx-target="#admin-permissions-list"
+							hx-swap="outerHTML"
+							hx-sync="closest #admin-permissions-root:drop"
+							class={ adminButtonClass }
+						>
+							Delete
+						</button>
+					</li>
+				}
+			</ul>
+		}
+	</div>
+}
+
+// AdminPermissionForm renders the form that creates a permission, or the out-of-band fresh copy of it a create sends.
+templ AdminPermissionForm(oob bool) {
+	<form
+		id="admin-permission-create-form"
+		if oob {
+			hx-swap-oob="true"
+		}
+		class="group space-y-4 rounded-lg border border-input p-4"
+		hx-post="/admin/permissions"
+		hx-target="#admin-permissions-list"
+		hx-swap="outerHTML"
+		hx-sync="closest #admin-permissions-root:drop"
+	>
+		<h2 class="text-lg font-semibold">New permission</h2>
+		<div class="space-y-2">
+			<label class="text-sm font-medium leading-none" for="admin-permission-create-node">Node</label>
+			<input
+				id="admin-permission-create-node"
+				name="node"
+				type="text"
+				required
+				autocomplete="off"
+				autocapitalize="off"
+				spellcheck="false"
+				placeholder="petpictures.admin"
+				class={ adminInputClass }
+			/>
+			<p class="text-xs text-gray-500 dark:text-gray-400">Lower-case words of letters, digits and underscores joined by dots</p>
+		</div>
+		<div class="space-y-2">
+			<label class="text-sm font-medium leading-none" for="admin-permission-create-description">Description</label>
+			<input id="admin-permission-create-description" name="description" type="text" autocomplete="off" class={ adminInputClass }/>
+		</div>
+		<div class="space-y-2">
+			<label class="text-sm font-medium leading-none" for="admin-permission-create-type">Value</label>
+			<select id="admin-permission-create-type" name="value_type" class={ adminSelectClass }>
+				<option value="">None (granted as is)</option>
+				<option value="int">Whole number</option>
+				<option value="string">Text</option>
+				<option value="string_list">List of text</option>
+			</select>
+		</div>
+		<div id="admin-permission-create-merge-field" class="hidden space-y-2 group-has-[option[value=int]:checked]:block">
+			<label class="text-sm font-medium leading-none" for="admin-permission-create-merge">When an account holds it through several roles</label>
+			<select id="admin-permission-create-merge" name="merge" class={ adminSelectClass }>
+				<option value="max">Use the highest value</option>
+				<option value="min">Use the lowest value</option>
+			</select>
+		</div>
+		<button id="admin-permission-create-submit" type="submit" class={ adminSubmitClass }>Create permission</button>
+	</form>
 }
 
 // AdminPermissionsPage serves the list of permissions and the form that creates one.
-templ AdminPermissionsPage() {
-	@WrapContents(adminPermissions())
+templ AdminPermissionsPage(d AdminPermissionsData) {
+	@adminPage(adminPermissions(d))
 }

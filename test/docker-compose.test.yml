@@ -4,8 +4,9 @@ services:
   stub-api:
     image: node:22-alpine
     volumes:
-      - ./integration/stub-api.mjs:/stub-api.mjs:ro
-    command: node /stub-api.mjs
+      - ./integration/stub-api.mjs:/stub/stub-api.mjs:ro
+      - ./integration/stub-admin.mjs:/stub/stub-admin.mjs:ro
+    command: node /stub/stub-api.mjs
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8098/health"]
       interval: 2s

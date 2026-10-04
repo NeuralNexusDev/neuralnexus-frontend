@@ -27,13 +27,6 @@ func NewWebServer(address string, usingUDS bool) *WebServer {
 	}
 }
 
-func noStoreHandler(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", noStore)
-		next.ServeHTTP(w, r)
-	})
-}
-
 // Setup - Setup the web server
 func (s *WebServer) Setup() http.Handler {
 	router := http.NewServeMux()
@@ -44,12 +37,23 @@ func (s *WebServer) Setup() http.Handler {
 	router.Handle("/login", templ.Handler(components.LoginPage()))
 	router.Handle("/register", templ.Handler(components.RegisterPage()))
 	router.Handle("/account", templ.Handler(components.AccountPage()))
-	router.Handle("/admin", noStoreHandler(templ.Handler(components.AdminDashboardPage())))
-	router.Handle("/admin/users", noStoreHandler(templ.Handler(components.AdminUsersPage())))
-	router.Handle("GET /admin/users/{id}", noStoreHandler(templ.Handler(components.AdminUserPage())))
-	router.Handle("/admin/roles", noStoreHandler(templ.Handler(components.AdminRolesPage())))
-	router.Handle("GET /admin/roles/{id}", noStoreHandler(templ.Handler(components.AdminRolePage())))
-	router.Handle("/admin/permissions", noStoreHandler(templ.Handler(components.AdminPermissionsPage())))
+	router.Handle("GET /admin", adminRoute(adminDashboardHandler))
+	router.Handle("GET /admin/users", adminRoute(adminUsersHandler))
+	router.Handle("GET /admin/users/rows", adminRoute(adminUserRowsHandler))
+	router.Handle("GET /admin/users/{id}", adminRoute(adminUserHandler))
+	router.Handle("POST /admin/users/{id}", adminAction(adminUserSaveHandler))
+	router.Handle("GET /admin/roles", adminRoute(adminRolesHandler))
+	router.Handle("POST /admin/roles", adminAction(adminRoleCreateHandler))
+	router.Handle("GET /admin/roles/{id}", adminRoute(adminRoleHandler))
+	router.Handle("POST /admin/roles/{id}", adminAction(adminRoleSaveHandler))
+	router.Handle("DELETE /admin/roles/{id}", adminAction(adminRoleDeleteHandler))
+	router.Handle("GET /admin/roles/{id}/grant-value", adminAction(adminRoleGrantValueHandler))
+	router.Handle("POST /admin/roles/{id}/permissions", adminAction(adminRoleGrantHandler))
+	router.Handle("POST /admin/roles/{id}/permissions/{permission}", adminAction(adminRoleValueHandler))
+	router.Handle("POST /admin/roles/{id}/permissions/{permission}/remove", adminAction(adminRoleRemoveHandler))
+	router.Handle("GET /admin/permissions", adminRoute(adminPermissionsHandler))
+	router.Handle("POST /admin/permissions", adminAction(adminPermissionCreateHandler))
+	router.Handle("DELETE /admin/permissions/{id}", adminAction(adminPermissionDeleteHandler))
 	router.Handle("/projects", templ.Handler(components.ProjectsPage()))
 	router.Handle("/project/bee-name-generator", templ.Handler(components.BeeNameGeneratorPage()))
 	router.Handle("/project/bee-name-generator/admin", templ.Handler(components.BeeNameGeneratorAdminPage()))
