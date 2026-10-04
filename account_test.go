@@ -41,7 +41,7 @@ func TestAccountContentShowsProfileSettingAndLinks(t *testing.T) {
 		`id="account-username">testuser<`,
 		`id="password-auth-enabled" name="password_auth" value="true" checked`,
 		`hx-post="/account/settings"`,
-		`id="link-discord"`, ">someone#1234<", `hx-post="/account/links/discord/unlink"`, `hx-confirm="Unlink Discord from your account?"`,
+		`id="link-discord"`, ">someone#1234<", `hx-delete="/account/links/discord"`, `hx-confirm="Unlink Discord from your account?"`,
 		`hx-post="/account/links/discord"`,
 		">streamer99<", ">Unverified<",
 		`id="link-microsoft-title"`, `data-platform="microsoft"`, `onclick="handleLinkAction(this.dataset.platform)"`,
@@ -253,7 +253,7 @@ func TestAccountUnlinkDeletesTheLinkAndAnswersWithTheUnlinkedRow(t *testing.T) {
 	f := newFakeAdmin(t)
 	f.on("DELETE /users/me/link/discord", 204, ``)
 	f.on("GET /users/me/links", 200, `[]`)
-	rec := action(http.MethodPost, "/account/links/discord/unlink", nil)
+	rec := action(http.MethodDelete, "/account/links/discord", nil)
 	assertStatus(t, rec, http.StatusOK)
 	assertWrites(t, f, "DELETE /users/me/link/discord ")
 	assertBody(t, rec, `id="link-discord"`, `id="link-discord-title" class="text-sm font-medium truncate">`, `data-platform="discord"`)
@@ -263,7 +263,7 @@ func TestAccountUnlinkDeletesTheLinkAndAnswersWithTheUnlinkedRow(t *testing.T) {
 func TestAccountLinkChangesRefusedShowTheMessageAndPutTheRowBack(t *testing.T) {
 	for _, tc := range []struct{ name, method, target, route string }{
 		{"toggle", http.MethodPost, "/account/links/discord", "PATCH /users/me/link/discord"},
-		{"unlink", http.MethodPost, "/account/links/discord/unlink", "DELETE /users/me/link/discord"},
+		{"unlink", http.MethodDelete, "/account/links/discord", "DELETE /users/me/link/discord"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFakeAdmin(t)
@@ -278,7 +278,7 @@ func TestAccountLinkChangesRefusedShowTheMessageAndPutTheRowBack(t *testing.T) {
 
 func TestAccountLinkChangesRefuseAnUnknownPlatform(t *testing.T) {
 	f := newFakeAdmin(t)
-	for _, target := range []string{"/account/links/minecraft", "/account/links/minecraft/unlink", "/account/links/..%2Fx", "/account/links/Discord"} {
+	for _, target := range []string{"/account/links/minecraft", "/account/links/..%2Fx", "/account/links/Discord"} {
 		t.Run(target, func(t *testing.T) {
 			rec := action(http.MethodPost, target, url.Values{})
 			if rec.Code != http.StatusNotFound && rec.Code != http.StatusMovedPermanently {
@@ -302,9 +302,20 @@ func TestAccountLinkChangeReloadFailureIsNotReportedAsAFailedChange(t *testing.T
 
 func TestAccountChangesNeedHTMX(t *testing.T) {
 	f := newFakeAdmin(t)
-	for _, target := range []string{"/account/settings", "/account/links/discord", "/account/links/discord/unlink"} {
-		rec := adminReq{method: http.MethodPost, target: target, form: url.Values{}}.do()
+	for _, tc := range []struct{ method, target string }{
+		{http.MethodPost, "/account/settings"},
+		{http.MethodPost, "/account/links/discord"},
+		{http.MethodDelete, "/account/links/discord"},
+	} {
+		rec := adminReq{method: tc.method, target: tc.target, form: url.Values{}}.do()
 		assertStatus(t, rec, http.StatusForbidden)
 	}
+	assertWrites(t, f)
+}
+
+func TestAccountUnlinkRefusesAnUnknownPlatform(t *testing.T) {
+	f := newFakeAdmin(t)
+	rec := action(http.MethodDelete, "/account/links/minecraft", nil)
+	assertStatus(t, rec, http.StatusNotFound)
 	assertWrites(t, f)
 }

@@ -309,7 +309,7 @@ func TestAdminActionsNeedHTMX(t *testing.T) {
 		{http.MethodDelete, "/admin/roles/" + idBee},
 		{http.MethodPost, "/admin/roles/" + idBee + "/permissions"},
 		{http.MethodPost, "/admin/roles/" + idBee + "/permissions/" + idPRate},
-		{http.MethodPost, "/admin/roles/" + idBee + "/permissions/" + idPRate + "/remove"},
+		{http.MethodDelete, "/admin/roles/" + idBee + "/permissions/" + idPRate},
 		{http.MethodPost, "/admin/permissions"},
 		{http.MethodDelete, "/admin/permissions/" + idPRate},
 	}
@@ -479,7 +479,7 @@ func TestAdminReloadFailureAfterAWriteIsNotReportedAsAFailedWrite(t *testing.T) 
 			f.on("PUT /roles/"+idBee+"/permissions/"+idPRate, 204, ``)
 		}},
 		{"remove", "GET /roles/" + idBee, func() *httptest.ResponseRecorder {
-			return action(http.MethodPost, "/admin/roles/"+idBee+"/permissions/"+idPBee+"/remove", nil)
+			return action(http.MethodDelete, "/admin/roles/"+idBee+"/permissions/"+idPBee, nil)
 		}, func(f *fakeAdmin) { f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``) }},
 		{"permission create", "GET /permissions", func() *httptest.ResponseRecorder {
 			return action(http.MethodPost, "/admin/permissions", url.Values{"node": {"pets.write"}})
@@ -529,7 +529,7 @@ func TestAdminPathsEscapeIDsThatLookLikeURLs(t *testing.T) {
 	f.on("GET /permissions", 200, `[]`)
 
 	action(http.MethodPost, "/admin/users/"+escaped, url.Values{"username": {"robert"}, "loaded_username": {"bob"}})
-	action(http.MethodPost, "/admin/roles/"+escaped+"/permissions/"+escaped+"/remove", nil)
+	action(http.MethodDelete, "/admin/roles/"+escaped+"/permissions/"+escaped, nil)
 	rec := action(http.MethodPost, "/admin/roles", url.Values{"name": {"n"}})
 	if got := rec.Header().Get("HX-Redirect"); got != "/admin/roles/"+escaped {
 		t.Errorf("HX-Redirect = %q", got)
@@ -655,19 +655,23 @@ func TestAdminErrorsEmptyTheStatusLineOfTheEditorTheyCameFrom(t *testing.T) {
 
 func TestAdminActionsRefuseAFormThatCannotBeRead(t *testing.T) {
 	f := newFakeAdmin(t)
-	targets := []string{
-		"/admin/users/" + idBob,
-		"/admin/roles",
-		"/admin/roles/" + idBee,
-		"/admin/roles/" + idBee + "/permissions",
-		"/admin/roles/" + idBee + "/permissions/" + idPRate,
-		"/admin/roles/" + idBee + "/permissions/" + idPRate + "/remove",
-		"/admin/permissions",
+	cases := []struct{ method, target string }{
+		{http.MethodPost, "/admin/users/" + idBob},
+		{http.MethodPost, "/admin/roles"},
+		{http.MethodPost, "/admin/roles/" + idBee},
+		{http.MethodPost, "/admin/roles/" + idBee + "/permissions"},
+		{http.MethodPost, "/admin/roles/" + idBee + "/permissions/" + idPRate},
+		{http.MethodDelete, "/admin/roles/" + idBee + "/permissions/" + idPRate},
+		{http.MethodPost, "/admin/permissions"},
+		{http.MethodPost, "/account/settings"},
+		{http.MethodPost, "/account/links/discord"},
+		{http.MethodDelete, "/account/links/discord"},
+		{http.MethodPost, "/project/bee-name-generator/admin/suggestions"},
 	}
-	for _, target := range targets {
-		t.Run(target, func(t *testing.T) {
+	for _, tc := range cases {
+		t.Run(tc.method+" "+tc.target, func(t *testing.T) {
 			f.reset()
-			req := httptest.NewRequest(http.MethodPost, target, strings.NewReader("name=%zz"))
+			req := httptest.NewRequest(tc.method, tc.target, strings.NewReader("name=%zz"))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			req.Header.Set("HX-Request", "true")
 			rec := httptest.NewRecorder()
@@ -681,6 +685,27 @@ func TestAdminActionsRefuseAFormThatCannotBeRead(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAdminDeleteReadsItsFormFromTheBodyAndTheQuery(t *testing.T) {
+	remove := func(target string, form url.Values) *httptest.ResponseRecorder {
+		f := newFakeAdmin(t)
+		seedRoleEditor(f)
+		f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
+		return action(http.MethodDelete, target, form)
+	}
+	base := "/admin/roles/" + idBee + "/permissions/" + idPBee
+	t.Run("body", func(t *testing.T) {
+		assertBody(t, remove(base, url.Values{"grant_permission": {idPMotd}, "grant_value": {"from body"}}), `value="from body"`)
+	})
+	t.Run("query", func(t *testing.T) {
+		assertBody(t, remove(base+"?grant_permission="+idPMotd+"&grant_value=from+query", nil), `value="from query"`)
+	})
+	t.Run("body wins over the query", func(t *testing.T) {
+		rec := remove(base+"?grant_value=from+query", url.Values{"grant_permission": {idPMotd}, "grant_value": {"from body"}})
+		assertBody(t, rec, `value="from body"`)
+		assertNoBody(t, rec, `value="from query"`)
+	})
 }
 
 func TestBeeAdminLinkShowsForTheBeeAdminPermission(t *testing.T) {

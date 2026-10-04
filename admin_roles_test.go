@@ -81,7 +81,7 @@ func TestAdminRoleEditorShowsTheRole(t *testing.T) {
 	assertBody(t, rec,
 		`id="admin-role-title"`, ">bee_admin<", ">"+idBee+"<",
 		`name="loaded_name" value="bee_admin"`, `name="loaded_description" value="Bee Name Generator Admin"`,
-		`hx-post="/admin/roles/`+idBee+`/permissions/`+idPRate+`/remove"`,
+		`hx-delete="/admin/roles/`+idBee+`/permissions/`+idPRate+`"`,
 		`hx-post="/admin/roles/`+idBee+`/permissions/`+idPRate+`"`,
 		`type="number"`, `value="100"`, `aria-label="Value of ratelimit"`,
 		`hx-delete="/admin/roles/`+idBee+`"`, `hx-confirm="Delete the role bee_admin?"`,
@@ -252,7 +252,7 @@ func TestAdminRoleRemoveDropsATypedValueForAPermissionNoLongerAvailable(t *testi
 	f := newFakeAdmin(t)
 	seedRoleEditor(f)
 	f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
-	rec := action(http.MethodPost, "/admin/roles/"+idBee+"/permissions/"+idPBee+"/remove", url.Values{"grant_permission": {idPRate}, "grant_value": {"stale"}})
+	rec := action(http.MethodDelete, "/admin/roles/"+idBee+"/permissions/"+idPBee, url.Values{"grant_permission": {idPRate}, "grant_value": {"stale"}})
 	assertNoBody(t, rec, `value="stale"`)
 	assertBody(t, rec, `<option value="`+idPPets+`" selected>`)
 }
@@ -261,7 +261,7 @@ func TestAdminRoleRemoveDeletesTheGrantAndKeepsTheGrantForm(t *testing.T) {
 	f := newFakeAdmin(t)
 	seedRoleEditor(f)
 	f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
-	rec := action(http.MethodPost, "/admin/roles/"+idBee+"/permissions/"+idPBee+"/remove", url.Values{"grant_permission": {idPMotd}, "grant_value": {"half typed"}})
+	rec := action(http.MethodDelete, "/admin/roles/"+idBee+"/permissions/"+idPBee, url.Values{"grant_permission": {idPMotd}, "grant_value": {"half typed"}})
 	assertStatus(t, rec, http.StatusOK)
 	assertWrites(t, f, `DELETE /roles/`+idBee+`/permissions/`+idPBee+` `)
 	assertBody(t, rec, `id="admin-role-granted"`, `id="admin-role-grant" hx-swap-oob="true"`,
@@ -272,7 +272,7 @@ func TestAdminRoleRemoveRefusedShowsTheAPIMessage(t *testing.T) {
 	f := newFakeAdmin(t)
 	seedRoleEditor(f)
 	f.problem("DELETE /roles/"+idBee+"/permissions/"+idPBee, 409, "system and owner keep roles.admin")
-	rec := action(http.MethodPost, "/admin/roles/"+idBee+"/permissions/"+idPBee+"/remove", nil)
+	rec := action(http.MethodDelete, "/admin/roles/"+idBee+"/permissions/"+idPBee, nil)
 	assertStatus(t, rec, http.StatusConflict)
 	if got := bannerText(rec); got != "system and owner keep roles.admin" {
 		t.Errorf("body = %q", got)
@@ -423,7 +423,7 @@ func TestAdminRoleChangesKeepTheValuesTypedInOtherRows(t *testing.T) {
 		f := newFakeAdmin(t)
 		seedRoleEditor(f)
 		f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
-		rec := action(http.MethodPost, "/admin/roles/"+idBee+"/permissions/"+idPBee+"/remove", typed(nil))
+		rec := action(http.MethodDelete, "/admin/roles/"+idBee+"/permissions/"+idPBee, typed(nil))
 		assertBody(t, rec, `value="777"`, `value="half typed"`)
 	})
 }
@@ -450,7 +450,7 @@ func TestAdminRoleChangesEmptyTheStatusLine(t *testing.T) {
 	f := newFakeAdmin(t)
 	seedRoleEditor(f)
 	f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
-	rec := action(http.MethodPost, "/admin/roles/"+idBee+"/permissions/"+idPBee+"/remove", nil)
+	rec := action(http.MethodDelete, "/admin/roles/"+idBee+"/permissions/"+idPBee, nil)
 	assertBody(t, rec, `<p id="admin-role-status" hx-swap-oob="innerHTML"></p>`)
 }
 

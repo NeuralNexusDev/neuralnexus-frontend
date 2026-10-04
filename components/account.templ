@@ -185,7 +185,7 @@ templ AccountLinkRow(platform AccountPlatform, link LinkedAccount, linked bool, 
 				<button
 					id={ "link-" + platform.ID + "-action" }
 					type="button"
-					hx-post={ "/account/links/" + platform.ID + "/unlink" }
+					hx-delete={ "/account/links/" + platform.ID }
 					hx-confirm={ "Unlink " + platform.Name + " from your account?" }
 					class="shrink-0 text-xs underline"
 				>

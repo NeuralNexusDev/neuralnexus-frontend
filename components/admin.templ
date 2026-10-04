@@ -773,7 +773,7 @@ templ AdminRoleGranted(d AdminRoleData) {
 							<button
 								type="button"
 								aria-label={ "Remove " + permission.Node }
-								hx-post={ adminRolePermissionPath(d.Role.ID, permission.ID) + "/remove" }
+								hx-delete={ adminRolePermissionPath(d.Role.ID, permission.ID) }
 								hx-include="#admin-role-grants"
 								class={ adminButtonClass }
 							>

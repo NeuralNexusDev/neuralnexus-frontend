@@ -2,12 +2,17 @@ package main
 
 import (
 	"errors"
+	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/a-h/templ"
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/components"
 )
+
+// maxActionBody is the most a DELETE form may carry.
+const maxActionBody = 1 << 20
 
 func noStoreHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -31,12 +36,38 @@ func adminAction(handler func(http.ResponseWriter, *http.Request, adminAPI)) htt
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		if err := r.ParseForm(); err != nil {
+		if err := parseActionForm(w, r); err != nil {
 			failFragment(w, r, invalidInput("The form could not be read"))
 			return
 		}
 		handler(w, r, a)
 	})
+}
+
+// parseActionForm parses the form of an action. Go reads a body only for POST, PUT and PATCH,
+// so a DELETE has its body read here, and what htmx sends in the query joins it.
+func parseActionForm(w http.ResponseWriter, r *http.Request) error {
+	if err := r.ParseForm(); err != nil {
+		return err
+	}
+	if r.Method != http.MethodDelete {
+		return nil
+	}
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxActionBody))
+	if err != nil {
+		return err
+	}
+	form, err := url.ParseQuery(string(body))
+	if err != nil {
+		return err
+	}
+	for key, values := range r.URL.Query() {
+		if _, ok := form[key]; !ok {
+			form[key] = values
+		}
+	}
+	r.PostForm = form
+	return nil
 }
 
 func errorStatus(err error) (int, string) {
