@@ -10,7 +10,7 @@ import (
 )
 
 func TestAdminRoleListShowsRolesWithTheirPermissions(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /roles", 200, `[
 		{"id":"`+idBee+`","name":"bee_admin","description":"Bee Name Generator Admin","permissions":[
 			{"id":"`+idPBee+`","node":"beenamegenerator.admin","description":"d"},
@@ -26,13 +26,13 @@ func TestAdminRoleListShowsRolesWithTheirPermissions(t *testing.T) {
 }
 
 func TestAdminRoleListWithoutRolesSaysSo(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /roles", 200, `[]`)
 	assertBody(t, getPage("/admin/roles/list"), `id="admin-roles-empty"`, ">No roles<", `id="admin-role-create-form"`)
 }
 
 func TestAdminRoleListRefusedHidesTheCreateForm(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.problem("GET /roles", 403, "You do not have permission to manage roles and permissions")
 	rec := getPage("/admin/roles/list")
 	assertStatus(t, rec, http.StatusForbidden)
@@ -41,7 +41,7 @@ func TestAdminRoleListRefusedHidesTheCreateForm(t *testing.T) {
 }
 
 func TestAdminRoleListEscapesAPIText(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /roles", 200, fmt.Sprintf(`[{"id":%q,"name":%q,"description":%q,"permissions":[
 		{"id":"1","node":%q,"description":"d"},
 		{"id":"2","node":"ratelimit","description":"d","value_type":"int","value":%q},
@@ -52,7 +52,7 @@ func TestAdminRoleListEscapesAPIText(t *testing.T) {
 }
 
 func TestAdminRoleCreatePostsTheTrimmedFieldsAndOpensTheEditor(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("POST /roles", 201, `{"id":"`+idBee+`","name":"moderator","description":"Moderates things","permissions":[]}`)
 	rec := action(http.MethodPost, "/admin/roles", url.Values{"name": {" moderator "}, "description": {" Moderates things "}})
 	assertStatus(t, rec, http.StatusOK)
@@ -63,7 +63,7 @@ func TestAdminRoleCreatePostsTheTrimmedFieldsAndOpensTheEditor(t *testing.T) {
 }
 
 func TestAdminRoleCreateRefusedShowsTheAPIMessage(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.problem("POST /roles", 409, "A role with that name already exists")
 	rec := action(http.MethodPost, "/admin/roles", url.Values{"name": {"system"}})
 	assertStatus(t, rec, http.StatusConflict)
@@ -72,7 +72,7 @@ func TestAdminRoleCreateRefusedShowsTheAPIMessage(t *testing.T) {
 	}
 }
 
-func seedRoleEditor(f *fakeAdmin) {
+func seedRoleEditor(f *fakeBackend) {
 	f.on("GET /roles/"+idBee, 200, `{"id":"`+idBee+`","name":"bee_admin","description":"Bee Name Generator Admin","permissions":[
 		{"id":"`+idPBee+`","node":"beenamegenerator.admin","description":"Bee name generator"},
 		{"id":"`+idPRate+`","node":"ratelimit","description":"Rate limit","value_type":"int","merge":"max","value":100}]}`)
@@ -80,7 +80,7 @@ func seedRoleEditor(f *fakeAdmin) {
 }
 
 func TestAdminRoleEditorShowsTheRole(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedRoleEditor(f)
 	rec := getPage("/admin/roles/" + idBee + "/editor")
 	assertStatus(t, rec, http.StatusOK)
@@ -102,7 +102,7 @@ func TestAdminRoleEditorShowsTheRole(t *testing.T) {
 }
 
 func TestAdminRoleEditorWithoutPermissionsOrGrantsLeft(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /roles/"+idSystem, 200, `{"id":"`+idSystem+`","name":"system","description":"System","permissions":[]}`)
 	f.on("GET /permissions", 200, `[]`)
 	rec := getPage("/admin/roles/" + idSystem + "/editor")
@@ -111,7 +111,7 @@ func TestAdminRoleEditorWithoutPermissionsOrGrantsLeft(t *testing.T) {
 }
 
 func TestAdminRoleEditorUnknownRoleShowsTheMessageAndNothingFromTheURL(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.problem("GET /roles/404", 404, "Role not found")
 	rec := getPage("/admin/roles/404/editor")
 	assertStatus(t, rec, http.StatusNotFound)
@@ -120,7 +120,7 @@ func TestAdminRoleEditorUnknownRoleShowsTheMessageAndNothingFromTheURL(t *testin
 }
 
 func TestAdminRoleEditorFailedPermissionLookupIsAnError(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedRoleEditor(f)
 	f.problem("GET /permissions", 500, "permissions are down")
 	rec := getPage("/admin/roles/" + idBee + "/editor")
@@ -132,7 +132,7 @@ func TestAdminRoleEditorFailedPermissionLookupIsAnError(t *testing.T) {
 func TestAdminRoleEditorEscapesIDsAndAPIText(t *testing.T) {
 	id := hostile + "id"
 	escaped := url.PathEscape(id)
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /roles/"+escaped, 200, fmt.Sprintf(`{"id":%q,"name":%q,"description":%q,"permissions":[
 		{"id":"1","node":%q,"description":%q},
 		{"id":"2","node":"motd","description":"d","value_type":"string","value":%q},
@@ -166,7 +166,7 @@ func TestAdminRoleGrantBuildsTheBodyFromTheTypedValue(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			f := newFakeAdmin(t)
+			f := newFakeBackend(t)
 			seedRoleEditor(f)
 			f.on("PUT /roles/"+idBee+"/permissions/"+tc.permission, 204, ``)
 			rec := action(http.MethodPost, "/admin/roles/"+idBee+"/permissions", url.Values{"grant_permission": {tc.permission}, "grant_value": {tc.value}})
@@ -197,7 +197,7 @@ func TestAdminRoleGrantRefusesUnusableValues(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			f := newFakeAdmin(t)
+			f := newFakeBackend(t)
 			seedRoleEditor(f)
 			rec := action(http.MethodPost, "/admin/roles/"+idBee+"/permissions", url.Values{"grant_permission": {tc.permission}, "grant_value": {tc.value}})
 			assertStatus(t, rec, http.StatusBadRequest)
@@ -210,7 +210,7 @@ func TestAdminRoleGrantRefusesUnusableValues(t *testing.T) {
 }
 
 func TestAdminRoleGrantUnknownPermission(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedRoleEditor(f)
 	rec := action(http.MethodPost, "/admin/roles/"+idBee+"/permissions", url.Values{"grant_permission": {"123"}})
 	assertStatus(t, rec, http.StatusNotFound)
@@ -218,7 +218,7 @@ func TestAdminRoleGrantUnknownPermission(t *testing.T) {
 }
 
 func TestAdminRoleGrantRefusedShowsTheAPIMessage(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedRoleEditor(f)
 	f.problem("PUT /roles/"+idBee+"/permissions/"+idPStore, 400, "The value must match")
 	rec := action(http.MethodPost, "/admin/roles/"+idBee+"/permissions", url.Values{"grant_permission": {idPStore}})
@@ -229,7 +229,7 @@ func TestAdminRoleGrantRefusedShowsTheAPIMessage(t *testing.T) {
 }
 
 func TestAdminRoleSaveValueAnswersWithTheGrantedListAlone(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedRoleEditor(f)
 	f.on("PUT /roles/"+idBee+"/permissions/"+idPRate, 204, ``)
 	rec := putRoleValue(idPRate, url.Values{"value_" + idPRate: {"250"}, "grant_permission": {idPMotd}, "grant_value": {"half typed"}})
@@ -240,7 +240,7 @@ func TestAdminRoleSaveValueAnswersWithTheGrantedListAlone(t *testing.T) {
 }
 
 func TestAdminRoleSaveValueDoesNotReloadThePermissionList(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedRoleEditor(f)
 	f.on("PUT /roles/"+idBee+"/permissions/"+idPRate, 204, ``)
 	putRoleValue(idPRate, url.Values{"value_" + idPRate: {"250"}})
@@ -256,7 +256,7 @@ func TestAdminRoleSaveValueDoesNotReloadThePermissionList(t *testing.T) {
 }
 
 func TestAdminRoleRemoveDropsATypedValueForAPermissionNoLongerAvailable(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedRoleEditor(f)
 	f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
 	rec := actionDelete("/admin/roles/"+idBee+"/permissions/"+idPBee, url.Values{"grant_permission": {idPRate}, "grant_value": {"stale"}})
@@ -265,7 +265,7 @@ func TestAdminRoleRemoveDropsATypedValueForAPermissionNoLongerAvailable(t *testi
 }
 
 func TestAdminRoleRemoveDeletesTheGrantAndKeepsTheGrantForm(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedRoleEditor(f)
 	f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
 	rec := actionDelete("/admin/roles/"+idBee+"/permissions/"+idPBee, url.Values{"grant_permission": {idPMotd}, "grant_value": {"half typed"}})
@@ -276,7 +276,7 @@ func TestAdminRoleRemoveDeletesTheGrantAndKeepsTheGrantForm(t *testing.T) {
 }
 
 func TestAdminRoleRemoveRefusedShowsTheAPIMessage(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedRoleEditor(f)
 	f.problem("DELETE /roles/"+idBee+"/permissions/"+idPBee, 409, "system and owner keep roles.admin")
 	rec := actionDelete("/admin/roles/"+idBee+"/permissions/"+idPBee, nil)
@@ -299,17 +299,17 @@ func TestAdminRoleGrantValueFragmentMatchesThePermissionType(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.permission, func(t *testing.T) {
-			f := newFakeAdmin(t)
+			f := newFakeBackend(t)
 			f.on("GET /permissions", 200, permissionsJSON)
-			rec := adminReq{method: http.MethodGet, target: "/admin/roles/" + idBee + "/grant-value?grant_permission=" + tc.permission, htmx: true}.do()
+			rec := pageReq{method: http.MethodGet, target: "/admin/roles/" + idBee + "/grant-value?grant_permission=" + tc.permission, htmx: true}.do()
 			assertStatus(t, rec, http.StatusOK)
 			assertBody(t, rec, tc.want)
 			assertNoBody(t, rec, tc.unwanted, "<html")
 		})
 	}
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /permissions", 200, permissionsJSON)
-	rec := adminReq{method: http.MethodGet, target: "/admin/roles/" + idBee + "/grant-value?grant_permission=nope", htmx: true}.do()
+	rec := pageReq{method: http.MethodGet, target: "/admin/roles/" + idBee + "/grant-value?grant_permission=nope", htmx: true}.do()
 	assertStatus(t, rec, http.StatusNotFound)
 }
 
@@ -325,7 +325,7 @@ func TestAdminRoleSaveSendsOnlyWhatChanged(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			f := newFakeAdmin(t)
+			f := newFakeBackend(t)
 			seedRoleEditor(f)
 			f.on("PATCH /roles/"+idBee, 200, `{"id":"`+idBee+`","name":"stored_name","description":"Stored description","permissions":[]}`)
 			tc.form.Set("loaded_name", "bee_admin")
@@ -348,7 +348,7 @@ func TestAdminRoleSaveSendsOnlyWhatChanged(t *testing.T) {
 }
 
 func TestAdminRoleRemoveReloadFailureRemovesTheRow(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
 	f.problem("GET /roles/"+idBee, 500, "down")
 	rec := actionDelete("/admin/roles/"+idBee+"/permissions/"+idPBee, nil)
@@ -361,7 +361,7 @@ func TestAdminRoleRemoveReloadFailureRemovesTheRow(t *testing.T) {
 }
 
 func TestAdminRoleRemoveReloadFailureOffersTheRemovedPermissionAgain(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
 	f.problem("GET /roles/"+idBee, 500, "down")
 	f.on("GET /permissions", 200, permissionsJSON)
@@ -372,7 +372,7 @@ func TestAdminRoleRemoveReloadFailureOffersTheRemovedPermissionAgain(t *testing.
 }
 
 func TestAdminRoleRemoveReloadFailureWithoutTheCatalogueReplacesTheGrantForm(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
 	f.problem("GET /roles/"+idBee, 500, "down")
 	f.problem("GET /permissions", 500, "down")
@@ -382,7 +382,7 @@ func TestAdminRoleRemoveReloadFailureWithoutTheCatalogueReplacesTheGrantForm(t *
 }
 
 func TestAdminRoleSaveWithoutAChangeSendsNothing(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedRoleEditor(f)
 	rec := action(http.MethodPost, "/admin/roles/"+idBee, url.Values{
 		"loaded_name": {"bee_admin"}, "name": {"bee_admin"},
@@ -399,7 +399,7 @@ func TestAdminRoleSaveWithoutAChangeSendsNothing(t *testing.T) {
 }
 
 func TestAdminRoleSaveRefusedShowsTheAPIMessage(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedRoleEditor(f)
 	f.problem("PATCH /roles/"+idBee, 409, "Built-in roles cannot be deleted or renamed")
 	rec := action(http.MethodPost, "/admin/roles/"+idBee, url.Values{"loaded_name": {"bee_admin"}, "name": {"renamed"}})
@@ -408,7 +408,7 @@ func TestAdminRoleSaveRefusedShowsTheAPIMessage(t *testing.T) {
 }
 
 func TestAdminRoleDeleteRedirectsToTheList(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("DELETE /roles/"+idBee, 204, ``)
 	rec := action(http.MethodDelete, "/admin/roles/"+idBee, nil)
 	assertStatus(t, rec, http.StatusOK)
@@ -419,7 +419,7 @@ func TestAdminRoleDeleteRedirectsToTheList(t *testing.T) {
 }
 
 func TestAdminRoleDeleteRefusedShowsTheAPIMessage(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.problem("DELETE /roles/"+idBee, 409, "The role is assigned to an account")
 	rec := action(http.MethodDelete, "/admin/roles/"+idBee, nil)
 	assertStatus(t, rec, http.StatusConflict)
@@ -429,7 +429,7 @@ func TestAdminRoleDeleteRefusedShowsTheAPIMessage(t *testing.T) {
 }
 
 func TestAdminRoleSaveRefusesAnEmptiedName(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedRoleEditor(f)
 	rec := action(http.MethodPost, "/admin/roles/"+idBee, url.Values{"loaded_name": {"bee_admin"}, "name": {"  "}})
 	assertStatus(t, rec, http.StatusBadRequest)
@@ -445,7 +445,7 @@ func TestAdminRoleChangesKeepTheValuesTypedInOtherRows(t *testing.T) {
 		return form
 	}
 	t.Run("grant keeps the draft and clears the grant form", func(t *testing.T) {
-		f := newFakeAdmin(t)
+		f := newFakeBackend(t)
 		seedRoleEditor(f)
 		f.on("PUT /roles/"+idBee+"/permissions/"+idPMotd, 204, ``)
 		rec := action(http.MethodPost, "/admin/roles/"+idBee+"/permissions", typed(url.Values{"grant_value": {"hello"}}))
@@ -453,7 +453,7 @@ func TestAdminRoleChangesKeepTheValuesTypedInOtherRows(t *testing.T) {
 		assertNoBody(t, rec, `value="hello"`, `value="half typed"`)
 	})
 	t.Run("saving a value keeps the other drafts and shows the saved value", func(t *testing.T) {
-		f := newFakeAdmin(t)
+		f := newFakeBackend(t)
 		f.on("GET /roles/"+idBee, 200, `{"id":"`+idBee+`","name":"bee_admin","permissions":[
 			{"id":"`+idPRate+`","node":"ratelimit","value_type":"int","merge":"max","value":250},
 			{"id":"`+idPMotd+`","node":"motd","value_type":"string","merge":"first","value":"hi"}]}`)
@@ -464,7 +464,7 @@ func TestAdminRoleChangesKeepTheValuesTypedInOtherRows(t *testing.T) {
 		assertNoBody(t, rec, `value="hi"`)
 	})
 	t.Run("removing keeps the other drafts", func(t *testing.T) {
-		f := newFakeAdmin(t)
+		f := newFakeBackend(t)
 		seedRoleEditor(f)
 		f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
 		rec := actionDelete("/admin/roles/"+idBee+"/permissions/"+idPBee, typed(nil))
@@ -474,14 +474,14 @@ func TestAdminRoleChangesKeepTheValuesTypedInOtherRows(t *testing.T) {
 
 func TestAdminRoleGrantsFocusTheListOnlyWhenTheirButtonIsGone(t *testing.T) {
 	t.Run("a grant that leaves others to grant", func(t *testing.T) {
-		f := newFakeAdmin(t)
+		f := newFakeBackend(t)
 		seedRoleEditor(f)
 		f.on("PUT /roles/"+idBee+"/permissions/"+idPStore, 204, ``)
 		rec := action(http.MethodPost, "/admin/roles/"+idBee+"/permissions", url.Values{"grant_permission": {idPStore}})
 		assertNoBody(t, rec, "autofocus")
 	})
 	t.Run("the last grant", func(t *testing.T) {
-		f := newFakeAdmin(t)
+		f := newFakeBackend(t)
 		f.on("GET /roles/"+idBee, 200, `{"id":"`+idBee+`","name":"bee_admin","permissions":[{"id":"`+idPBee+`","node":"beenamegenerator.admin"}]}`)
 		f.on("GET /permissions", 200, `[{"id":"`+idPBee+`","node":"beenamegenerator.admin"}]`)
 		f.on("PUT /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
@@ -491,7 +491,7 @@ func TestAdminRoleGrantsFocusTheListOnlyWhenTheirButtonIsGone(t *testing.T) {
 }
 
 func TestAdminRoleChangesEmptyTheStatusLine(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedRoleEditor(f)
 	f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
 	rec := actionDelete("/admin/roles/"+idBee+"/permissions/"+idPBee, nil)
@@ -499,7 +499,7 @@ func TestAdminRoleChangesEmptyTheStatusLine(t *testing.T) {
 }
 
 func TestAdminRoleEditorQueuesActionsOnTheEditor(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedRoleEditor(f)
 	rec := getPage("/admin/roles/" + idBee + "/editor")
 	assertBody(t, rec,

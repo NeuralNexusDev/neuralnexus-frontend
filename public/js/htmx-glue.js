@@ -5,7 +5,7 @@
     const elementRequests = new WeakMap();
 
     const showBanner = (text) => {
-        const banner = document.getElementById('admin-error');
+        const banner = document.getElementById('page-error');
         if (banner) {
             banner.textContent = text;
             banner.scrollIntoView({ block: 'nearest' });
@@ -161,7 +161,7 @@
         if (state.active.size > 0) {
             return;
         }
-        if (state.dropped && !document.getElementById('admin-error')?.textContent) {
+        if (state.dropped && !document.getElementById('page-error')?.textContent) {
             showBanner('The change made while saving was not sent. Make it again.');
         }
         state.dropped = false;

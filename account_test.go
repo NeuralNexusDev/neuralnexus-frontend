@@ -14,17 +14,17 @@ const accountLinksJSON = `[
 	{"platform":"steam","platform_username":"","verified":true,"login_enabled":false}
 ]`
 
-func seedAccount(f *fakeAdmin) {
+func seedAccount(f *fakeBackend) {
 	f.on("GET /users/me", 200, `{"username":"testuser"}`)
 	f.on("GET /users/me/settings", 200, `{"password_auth":true}`)
 	f.on("GET /users/me/links", 200, accountLinksJSON)
 }
 
 func TestAccountPageIsAShellThatLoadsItsContent(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	rec := getPage("/account")
 	assertStatus(t, rec, http.StatusOK)
-	assertBody(t, rec, `hx-get="/account/content"`, `hx-trigger="load"`, "htmx/v4.0.0/htmx.min.js", `id="admin-error"`, `id="auth-error"`,
+	assertBody(t, rec, `hx-get="/account/content"`, `hx-trigger="load"`, "htmx/v4.0.0/htmx.min.js", `id="page-error"`, `id="auth-error"`,
 		`id="link-discord-oauth-base"`, `id="link-xboxlive-oauth-base"`, "const linkRedirect", "showAuthErrorFromQuery()")
 	assertNoBody(t, rec, `id="account-username"`, "loadAccountProfile")
 	if len(f.uris()) != 0 {
@@ -33,7 +33,7 @@ func TestAccountPageIsAShellThatLoadsItsContent(t *testing.T) {
 }
 
 func TestAccountContentShowsProfileSettingAndLinks(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedAccount(f)
 	rec := getPage("/account/content")
 	assertStatus(t, rec, http.StatusOK)
@@ -68,7 +68,7 @@ func accountRow(body string, platform string) string {
 }
 
 func TestAccountContentLinkRowStates(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedAccount(f)
 	body := getPage("/account/content").Body.String()
 	cases := []struct {
@@ -100,7 +100,7 @@ func TestAccountContentLinkRowStates(t *testing.T) {
 
 func TestAccountContentFailures(t *testing.T) {
 	t.Run("profile signed out", func(t *testing.T) {
-		f := newFakeAdmin(t)
+		f := newFakeBackend(t)
 		seedAccount(f)
 		f.problem("GET /users/me", 401, "sign in")
 		rec := getPage("/account/content")
@@ -109,7 +109,7 @@ func TestAccountContentFailures(t *testing.T) {
 		}
 	})
 	t.Run("profile failed", func(t *testing.T) {
-		f := newFakeAdmin(t)
+		f := newFakeBackend(t)
 		seedAccount(f)
 		f.problem("GET /users/me", 500, "boom")
 		rec := getPage("/account/content")
@@ -119,7 +119,7 @@ func TestAccountContentFailures(t *testing.T) {
 		}
 	})
 	t.Run("settings failed", func(t *testing.T) {
-		f := newFakeAdmin(t)
+		f := newFakeBackend(t)
 		seedAccount(f)
 		f.problem("GET /users/me/settings", 500, "settings down")
 		rec := getPage("/account/content")
@@ -128,7 +128,7 @@ func TestAccountContentFailures(t *testing.T) {
 		assertNoBody(t, rec, `id="password-auth-enabled" name="password_auth" value="true" checked`)
 	})
 	t.Run("links failed", func(t *testing.T) {
-		f := newFakeAdmin(t)
+		f := newFakeBackend(t)
 		seedAccount(f)
 		f.problem("GET /users/me/links", 500, "links down")
 		rec := getPage("/account/content")
@@ -137,7 +137,7 @@ func TestAccountContentFailures(t *testing.T) {
 		assertNoBody(t, rec, `id="link-discord"`)
 	})
 	t.Run("settings signed out", func(t *testing.T) {
-		f := newFakeAdmin(t)
+		f := newFakeBackend(t)
 		seedAccount(f)
 		f.problem("GET /users/me/settings", 401, "sign in")
 		rec := getPage("/account/content")
@@ -148,7 +148,7 @@ func TestAccountContentFailures(t *testing.T) {
 }
 
 func TestAccountContentEscapesAPIText(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /users/me", 200, fmt.Sprintf(`{"username":%q}`, hostile))
 	f.on("GET /users/me/settings", 200, `{"password_auth":false}`)
 	f.on("GET /users/me/links", 200, fmt.Sprintf(`[{"platform":"discord","platform_username":%q,"verified":true}]`, hostile))
@@ -169,32 +169,32 @@ func TestAccountSettingsToggleSendsTheCheckboxState(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			f := newFakeAdmin(t)
+			f := newFakeBackend(t)
 			f.on("PATCH /users/me/settings", 204, ``)
 			f.on("GET /users/me/settings", 200, `{"password_auth":true}`)
 			rec := action(http.MethodPost, "/account/settings", tc.form)
 			assertStatus(t, rec, http.StatusOK)
 			assertWrites(t, f, tc.want)
-			assertBody(t, rec, `id="account-password"`, `<div id="admin-error" hx-swap-oob="innerHTML"></div>`)
+			assertBody(t, rec, `id="account-password"`, `<div id="page-error" hx-swap-oob="innerHTML"></div>`)
 			assertNoBody(t, rec, "hx-swap-oob=\"true\"")
 		})
 	}
 }
 
 func TestAccountSettingsToggleRefusedShowsTheMessageAndPutsTheCheckboxBack(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.problem("PATCH /users/me/settings", 409, "Keep one way to sign in")
 	f.on("GET /users/me/settings", 200, `{"password_auth":true}`)
 	rec := action(http.MethodPost, "/account/settings", url.Values{})
 	assertStatus(t, rec, http.StatusConflict)
 	assertBody(t, rec, "Keep one way to sign in", `id="account-password" hx-swap-oob="true"`, `value="true" checked`)
-	if got := rec.Header().Get("HX-Retarget"); got != "#admin-error" {
+	if got := rec.Header().Get("HX-Retarget"); got != "#page-error" {
 		t.Errorf("HX-Retarget = %q", got)
 	}
 }
 
 func TestAccountSettingsToggleReloadFailureIsNotReportedAsAFailedChange(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("PATCH /users/me/settings", 204, ``)
 	f.problem("GET /users/me/settings", 500, "down")
 	rec := action(http.MethodPost, "/account/settings", url.Values{"password_auth": {"true"}})
@@ -205,7 +205,7 @@ func TestAccountSettingsToggleReloadFailureIsNotReportedAsAFailedChange(t *testi
 }
 
 func TestAccountSettingsToggleSignedOutRedirects(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.problem("PATCH /users/me/settings", 401, "sign in")
 	rec := action(http.MethodPost, "/account/settings", url.Values{})
 	if got := rec.Header().Get("HX-Redirect"); got != "/login" {
@@ -224,7 +224,7 @@ func TestAccountLinkToggleSendsTheCheckboxStateAndAnswersWithTheRow(t *testing.T
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			f := newFakeAdmin(t)
+			f := newFakeBackend(t)
 			seedAccount(f)
 			f.on("PATCH /users/me/link/discord", 204, ``)
 			rec := action(http.MethodPost, "/account/links/discord", tc.form)
@@ -237,7 +237,7 @@ func TestAccountLinkToggleSendsTheCheckboxStateAndAnswersWithTheRow(t *testing.T
 }
 
 func TestAccountUnlinkDeletesTheLinkAndAnswersWithTheUnlinkedRow(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("DELETE /users/me/link/discord", 204, ``)
 	f.on("GET /users/me/links", 200, `[]`)
 	rec := action(http.MethodDelete, "/account/links/discord", nil)
@@ -248,7 +248,7 @@ func TestAccountUnlinkDeletesTheLinkAndAnswersWithTheUnlinkedRow(t *testing.T) {
 }
 
 func TestAccountLinkToggleRefusedShowsTheMessageAndPutsTheCheckboxBack(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.problem("PATCH /users/me/link/discord", 409, "Keep one way to sign in")
 	for _, form := range []url.Values{{}, {"login_enabled": {"true"}}} {
 		rec := action(http.MethodPost, "/account/links/discord", form)
@@ -265,7 +265,7 @@ func TestAccountLinkToggleRefusedShowsTheMessageAndPutsTheCheckboxBack(t *testin
 }
 
 func TestAccountUnlinkRefusedShowsTheMessage(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.problem("DELETE /users/me/link/discord", 409, "Keep one way to sign in")
 	rec := action(http.MethodDelete, "/account/links/discord", nil)
 	assertStatus(t, rec, http.StatusConflict)
@@ -275,7 +275,7 @@ func TestAccountUnlinkRefusedShowsTheMessage(t *testing.T) {
 }
 
 func TestAccountLinkChangesRefuseAnUnknownPlatform(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	for _, target := range []string{"/account/links/minecraft", "/account/links/..%2Fx", "/account/links/Discord"} {
 		t.Run(target, func(t *testing.T) {
 			rec := action(http.MethodPost, target, url.Values{})
@@ -288,7 +288,7 @@ func TestAccountLinkChangesRefuseAnUnknownPlatform(t *testing.T) {
 }
 
 func TestAccountLinkChangeReloadFailureIsNotReportedAsAFailedChange(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("PATCH /users/me/link/discord", 204, ``)
 	f.problem("GET /users/me/links", 500, "down")
 	rec := action(http.MethodPost, "/account/links/discord", url.Values{"login_enabled": {"true"}})
@@ -299,14 +299,14 @@ func TestAccountLinkChangeReloadFailureIsNotReportedAsAFailedChange(t *testing.T
 }
 
 func TestAccountUnlinkRefusesAnUnknownPlatform(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	rec := action(http.MethodDelete, "/account/links/minecraft", nil)
 	assertStatus(t, rec, http.StatusNotFound)
 	assertWrites(t, f)
 }
 
 func TestAccountControlsNameTheirPlatform(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedAccount(f)
 	assertBody(t, getPage("/account/content"),
 		`aria-label="Unlink Discord"`, `aria-label="Link Microsoft"`, `aria-label="Allow logins for Discord"`, `aria-label="Allow logins for Xbox Live"`)

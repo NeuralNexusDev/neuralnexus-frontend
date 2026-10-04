@@ -27,7 +27,7 @@ func captureLog(t *testing.T) *bytes.Buffer {
 }
 
 func TestResponsesCarryTheSecurityHeaders(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /users/me/permissions", 200, `["users.admin"]`)
 	for _, target := range []string{"/teapot", "/admin/cards", "/public/site.webmanifest"} {
 		t.Run(target, func(t *testing.T) {
@@ -101,7 +101,7 @@ func TestFailedAPICallsLogTheirCauseWithoutTheSession(t *testing.T) {
 		t.Cleanup(func() { config.APIURL = apiURL })
 		down.Close()
 		buf := captureLog(t)
-		rec := adminReq{method: http.MethodGet, target: "/admin/roles/list", cookies: []*http.Cookie{cookie}}.do()
+		rec := pageReq{method: http.MethodGet, target: "/admin/roles/list", cookies: []*http.Cookie{cookie}}.do()
 		assertStatus(t, rec, http.StatusBadGateway)
 		for _, want := range []string{"admin request failed", "status=502", `api="GET /roles"`, "request_id=", "connection refused"} {
 			if !strings.Contains(buf.String(), want) {
@@ -113,10 +113,10 @@ func TestFailedAPICallsLogTheirCauseWithoutTheSession(t *testing.T) {
 		}
 	})
 	t.Run("an API that answers 500", func(t *testing.T) {
-		f := newFakeAdmin(t)
+		f := newFakeBackend(t)
 		f.problem("GET /roles", 500, "the database is down")
 		buf := captureLog(t)
-		rec := adminReq{method: http.MethodGet, target: "/admin/roles/list", cookies: []*http.Cookie{cookie}}.do()
+		rec := pageReq{method: http.MethodGet, target: "/admin/roles/list", cookies: []*http.Cookie{cookie}}.do()
 		assertStatus(t, rec, http.StatusInternalServerError)
 		for _, want := range []string{"admin request failed", "status=500", `api="GET /roles"`, "request_id="} {
 			if !strings.Contains(buf.String(), want) {
@@ -128,10 +128,10 @@ func TestFailedAPICallsLogTheirCauseWithoutTheSession(t *testing.T) {
 		}
 	})
 	t.Run("an API that refuses with a 4xx", func(t *testing.T) {
-		f := newFakeAdmin(t)
+		f := newFakeBackend(t)
 		f.problem("GET /roles", 403, "You do not have permission")
 		buf := captureLog(t)
-		adminReq{method: http.MethodGet, target: "/admin/roles/list", cookies: []*http.Cookie{cookie}}.do()
+		pageReq{method: http.MethodGet, target: "/admin/roles/list", cookies: []*http.Cookie{cookie}}.do()
 		if strings.Contains(buf.String(), "admin request failed") {
 			t.Errorf("a refusal was logged as a failure:\n%s", buf.String())
 		}
@@ -139,7 +139,7 @@ func TestFailedAPICallsLogTheirCauseWithoutTheSession(t *testing.T) {
 }
 
 func TestAbandonedRequestsAreNotLoggedAsFailures(t *testing.T) {
-	newFakeAdmin(t)
+	newFakeBackend(t)
 	buf := captureLog(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -158,9 +158,9 @@ func TestAdminRequestsStopWaitingForASlowAPI(t *testing.T) {
 		}
 	}))
 	t.Cleanup(slow.Close)
-	apiURL, timeout := config.APIURL, adminRequestTimeout
-	config.APIURL, adminRequestTimeout = slow.URL, 50*time.Millisecond
-	t.Cleanup(func() { config.APIURL, adminRequestTimeout = apiURL, timeout })
+	apiURL, timeout := config.APIURL, pageRequestTimeout
+	config.APIURL, pageRequestTimeout = slow.URL, 50*time.Millisecond
+	t.Cleanup(func() { config.APIURL, pageRequestTimeout = apiURL, timeout })
 	captureLog(t)
 	start := time.Now()
 	rec := getPage("/admin/roles/list")
@@ -196,7 +196,7 @@ func TestAPanicInAHandlerAnswers500AndLogsWhereItHappened(t *testing.T) {
 }
 
 func TestLinksRenderTheirPaths(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /users", 200, usersJSON)
 	f.on("GET /roles", 200, rolesJSON)
 	f.on("GET /users/me/permissions", 200, `["users.admin","roles.admin"]`)
@@ -228,7 +228,7 @@ func TestRefusedCreateFormsFlagTheFieldAndKeepTheBanner(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name+" refused", func(t *testing.T) {
-			f := newFakeAdmin(t)
+			f := newFakeBackend(t)
 			f.problem(tc.route, 409, "Already exists")
 			rec := action(http.MethodPost, tc.target, tc.form)
 			assertStatus(t, rec, http.StatusConflict)
@@ -242,7 +242,7 @@ func TestRefusedCreateFormsFlagTheFieldAndKeepTheBanner(t *testing.T) {
 				`value="Bad `, `<p id="`+tc.field+`-error" class="`, `>Already exists</p>`)
 		})
 		t.Run(tc.name+" failed server side", func(t *testing.T) {
-			f := newFakeAdmin(t)
+			f := newFakeBackend(t)
 			f.problem(tc.route, 500, "database down")
 			captureLog(t)
 			rec := action(http.MethodPost, tc.target, tc.form)
@@ -254,13 +254,13 @@ func TestRefusedCreateFormsFlagTheFieldAndKeepTheBanner(t *testing.T) {
 
 func TestRefusedUsernamesFlagTheUsernameField(t *testing.T) {
 	t.Run("emptied", func(t *testing.T) {
-		f := newFakeAdmin(t)
+		f := newFakeBackend(t)
 		seedUserEditor(f)
 		rec := saveUser(userForm(url.Values{"username": {"  "}}))
 		assertBody(t, rec, `id="admin-user-username-field" hx-swap-oob="true"`, `aria-invalid="true"`, `aria-describedby="admin-user-username-error"`, `<p id="admin-user-username-error"`, ">Enter a username</p>")
 	})
 	t.Run("taken", func(t *testing.T) {
-		f := newFakeAdmin(t)
+		f := newFakeBackend(t)
 		seedUserEditor(f)
 		f.problem("PUT /users/"+idBob, 409, "An account with this username already exists")
 		rec := saveUser(userForm(url.Values{"username": {"alice"}}))
@@ -268,7 +268,7 @@ func TestRefusedUsernamesFlagTheUsernameField(t *testing.T) {
 		assertBody(t, rec, `id="admin-user-username-field" hx-swap-oob="true"`, `value="alice"`, ">An account with this username already exists</p>")
 	})
 	t.Run("a refused role change leaves the username field alone", func(t *testing.T) {
-		f := newFakeAdmin(t)
+		f := newFakeBackend(t)
 		seedUserEditor(f)
 		f.problem("PUT /users/"+idBob, 409, "That role cannot be held with another")
 		rec := saveUser(userForm(url.Values{"roles": {idBee, idSystem}}))
@@ -278,7 +278,7 @@ func TestRefusedUsernamesFlagTheUsernameField(t *testing.T) {
 }
 
 func TestFieldHelpIsTiedToItsInput(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /roles", 200, `[]`)
 	f.on("GET /permissions", 200, `[]`)
 	assertBody(t, getPage("/admin/roles/list"), `id="admin-role-create-name-help"`, `aria-describedby="admin-role-create-name-help"`)
@@ -287,15 +287,15 @@ func TestFieldHelpIsTiedToItsInput(t *testing.T) {
 }
 
 func TestUserListTellsHowManyUsersEachResponseHolds(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /users", 200, usersJSON)
 	f.on("GET /roles", 200, `[]`)
 	assertBody(t, getPage("/admin/users/list"), `id="admin-users-count" role="status"`, ">3 users</p>")
-	rec := adminReq{method: http.MethodGet, target: "/admin/users/rows?search=bob", htmx: true}.do()
+	rec := pageReq{method: http.MethodGet, target: "/admin/users/rows?search=bob", htmx: true}.do()
 	assertBody(t, rec, `id="admin-users-count" role="status" hx-swap-oob="innerHTML"`, ">1 user</p>")
-	rec = adminReq{method: http.MethodGet, target: "/admin/users/rows?search=zzz", htmx: true}.do()
+	rec = pageReq{method: http.MethodGet, target: "/admin/users/rows?search=zzz", htmx: true}.do()
 	assertBody(t, rec, ">No matches</p>")
 	f.on("GET /users", 200, fullPage(200))
-	rec = adminReq{method: http.MethodGet, target: "/admin/users/rows?offset=200&search=u", htmx: true}.do()
+	rec = pageReq{method: http.MethodGet, target: "/admin/users/rows?offset=200&search=u", htmx: true}.do()
 	assertBody(t, rec, "more users. Searched the first ")
 }

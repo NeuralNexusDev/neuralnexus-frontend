@@ -10,7 +10,7 @@ import (
 )
 
 func TestAdminUserListPagesAndNamesRoles(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /users", 200, usersJSON)
 	f.on("GET /roles", 200, rolesJSON)
 	rec := getPage("/admin/users/list")
@@ -42,7 +42,7 @@ func TestAdminUserListOffersMoreOnlyAfterAFullPage(t *testing.T) {
 	}{{0, false}, {1, false}, {150, false}, {199, false}, {200, true}}
 	for _, tc := range cases {
 		t.Run(fmt.Sprint(tc.rows), func(t *testing.T) {
-			f := newFakeAdmin(t)
+			f := newFakeBackend(t)
 			f.on("GET /users", 200, fullPage(tc.rows))
 			f.on("GET /roles", 200, `[]`)
 			rec := getPage("/admin/users/list")
@@ -60,10 +60,10 @@ func TestAdminUserListOffersMoreOnlyAfterAFullPage(t *testing.T) {
 }
 
 func TestAdminUserRowsContinueFromTheOffset(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /users", 200, fullPage(200))
 	f.on("GET /roles", 200, `[]`)
-	rec := adminReq{method: http.MethodGet, target: "/admin/users/rows?offset=400", htmx: true}.do()
+	rec := pageReq{method: http.MethodGet, target: "/admin/users/rows?offset=400", htmx: true}.do()
 	assertStatus(t, rec, http.StatusOK)
 	assertBody(t, rec, `hx-get="/admin/users/rows?offset=600"`)
 	assertNoBody(t, rec, "<html", "<body")
@@ -73,11 +73,11 @@ func TestAdminUserRowsContinueFromTheOffset(t *testing.T) {
 }
 
 func TestAdminUserRowsRejectABadOffset(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	for _, offset := range []string{"-1", "x", "1.5", "99999999999999999999"} {
 		t.Run(offset, func(t *testing.T) {
 			f.reset()
-			rec := adminReq{method: http.MethodGet, target: "/admin/users/rows?offset=" + offset, htmx: true}.do()
+			rec := pageReq{method: http.MethodGet, target: "/admin/users/rows?offset=" + offset, htmx: true}.do()
 			assertStatus(t, rec, http.StatusBadRequest)
 			if len(f.uris()) != 0 {
 				t.Errorf("a bad offset reached the API: %v", f.uris())
@@ -87,7 +87,7 @@ func TestAdminUserRowsRejectABadOffset(t *testing.T) {
 }
 
 func TestAdminUserListShowsRoleIDsWithoutRoleAccess(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /users", 200, usersJSON)
 	f.problem("GET /roles", 403, "forbidden")
 	rec := getPage("/admin/users/list")
@@ -96,7 +96,7 @@ func TestAdminUserListShowsRoleIDsWithoutRoleAccess(t *testing.T) {
 }
 
 func TestAdminUserListFailedRolesLookupIsAnError(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /users", 200, usersJSON)
 	f.problem("GET /roles", 500, "roles are down")
 	rec := getPage("/admin/users/list")
@@ -106,7 +106,7 @@ func TestAdminUserListFailedRolesLookupIsAnError(t *testing.T) {
 }
 
 func TestAdminUserListRefusedHidesTheSearch(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.problem("GET /users", 403, "You do not have permission to list users")
 	rec := getPage("/admin/users/list")
 	assertStatus(t, rec, http.StatusForbidden)
@@ -115,7 +115,7 @@ func TestAdminUserListRefusedHidesTheSearch(t *testing.T) {
 }
 
 func TestAdminUserListEscapesAPIText(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /users", 200, fmt.Sprintf(`[{"user_id":%q,"username":%q,"roles":[%q]}]`, hostile+"id", hostile+"name", idBee))
 	f.on("GET /roles", 200, fmt.Sprintf(`[{"id":%q,"name":%q,"description":"d","permissions":[]}]`, idBee, hostile+"role"))
 	rec := getPage("/admin/users/list")
@@ -125,7 +125,7 @@ func TestAdminUserListEscapesAPIText(t *testing.T) {
 
 const bobJSON = `{"user_id":"` + idBob + `","username":"bob","roles":["` + idBee + `"]}`
 
-func seedUserEditor(f *fakeAdmin) {
+func seedUserEditor(f *fakeBackend) {
 	f.on("GET /users/"+idBob, 200, bobJSON)
 	f.on("GET /users/"+idBob+"/links", 200, `[{"platform":"discord","platform_username":"bob#1234","platform_id":"9"},{"platform":"steam","platform_id":"76561198000000000"}]`)
 	f.on("GET /users/"+idBob+"/permissions", 200, `["beenamegenerator.admin","ratelimit:100"]`)
@@ -133,7 +133,7 @@ func seedUserEditor(f *fakeAdmin) {
 }
 
 func TestAdminUserEditorShowsTheAccount(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedUserEditor(f)
 	rec := getPage("/admin/users/" + idBob + "/editor")
 	assertStatus(t, rec, http.StatusOK)
@@ -156,7 +156,7 @@ func TestAdminUserEditorShowsTheAccount(t *testing.T) {
 }
 
 func TestAdminUserEditorShowsEmptyStates(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedUserEditor(f)
 	f.on("GET /users/"+idBob+"/links", 200, `[]`)
 	f.on("GET /users/"+idBob+"/permissions", 200, `[]`)
@@ -165,7 +165,7 @@ func TestAdminUserEditorShowsEmptyStates(t *testing.T) {
 }
 
 func TestAdminUserEditorShowsRefusedSectionsAsErrors(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedUserEditor(f)
 	f.problem("GET /users/"+idBob+"/links", 403, "links are off limits")
 	f.problem("GET /users/"+idBob+"/permissions", 500, "permissions are down")
@@ -176,7 +176,7 @@ func TestAdminUserEditorShowsRefusedSectionsAsErrors(t *testing.T) {
 }
 
 func TestAdminUserEditorWithoutRoleAccessIsReadOnly(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedUserEditor(f)
 	f.problem("GET /roles", 403, "forbidden")
 	rec := getPage("/admin/users/" + idBob + "/editor")
@@ -186,7 +186,7 @@ func TestAdminUserEditorWithoutRoleAccessIsReadOnly(t *testing.T) {
 }
 
 func TestAdminUserEditorFailedRolesLookupIsAnError(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedUserEditor(f)
 	f.problem("GET /roles", 500, "roles are down")
 	rec := getPage("/admin/users/" + idBob + "/editor")
@@ -196,7 +196,7 @@ func TestAdminUserEditorFailedRolesLookupIsAnError(t *testing.T) {
 }
 
 func TestAdminUserEditorUnknownUserShowsTheMessageAndNothingFromTheURL(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.problem("GET /users/999", 404, "User not found")
 	rec := getPage("/admin/users/999/editor")
 	assertStatus(t, rec, http.StatusNotFound)
@@ -206,7 +206,7 @@ func TestAdminUserEditorUnknownUserShowsTheMessageAndNothingFromTheURL(t *testin
 
 func TestAdminUserEditorEscapesIDsAndAPIText(t *testing.T) {
 	id := hostile + "id"
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	escaped := url.PathEscape(id)
 	f.on("GET /users/"+escaped, 200, fmt.Sprintf(`{"user_id":%q,"username":%q,"roles":[%q,"gone"]}`, id, hostile+"name", idBee))
 	f.on("GET /users/"+escaped+"/links", 200, fmt.Sprintf(`[{"platform":%q,"platform_username":%q,"platform_id":%q}]`, hostile+"platform", hostile+"user", hostile+"pid"))
@@ -266,7 +266,7 @@ func TestAdminUserSaveSendsOnlyWhatChanged(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			f := newFakeAdmin(t)
+			f := newFakeBackend(t)
 			seedUserEditor(f)
 			f.on("PUT /users/"+idBob, 200, bobJSON)
 			rec := saveUser(tc.form())
@@ -280,7 +280,7 @@ func TestAdminUserSaveSendsOnlyWhatChanged(t *testing.T) {
 }
 
 func TestAdminUserSaveWithoutRoleAccessLeavesRolesOut(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedUserEditor(f)
 	f.on("PUT /users/"+idBob, 200, bobJSON)
 	form := userForm(url.Values{"username": {"robert"}})
@@ -291,7 +291,7 @@ func TestAdminUserSaveWithoutRoleAccessLeavesRolesOut(t *testing.T) {
 }
 
 func TestAdminUserSaveWithoutAChangeSendsNothing(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedUserEditor(f)
 	rec := saveUser(userForm(nil))
 	assertStatus(t, rec, http.StatusOK)
@@ -305,7 +305,7 @@ func TestAdminUserSaveWithoutAChangeSendsNothing(t *testing.T) {
 }
 
 func TestAdminUserSaveRefusesAnEmptiedUsername(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedUserEditor(f)
 	rec := saveUser(userForm(url.Values{"username": {"   "}}))
 	assertStatus(t, rec, http.StatusBadRequest)
@@ -316,7 +316,7 @@ func TestAdminUserSaveRefusesAnEmptiedUsername(t *testing.T) {
 }
 
 func TestAdminUserSaveKeepsAnAccountWithoutAUsernameThatWay(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /users/"+idAnon, 200, `{"user_id":"`+idAnon+`","username":"","roles":[]}`)
 	f.on("GET /users/"+idAnon+"/links", 200, `[]`)
 	f.on("GET /users/"+idAnon+"/permissions", 200, `[]`)
@@ -328,7 +328,7 @@ func TestAdminUserSaveKeepsAnAccountWithoutAUsernameThatWay(t *testing.T) {
 }
 
 func TestAdminUserSaveRefreshesThePermissions(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedUserEditor(f)
 	f.on("PUT /users/"+idBob, 200, bobJSON)
 	f.on("GET /users/"+idBob+"/permissions", 200, `["users.admin"]`)
@@ -341,7 +341,7 @@ func TestAdminUserSaveRefreshesThePermissions(t *testing.T) {
 }
 
 func TestAdminUserSaveSaysWhenThePermissionsCouldNotBeRefreshed(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedUserEditor(f)
 	f.on("PUT /users/"+idBob, 200, bobJSON)
 	f.problem("GET /users/"+idBob+"/permissions", 500, "permissions are down")
@@ -352,7 +352,7 @@ func TestAdminUserSaveSaysWhenThePermissionsCouldNotBeRefreshed(t *testing.T) {
 }
 
 func TestAdminUserSaveRefusedShowsTheAPIMessage(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedUserEditor(f)
 	f.problem("PUT /users/"+idBob, 409, "An account with this username already exists")
 	rec := saveUser(userForm(url.Values{"username": {"alice"}}))
@@ -364,7 +364,7 @@ func TestAdminUserSaveRefusedShowsTheAPIMessage(t *testing.T) {
 }
 
 func TestAdminUserSaveReloadFailureIsNotReportedAsAFailedSave(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedUserEditor(f)
 	f.on("PUT /users/"+idBob, 200, bobJSON)
 	f.problem("GET /roles", 500, "roles are down")
@@ -376,7 +376,7 @@ func TestAdminUserSaveReloadFailureIsNotReportedAsAFailedSave(t *testing.T) {
 }
 
 func TestAdminUserSaveEscapesAPIText(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedUserEditor(f)
 	f.on("PUT /users/"+idBob, 200, fmt.Sprintf(`{"user_id":%q,"username":%q,"roles":[]}`, idBob, hostile))
 	rec := saveUser(userForm(url.Values{"username": {hostile}}))
@@ -386,7 +386,7 @@ func TestAdminUserSaveEscapesAPIText(t *testing.T) {
 const idUnlisted = "4242424242424242424"
 
 func TestAdminUserEditorKeepsRolesWithoutACheckbox(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /users/"+idBob, 200, `{"user_id":"`+idBob+`","username":"bob","roles":["`+idBee+`","`+idUnlisted+`"]}`)
 	f.on("GET /users/"+idBob+"/links", 200, `[]`)
 	f.on("GET /users/"+idBob+"/permissions", 200, `[]`)
@@ -414,7 +414,7 @@ func TestAdminUserSaveKeepsRolesWithoutACheckbox(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			f := newFakeAdmin(t)
+			f := newFakeBackend(t)
 			f.on("PUT /users/"+idBob, 200, bobJSON)
 			f.on("GET /users/"+idBob+"/links", 200, `[]`)
 			f.on("GET /users/"+idBob+"/permissions", 200, `[]`)
@@ -429,7 +429,7 @@ func TestAdminUserSaveKeepsRolesWithoutACheckbox(t *testing.T) {
 }
 
 func TestAdminUserSaveIgnoresTheOrderOfRoles(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedUserEditor(f)
 	form := userForm(nil)
 	form["loaded_roles"] = []string{idBee, idSystem}
@@ -440,10 +440,10 @@ func TestAdminUserSaveIgnoresTheOrderOfRoles(t *testing.T) {
 }
 
 func TestAdminUserRowsFocusTheFirstNewRowAfterTheFirstPage(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /roles", 200, rolesJSON)
 	f.on("GET /users", 200, usersJSON)
-	rec := adminReq{method: http.MethodGet, target: "/admin/users/rows?offset=3", htmx: true}.do()
+	rec := pageReq{method: http.MethodGet, target: "/admin/users/rows?offset=3", htmx: true}.do()
 	if got := strings.Count(rec.Body.String(), "autofocus"); got != 1 {
 		t.Errorf("autofocus appears %d times, want once", got)
 	}
@@ -451,17 +451,17 @@ func TestAdminUserRowsFocusTheFirstNewRowAfterTheFirstPage(t *testing.T) {
 }
 
 func TestAdminUserRowsFromTheStartDoNotTakeFocus(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /roles", 200, rolesJSON)
 	f.on("GET /users", 200, usersJSON)
-	rec := adminReq{method: http.MethodGet, target: "/admin/users/rows?offset=0", htmx: true}.do()
+	rec := pageReq{method: http.MethodGet, target: "/admin/users/rows?offset=0", htmx: true}.do()
 	assertStatus(t, rec, http.StatusOK)
 	assertNoBody(t, rec, "autofocus")
 }
 
 func TestAdminUserEditorEscapesTheIDInEveryCall(t *testing.T) {
 	const escaped = "a%2Fb%3Fc%23d%25e"
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /users/"+escaped, 200, `{"user_id":"a/b?c#d%e","username":"x","roles":[]}`)
 	f.on("GET /users/"+escaped+"/links", 200, `[]`)
 	f.on("GET /users/"+escaped+"/permissions", 200, `[]`)
@@ -480,7 +480,7 @@ func userPage(from, n int) string {
 }
 
 func TestAdminUserSearchMatchesNamesAndIDsIgnoringCase(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /users", 200, usersJSON)
 	f.on("GET /roles", 200, `[]`)
 	cases := []struct {
@@ -495,7 +495,7 @@ func TestAdminUserSearchMatchesNamesAndIDsIgnoringCase(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.search, func(t *testing.T) {
-			rec := adminReq{method: http.MethodGet, target: "/admin/users/rows?search=" + url.QueryEscape(tc.search), htmx: true}.do()
+			rec := pageReq{method: http.MethodGet, target: "/admin/users/rows?search=" + url.QueryEscape(tc.search), htmx: true}.do()
 			assertStatus(t, rec, http.StatusOK)
 			assertBody(t, rec, tc.want...)
 			assertNoBody(t, rec, tc.not...)
@@ -507,10 +507,10 @@ func TestAdminUserSearchMatchesNamesAndIDsIgnoringCase(t *testing.T) {
 }
 
 func TestAdminUserSearchReadsPagesUntilTheListEnds(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /roles", 200, `[]`)
 	f.on("GET /users", 200, fullPage(200))
-	rec := adminReq{method: http.MethodGet, target: "/admin/users/rows?search=user19", htmx: true}.do()
+	rec := pageReq{method: http.MethodGet, target: "/admin/users/rows?search=user19", htmx: true}.do()
 	assertStatus(t, rec, http.StatusOK)
 	uris := f.uris()
 	wantCalls := []string{
@@ -524,10 +524,10 @@ func TestAdminUserSearchReadsPagesUntilTheListEnds(t *testing.T) {
 }
 
 func TestAdminUserSearchStopsAtAShortPage(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /roles", 200, `[]`)
 	f.on("GET /users", 200, fullPage(150))
-	rec := adminReq{method: http.MethodGet, target: "/admin/users/rows?search=user1", htmx: true}.do()
+	rec := pageReq{method: http.MethodGet, target: "/admin/users/rows?search=user1", htmx: true}.do()
 	if got := len(f.uris()); got != 2 {
 		t.Errorf("calls = %v, want one page and the roles", f.uris())
 	}
@@ -535,23 +535,23 @@ func TestAdminUserSearchStopsAtAShortPage(t *testing.T) {
 }
 
 func TestAdminUserSearchWithoutMatchesInTheScannedUsersOffersMore(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /roles", 200, `[]`)
 	f.on("GET /users", 200, fullPage(200))
-	rec := adminReq{method: http.MethodGet, target: "/admin/users/rows?search=zzz", htmx: true}.do()
+	rec := pageReq{method: http.MethodGet, target: "/admin/users/rows?search=zzz", htmx: true}.do()
 	assertBody(t, rec, "No matches in the first 1000 users", `id="admin-users-more"`)
 }
 
 func TestAdminUserRowsAfterTheFirstPageHaveNoEmptyNotice(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /roles", 200, `[]`)
 	f.on("GET /users", 200, `[]`)
-	rec := adminReq{method: http.MethodGet, target: "/admin/users/rows?offset=200&search=zzz", htmx: true}.do()
+	rec := pageReq{method: http.MethodGet, target: "/admin/users/rows?offset=200&search=zzz", htmx: true}.do()
 	assertNoBody(t, rec, `id="admin-users-empty"`)
 }
 
 func TestAdminUserListWithoutASearchReadsOnePage(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /roles", 200, `[]`)
 	f.on("GET /users", 200, fullPage(200))
 	rec := getPage("/admin/users/list")
@@ -563,7 +563,7 @@ func TestAdminUserListWithoutASearchReadsOnePage(t *testing.T) {
 }
 
 func TestAdminUserSearchBoxQueriesTheServer(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /users", 200, usersJSON)
 	f.on("GET /roles", 200, `[]`)
 	assertBody(t, getPage("/admin/users/list"),
@@ -573,7 +573,7 @@ func TestAdminUserSearchBoxQueriesTheServer(t *testing.T) {
 }
 
 func TestAdminUserSaveDoesNotReloadTheLinkedAccounts(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedUserEditor(f)
 	f.on("PUT /users/"+idBob, 200, bobJSON)
 	rec := saveUser(userForm(url.Values{"username": {"robert"}}))
@@ -586,7 +586,7 @@ func TestAdminUserSaveDoesNotReloadTheLinkedAccounts(t *testing.T) {
 }
 
 func TestAdminUserPageShowsEveryRegion(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedUserEditor(f)
 	rec := getPage("/admin/users/" + idBob + "/editor")
 	assertBody(t, rec, `id="admin-user"`, `id="admin-user-header"`, `id="admin-user-form"`, `id="admin-user-permissions-section"`,
@@ -595,20 +595,20 @@ func TestAdminUserPageShowsEveryRegion(t *testing.T) {
 }
 
 func TestAdminUserRowsFocusSomethingWhenAPageHasNoRows(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /roles", 200, `[]`)
 	f.on("GET /users", 200, `[]`)
-	rec := adminReq{method: http.MethodGet, target: "/admin/users/rows?offset=200", htmx: true}.do()
+	rec := pageReq{method: http.MethodGet, target: "/admin/users/rows?offset=200", htmx: true}.do()
 	assertBody(t, rec, `id="admin-users-end" tabindex="-1" autofocus`, "No more users")
 
 	f.on("GET /users", 200, fullPage(200))
-	rec = adminReq{method: http.MethodGet, target: "/admin/users/rows?offset=1000&search=zzz", htmx: true}.do()
+	rec = pageReq{method: http.MethodGet, target: "/admin/users/rows?offset=1000&search=zzz", htmx: true}.do()
 	assertBody(t, rec, `id="admin-users-more-button" type="button" autofocus`)
 	assertNoBody(t, rec, `id="admin-users-end"`)
 }
 
 func TestAdminUserSaveReloadFailureRefreshesWhatTheNextSaveComparesWith(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedUserEditor(f)
 	f.on("PUT /users/"+idBob, 200, `{"user_id":"`+idBob+`","username":"robert","roles":["`+idSystem+`"]}`)
 	f.problem("GET /roles", 500, "roles are down")

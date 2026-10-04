@@ -9,7 +9,7 @@ import (
 )
 
 func TestAdminPermissionListShowsTypesAndMerge(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /permissions", 200, permissionsJSON)
 	rec := getPage("/admin/permissions/list")
 	assertStatus(t, rec, http.StatusOK)
@@ -22,7 +22,7 @@ func TestAdminPermissionListShowsTypesAndMerge(t *testing.T) {
 }
 
 func TestAdminPermissionListEmptyAndRefused(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /permissions", 200, `[]`)
 	assertBody(t, getPage("/admin/permissions/list"), `id="admin-permissions-empty"`, `id="admin-permission-create-form"`)
 
@@ -34,7 +34,7 @@ func TestAdminPermissionListEmptyAndRefused(t *testing.T) {
 }
 
 func TestAdminPermissionListEscapesAPIText(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /permissions", 200, fmt.Sprintf(`[{"id":%q,"node":%q,"description":%q,"value_type":%q,"merge":%q}]`,
 		hostile+"id", hostile+"node", hostile+"description", hostile+"type", hostile+"merge"))
 	rec := getPage("/admin/permissions/list")
@@ -54,7 +54,7 @@ func TestAdminPermissionCreateSendsOnlyWhatTheTypeNeeds(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			f := newFakeAdmin(t)
+			f := newFakeBackend(t)
 			f.on("POST /permissions", 201, `{}`)
 			f.on("GET /permissions", 200, permissionsJSON)
 			rec := action(http.MethodPost, "/admin/permissions", tc.form)
@@ -67,7 +67,7 @@ func TestAdminPermissionCreateSendsOnlyWhatTheTypeNeeds(t *testing.T) {
 }
 
 func TestAdminPermissionCreateRefusedShowsTheAPIMessage(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.problem("POST /permissions", 400, "Nodes are lower-case words")
 	rec := action(http.MethodPost, "/admin/permissions", url.Values{"node": {"Bad Node"}})
 	assertStatus(t, rec, http.StatusBadRequest)
@@ -77,7 +77,7 @@ func TestAdminPermissionCreateRefusedShowsTheAPIMessage(t *testing.T) {
 }
 
 func TestAdminPermissionDeleteReloadsTheListWithFocusOnItsHeading(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("DELETE /permissions/"+idPStore, 204, ``)
 	f.on("GET /permissions", 200, permissionsJSON)
 	rec := action(http.MethodDelete, "/admin/permissions/"+idPStore, nil)
@@ -87,7 +87,7 @@ func TestAdminPermissionDeleteReloadsTheListWithFocusOnItsHeading(t *testing.T) 
 }
 
 func TestAdminPermissionDeleteRefusedShowsTheAPIMessage(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.problem("DELETE /permissions/"+idPBee, 409, "The permission is granted by a role")
 	rec := action(http.MethodDelete, "/admin/permissions/"+idPBee, nil)
 	assertStatus(t, rec, http.StatusConflict)
@@ -97,7 +97,7 @@ func TestAdminPermissionDeleteRefusedShowsTheAPIMessage(t *testing.T) {
 }
 
 func TestAdminPermissionsRootQueuesActionsAndNamesTheTarget(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /permissions", 200, permissionsJSON)
 	rec := getPage("/admin/permissions/list")
 	assertBody(t, rec, `id="admin-permissions-root" class="space-y-6" data-busy-region hx-sync:inherited="this:drop" hx-target:inherited="#admin-permissions-list" hx-swap:inherited="outerHTML"`)
@@ -108,7 +108,7 @@ func TestAdminPermissionsRootQueuesActionsAndNamesTheTarget(t *testing.T) {
 }
 
 func TestAdminPermissionDeleteReloadFailureRemovesTheRow(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("DELETE /permissions/"+idPStore, 204, ``)
 	f.problem("GET /permissions", 500, "down")
 	rec := action(http.MethodDelete, "/admin/permissions/"+idPStore, nil)
@@ -116,7 +116,7 @@ func TestAdminPermissionDeleteReloadFailureRemovesTheRow(t *testing.T) {
 }
 
 func TestAdminPermissionCreateReloadFailureListsTheNewPermission(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("POST /permissions", 201, `{"id":"`+idPStore+`","node":"pets.write","description":"Write pets"}`)
 	f.problem("GET /permissions", 500, "down")
 	rec := action(http.MethodPost, "/admin/permissions", url.Values{"node": {"pets.write"}})
@@ -124,7 +124,7 @@ func TestAdminPermissionCreateReloadFailureListsTheNewPermission(t *testing.T) {
 }
 
 func TestAdminPermissionCreateReloadFailureClearsTheForm(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("POST /permissions", 201, `{}`)
 	f.problem("GET /permissions", 500, "down")
 	rec := action(http.MethodPost, "/admin/permissions", url.Values{"node": {"pets.write"}})

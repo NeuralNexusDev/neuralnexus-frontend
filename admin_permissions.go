@@ -9,7 +9,7 @@ import (
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/components"
 )
 
-func adminPermissionsListHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
+func adminPermissionsListHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
 	data, err := loadPermissions(a, false)
 	if err != nil {
 		failFragment(w, r, err)
@@ -18,15 +18,15 @@ func adminPermissionsListHandler(w http.ResponseWriter, r *http.Request, a admin
 	renderAll(w, r, components.AdminPermissionsContent(data))
 }
 
-func loadPermissions(a adminAPI, focusList bool) (components.AdminPermissionsData, error) {
-	permissions, err := adminGet[[]components.Permission](a, "/permissions", loadPermissionsFailed)
+func loadPermissions(a apiSession, focusList bool) (components.AdminPermissionsData, error) {
+	permissions, err := apiGet[[]components.Permission](a, "/permissions", loadPermissionsFailed)
 	if err != nil {
 		return components.AdminPermissionsData{}, err
 	}
 	return components.AdminPermissionsData{Permissions: permissions, FocusList: focusList}, nil
 }
 
-func adminPermissionCreateHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
+func adminPermissionCreateHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
 	body := map[string]string{
 		"node":        strings.TrimSpace(r.Form.Get("node")),
 		"description": strings.TrimSpace(r.Form.Get("description")),
@@ -38,7 +38,7 @@ func adminPermissionCreateHandler(w http.ResponseWriter, r *http.Request, a admi
 	if valueType == "int" {
 		body["merge"] = r.Form.Get("merge")
 	}
-	created, err := adminSend[components.Permission](a, http.MethodPost, "/permissions", body, "Failed to create the permission")
+	created, err := apiSend[components.Permission](a, http.MethodPost, "/permissions", body, "Failed to create the permission")
 	if err != nil {
 		var restore []templ.Component
 		if message := fieldRefusal(err); message != "" {
@@ -55,8 +55,8 @@ func adminPermissionCreateHandler(w http.ResponseWriter, r *http.Request, a admi
 	renderAll(w, r, components.AdminPermissionList(data), components.AdminPermissionForm(true))
 }
 
-func adminPermissionDeleteHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
-	if _, err := adminSend[struct{}](a, http.MethodDelete, "/permissions/"+url.PathEscape(r.PathValue("id")), nil, "Failed to delete the permission"); err != nil {
+func adminPermissionDeleteHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
+	if _, err := apiSend[struct{}](a, http.MethodDelete, "/permissions/"+url.PathEscape(r.PathValue("id")), nil, "Failed to delete the permission"); err != nil {
 		failFragment(w, r, err)
 		return
 	}

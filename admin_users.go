@@ -33,9 +33,9 @@ func sameSet(a []string, b []string) bool {
 	return true
 }
 
-func listRoles(a adminAPI) ([]components.Role, bool, error) {
-	roles, err := adminGet[[]components.Role](a, "/roles", loadRolesFailed)
-	var failure *adminError
+func listRoles(a apiSession) ([]components.Role, bool, error) {
+	roles, err := apiGet[[]components.Role](a, "/roles", loadRolesFailed)
+	var failure *apiError
 	if errors.As(err, &failure) && failure.Status == http.StatusForbidden {
 		return nil, false, nil
 	}
@@ -46,7 +46,7 @@ func listRoles(a adminAPI) ([]components.Role, bool, error) {
 }
 
 // The API has no search, so a search reads pages of users and matches them here.
-func loadUsersPage(a adminAPI, offset int, search string) (components.AdminUsersData, error) {
+func loadUsersPage(a apiSession, offset int, search string) (components.AdminUsersData, error) {
 	search = strings.TrimSpace(search)
 	needle := strings.ToLower(search)
 	pages := 1
@@ -57,7 +57,7 @@ func loadUsersPage(a adminAPI, offset int, search string) (components.AdminUsers
 	next := offset
 	more := false
 	for range pages {
-		page, err := adminGet[[]components.UserAccount](a, fmt.Sprintf("/users?limit=%d&offset=%d", usersPageSize, next), "Failed to load users")
+		page, err := apiGet[[]components.UserAccount](a, fmt.Sprintf("/users?limit=%d&offset=%d", usersPageSize, next), "Failed to load users")
 		if err != nil {
 			return components.AdminUsersData{}, err
 		}
@@ -93,7 +93,7 @@ func loadUsersPage(a adminAPI, offset int, search string) (components.AdminUsers
 	}, nil
 }
 
-func adminUsersListHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
+func adminUsersListHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
 	data, err := loadUsersPage(a, 0, "")
 	if err != nil {
 		failFragment(w, r, err)
@@ -102,7 +102,7 @@ func adminUsersListHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	renderAll(w, r, components.AdminUsersList(data))
 }
 
-func adminUserRowsHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
+func adminUserRowsHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
 	offset := 0
 	if raw := r.URL.Query().Get("offset"); raw != "" {
 		var err error
@@ -120,10 +120,10 @@ func adminUserRowsHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	renderAll(w, r, components.AdminUserRows(data), components.AdminUsersCount(data, true))
 }
 
-func loadUserEditor(a adminAPI, id string, user *components.UserAccount, withLinks bool) (components.AdminUserData, error) {
+func loadUserEditor(a apiSession, id string, user *components.UserAccount, withLinks bool) (components.AdminUserData, error) {
 	path := "/users/" + url.PathEscape(id)
 	if user == nil {
-		loaded, err := adminGet[components.UserAccount](a, path, "Failed to load the user")
+		loaded, err := apiGet[components.UserAccount](a, path, "Failed to load the user")
 		if err != nil {
 			return components.AdminUserData{}, err
 		}
@@ -135,13 +135,13 @@ func loadUserEditor(a adminAPI, id string, user *components.UserAccount, withLin
 	}
 	data := components.AdminUserData{User: *user, Roles: roles, RolesReadable: readable}
 	if withLinks {
-		links, err := adminGet[[]components.LinkedAccount](a, path+"/links", "Failed to load the linked accounts")
+		links, err := apiGet[[]components.LinkedAccount](a, path+"/links", "Failed to load the linked accounts")
 		if data.LinksError, err = secondary(err); err != nil {
 			return components.AdminUserData{}, err
 		}
 		data.Links = links
 	}
-	permissions, err := adminGet[[]string](a, path+"/permissions", "Failed to load the permissions")
+	permissions, err := apiGet[[]string](a, path+"/permissions", "Failed to load the permissions")
 	if data.PermissionsErr, err = secondary(err); err != nil {
 		return components.AdminUserData{}, err
 	}
@@ -149,7 +149,7 @@ func loadUserEditor(a adminAPI, id string, user *components.UserAccount, withLin
 	return data, nil
 }
 
-func adminUserEditorHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
+func adminUserEditorHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
 	data, err := loadUserEditor(a, r.PathValue("id"), nil, true)
 	if err != nil {
 		failFragment(w, r, err)
@@ -163,11 +163,11 @@ func renderUserSave(w http.ResponseWriter, r *http.Request, data components.Admi
 		components.AdminUserForm(data),
 		components.AdminUserHeader(data, true),
 		components.AdminUserPermissions(data, true),
-		components.AdminStatus(components.AdminUserStatusID, status),
+		components.StatusLine(components.AdminUserStatusID, status),
 	)
 }
 
-func adminUserSaveHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
+func adminUserSaveHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
 	id := r.PathValue("id")
 	body := map[string]any{}
 	if raw := r.Form.Get("username"); raw != r.Form.Get("loaded_username") {
@@ -188,7 +188,7 @@ func adminUserSaveHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 		nothingToSave(w, r, components.AdminUserStatusID)
 		return
 	}
-	saved, err := adminSend[components.UserAccount](a, http.MethodPut, "/users/"+url.PathEscape(id), body, "Failed to save the user")
+	saved, err := apiSend[components.UserAccount](a, http.MethodPut, "/users/"+url.PathEscape(id), body, "Failed to save the user")
 	if err != nil {
 		var restore []templ.Component
 		if message := fieldRefusal(err); message != "" && body["username"] != nil {

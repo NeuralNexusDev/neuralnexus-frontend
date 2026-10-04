@@ -238,9 +238,9 @@ func adminLinkName(link LinkedAccount) string {
 	return link.PlatformID
 }
 
-// AdminErrorClear empties the error banner out of band, so a change that works removes the message of one that did not.
-templ AdminErrorClear() {
-	<div id="admin-error" hx-swap-oob="innerHTML"></div>
+// ErrorClear empties the error banner out of band, so a change that works removes the message of one that did not.
+templ ErrorClear() {
+	<div id="page-error" hx-swap-oob="innerHTML"></div>
 }
 
 // AdminDashboardLink is the link from the account page to the admin dashboard.
@@ -254,13 +254,13 @@ templ AdminDashboardLink() {
 	</a>
 }
 
-// AdminStatus updates a page's status line out of band, so the line keeps announcing what it says.
-templ AdminStatus(id string, message string) {
+// StatusLine updates a page's status line out of band, so the line keeps announcing what it says.
+templ StatusLine(id string, message string) {
 	<p id={ id } hx-swap-oob="innerHTML">{ message }</p>
 }
 
-// AdminErrorText is the body of an error response that htmx swaps into the error banner.
-templ AdminErrorText(message string) {
+// ErrorText is the body of an error response that htmx swaps into the error banner.
+templ ErrorText(message string) {
 	{ message }
 }
 
@@ -475,8 +475,8 @@ templ AdminUserLoaded(d AdminUserData, oob bool) {
 	</div>
 }
 
-// AdminRowGone removes a row out of band, for a row whose removal succeeded when the page could not be refreshed.
-templ AdminRowGone(id string) {
+// RowGone removes a row out of band, for a row whose removal succeeded when the page could not be refreshed.
+templ RowGone(id string) {
 	<div hx-swap-oob={ "delete:#" + id }></div>
 }
 

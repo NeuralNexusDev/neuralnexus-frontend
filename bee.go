@@ -16,8 +16,8 @@ func isDotSegment(name string) bool {
 	return name == "." || name == ".."
 }
 
-func loadBeeSuggestions(a adminAPI, focusList bool) (components.BeeSuggestionsData, error) {
-	list, err := adminGet[struct {
+func loadBeeSuggestions(a apiSession, focusList bool) (components.BeeSuggestionsData, error) {
+	list, err := apiGet[struct {
 		Suggestions []string `json:"suggestions"`
 	}](a, "/bee-name-generator/suggestion/"+strconv.Itoa(beeSuggestionLimit), "Failed to load suggestions")
 	if err != nil {
@@ -26,7 +26,7 @@ func loadBeeSuggestions(a adminAPI, focusList bool) (components.BeeSuggestionsDa
 	return components.BeeSuggestionsData{Names: list.Suggestions, FocusList: focusList}, nil
 }
 
-func beeSuggestionsHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
+func beeSuggestionsHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
 	data, err := loadBeeSuggestions(a, false)
 	if err != nil {
 		failFragment(w, r, err)
@@ -35,7 +35,7 @@ func beeSuggestionsHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 	renderAll(w, r, components.BeeSuggestions(data))
 }
 
-func beeReviewHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
+func beeReviewHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
 	name := r.Form.Get("name")
 	var method, fallback string
 	switch r.Form.Get("action") {
@@ -51,7 +51,7 @@ func beeReviewHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 		failFragment(w, r, invalidInput("That name cannot be reviewed here"))
 		return
 	}
-	if _, err := adminSend[struct{}](a, method, "/bee-name-generator/suggestion/"+url.PathEscape(name), nil, fallback); err != nil {
+	if _, err := apiSend[struct{}](a, method, "/bee-name-generator/suggestion/"+url.PathEscape(name), nil, fallback); err != nil {
 		failFragment(w, r, err)
 		return
 	}

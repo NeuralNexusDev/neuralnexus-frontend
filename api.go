@@ -13,11 +13,11 @@ import (
 
 const (
 	sessionCookieName = "session"
-	maxAdminResponse  = 1 << 20
-	adminAPITimeout   = 15 * time.Second
+	maxAPIResponse    = 1 << 20
+	apiTimeout        = 15 * time.Second
 )
 
-var adminClient = &http.Client{Timeout: adminAPITimeout}
+var apiClient = &http.Client{Timeout: apiTimeout}
 
 var errUnauthorized = errors.New("not signed in")
 
@@ -28,7 +28,7 @@ const (
 	unknownPlatform       = "Unknown platform"
 )
 
-type adminError struct {
+type apiError struct {
 	Status  int
 	Message string
 	Method  string
@@ -36,25 +36,25 @@ type adminError struct {
 	Err     error
 }
 
-func (e *adminError) Error() string {
+func (e *apiError) Error() string {
 	return e.Message
 }
 
-func (e *adminError) Unwrap() error {
+func (e *apiError) Unwrap() error {
 	return e.Err
 }
 
 func invalidInput(message string) error {
-	return &adminError{Status: http.StatusBadRequest, Message: message}
+	return &apiError{Status: http.StatusBadRequest, Message: message}
 }
 
-type adminAPI struct {
+type apiSession struct {
 	r *http.Request
 }
 
-func (a adminAPI) call(method string, path string, body any, fallback string) ([]byte, error) {
+func (a apiSession) call(method string, path string, body any, fallback string) ([]byte, error) {
 	fail := func(status int, cause error) error {
-		return &adminError{Status: status, Message: fallback, Method: method, Path: path, Err: cause}
+		return &apiError{Status: status, Message: fallback, Method: method, Path: path, Err: cause}
 	}
 	var reader io.Reader
 	if body != nil {
@@ -75,12 +75,12 @@ func (a adminAPI) call(method string, path string, body any, fallback string) ([
 	if cookie, err := a.r.Cookie(sessionCookieName); err == nil {
 		req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: cookie.Value})
 	}
-	res, err := adminClient.Do(req)
+	res, err := apiClient.Do(req)
 	if err != nil {
 		return nil, fail(http.StatusBadGateway, err)
 	}
 	defer res.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(res.Body, maxAdminResponse))
+	data, err := io.ReadAll(io.LimitReader(res.Body, maxAPIResponse))
 	if err != nil {
 		return nil, fail(http.StatusBadGateway, err)
 	}
@@ -96,24 +96,24 @@ func (a adminAPI) call(method string, path string, body any, fallback string) ([
 		if message == "" {
 			message = fallback
 		}
-		return nil, &adminError{Status: res.StatusCode, Message: message, Method: method, Path: path}
+		return nil, &apiError{Status: res.StatusCode, Message: message, Method: method, Path: path}
 	}
 	return data, nil
 }
 
-func adminGet[T any](a adminAPI, path string, fallback string) (T, error) {
+func apiGet[T any](a apiSession, path string, fallback string) (T, error) {
 	var out T
 	data, err := a.call(http.MethodGet, path, nil, fallback)
 	if err != nil {
 		return out, err
 	}
 	if err := json.Unmarshal(data, &out); err != nil {
-		return out, &adminError{Status: http.StatusBadGateway, Message: fallback, Method: http.MethodGet, Path: path, Err: err}
+		return out, &apiError{Status: http.StatusBadGateway, Message: fallback, Method: http.MethodGet, Path: path, Err: err}
 	}
 	return out, nil
 }
 
-func adminSend[T any](a adminAPI, method string, path string, body any, fallback string) (T, error) {
+func apiSend[T any](a apiSession, method string, path string, body any, fallback string) (T, error) {
 	var out T
 	data, err := a.call(method, path, body, fallback)
 	if err != nil {
@@ -123,7 +123,7 @@ func adminSend[T any](a adminAPI, method string, path string, body any, fallback
 		return out, nil
 	}
 	if err := json.Unmarshal(data, &out); err != nil {
-		return out, &adminError{Status: http.StatusBadGateway, Message: fallback, Method: method, Path: path, Err: err}
+		return out, &apiError{Status: http.StatusBadGateway, Message: fallback, Method: method, Path: path, Err: err}
 	}
 	return out, nil
 }

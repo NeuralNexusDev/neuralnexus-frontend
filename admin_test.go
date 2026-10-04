@@ -38,15 +38,15 @@ type fakeCall struct {
 	method, uri, body, cookie string
 }
 
-type fakeAdmin struct {
+type fakeBackend struct {
 	mu     sync.Mutex
 	calls  []fakeCall
 	routes map[string]fakeResponse
 }
 
-func newFakeAdmin(t *testing.T) *fakeAdmin {
+func newFakeBackend(t *testing.T) *fakeBackend {
 	t.Helper()
-	f := &fakeAdmin{routes: map[string]fakeResponse{}}
+	f := &fakeBackend{routes: map[string]fakeResponse{}}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		cookie := ""
@@ -76,17 +76,17 @@ func newFakeAdmin(t *testing.T) *fakeAdmin {
 	return f
 }
 
-func (f *fakeAdmin) on(route string, status int, body string) {
+func (f *fakeBackend) on(route string, status int, body string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.routes[route] = fakeResponse{status: status, body: body}
 }
 
-func (f *fakeAdmin) problem(route string, status int, detail string) {
+func (f *fakeBackend) problem(route string, status int, detail string) {
 	f.on(route, status, fmt.Sprintf(`{"detail":%q}`, detail))
 }
 
-func (f *fakeAdmin) writes() []string {
+func (f *fakeBackend) writes() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var out []string
@@ -98,7 +98,7 @@ func (f *fakeAdmin) writes() []string {
 	return out
 }
 
-func (f *fakeAdmin) uris() []string {
+func (f *fakeBackend) uris() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var out []string
@@ -108,20 +108,20 @@ func (f *fakeAdmin) uris() []string {
 	return out
 }
 
-func (f *fakeAdmin) reset() {
+func (f *fakeBackend) reset() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = nil
 }
 
-type adminReq struct {
+type pageReq struct {
 	method, target string
 	form           url.Values
 	htmx           bool
 	cookies        []*http.Cookie
 }
 
-func (a adminReq) do() *httptest.ResponseRecorder {
+func (a pageReq) do() *httptest.ResponseRecorder {
 	var body io.Reader
 	if a.form != nil {
 		body = strings.NewReader(a.form.Encode())
@@ -142,7 +142,7 @@ func (a adminReq) do() *httptest.ResponseRecorder {
 }
 
 func getPage(target string) *httptest.ResponseRecorder {
-	return adminReq{method: http.MethodGet, target: target}.do()
+	return pageReq{method: http.MethodGet, target: target}.do()
 }
 
 func actionDelete(target string, form url.Values) *httptest.ResponseRecorder {
@@ -153,7 +153,7 @@ func actionDelete(target string, form url.Values) *httptest.ResponseRecorder {
 }
 
 func action(method, target string, form url.Values) *httptest.ResponseRecorder {
-	return adminReq{method: method, target: target, form: form, htmx: true}.do()
+	return pageReq{method: method, target: target, form: form, htmx: true}.do()
 }
 
 func bannerText(rec *httptest.ResponseRecorder) string {
@@ -198,7 +198,7 @@ func assertStatus(t *testing.T, rec *httptest.ResponseRecorder, want int) {
 	}
 }
 
-func assertWrites(t *testing.T, f *fakeAdmin, want ...string) {
+func assertWrites(t *testing.T, f *fakeBackend, want ...string) {
 	t.Helper()
 	got := f.writes()
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
@@ -229,7 +229,7 @@ const (
 )
 
 func TestAdminShellsHoldNoDataAndLoadTheirContent(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	cases := []struct{ path, loads string }{
 		{"/admin", "/admin/cards"},
 		{"/admin/users", "/admin/users/list"},
@@ -243,7 +243,7 @@ func TestAdminShellsHoldNoDataAndLoadTheirContent(t *testing.T) {
 			f.reset()
 			rec := getPage(tc.path)
 			assertStatus(t, rec, http.StatusOK)
-			assertBody(t, rec, `hx-get="`+tc.loads+`"`, `hx-trigger="load"`, `hx-swap="outerHTML"`, `id="admin-error"`,
+			assertBody(t, rec, `hx-get="`+tc.loads+`"`, `hx-trigger="load"`, `hx-swap="outerHTML"`, `id="page-error"`,
 				`<script src="https://s3.neuralnexus.dev/cdn/htmx/v4.0.0/htmx.min.js" integrity="sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc" crossorigin="anonymous" defer>`, `&#34;mode&#34;:&#34;same-origin&#34;`, `&#34;history&#34;:false`, `&#34;allowEmptySwapAfterOOB&#34;:true`, `&#34;defaultSettleDelay&#34;:0`, `&#34;defaultTimeout&#34;:60000`, `src="/public/js/htmx-glue.js" defer`)
 			if len(f.uris()) != 0 {
 				t.Errorf("a shell called the API: %v", f.uris())
@@ -265,7 +265,7 @@ func TestAdminShellsEscapeTheIDInTheirLoadPath(t *testing.T) {
 }
 
 func TestAdminFragmentsHaveNoPageChrome(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /users/me/permissions", 200, `["users.admin","roles.admin"]`)
 	f.on("GET /users", 200, usersJSON)
 	f.on("GET /roles", 200, rolesJSON)
@@ -287,15 +287,15 @@ func TestAdminFragmentsHaveNoPageChrome(t *testing.T) {
 			rec := getPage(tc.path)
 			assertStatus(t, rec, http.StatusOK)
 			assertBody(t, rec, tc.marker)
-			assertNoBody(t, rec, "<html", "<body", `id="admin-error" role="alert"`)
+			assertNoBody(t, rec, "<html", "<body", `id="page-error" role="alert"`)
 		})
 	}
 }
 
 func TestAdminForwardsOnlyTheSessionCookie(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /users/me/permissions", 200, `["users.admin"]`)
-	adminReq{method: http.MethodGet, target: "/admin/cards", cookies: []*http.Cookie{
+	pageReq{method: http.MethodGet, target: "/admin/cards", cookies: []*http.Cookie{
 		{Name: "session", Value: "jwt-value"},
 		{Name: "nonce", Value: "other"},
 	}}.do()
@@ -307,7 +307,7 @@ func TestAdminForwardsOnlyTheSessionCookie(t *testing.T) {
 }
 
 func TestAdminActionsNeedHTMX(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	cases := []struct{ method, target string }{
 		{http.MethodPost, "/admin/users/" + idBob},
 		{http.MethodPost, "/admin/roles"},
@@ -326,7 +326,7 @@ func TestAdminActionsNeedHTMX(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.method+" "+tc.target, func(t *testing.T) {
 			f.reset()
-			rec := adminReq{method: tc.method, target: tc.target, form: url.Values{"name": {"x"}}}.do()
+			rec := pageReq{method: tc.method, target: tc.target, form: url.Values{"name": {"x"}}}.do()
 			assertStatus(t, rec, http.StatusForbidden)
 			if len(f.uris()) != 0 {
 				t.Errorf("a request without HX-Request reached the API: %v", f.uris())
@@ -336,7 +336,7 @@ func TestAdminActionsNeedHTMX(t *testing.T) {
 }
 
 func TestAdminSignedOutVisitors(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	for _, route := range []string{"GET /users/me/permissions", "GET /users", "GET /roles", "GET /permissions", "GET /users/" + idBob, "GET /roles/" + idBee, "POST /roles"} {
 		f.problem(route, 401, "sign in")
 	}
@@ -352,7 +352,7 @@ func TestAdminSignedOutVisitors(t *testing.T) {
 			}
 		})
 	}
-	rec := adminReq{method: http.MethodGet, target: "/admin/roles/" + idBee + "/grant-value?grant_permission=" + idPRate, htmx: true}.do()
+	rec := pageReq{method: http.MethodGet, target: "/admin/roles/" + idBee + "/grant-value?grant_permission=" + idPRate, htmx: true}.do()
 	if got := rec.Header().Get("HX-Redirect"); got != "/login" {
 		t.Errorf("HX-Redirect = %q, want /login", got)
 	}
@@ -363,21 +363,21 @@ func TestAdminSignedOutVisitors(t *testing.T) {
 }
 
 func TestAdminRefusalsShowTheAPIMessage(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.problem("GET /users/me/permissions", 403, "You may not")
 	rec := getPage("/admin/cards")
 	assertStatus(t, rec, http.StatusForbidden)
 	if got := bannerText(rec); got != "You may not" {
 		t.Errorf("body = %q", got)
 	}
-	if got := rec.Header().Get("HX-Retarget"); got != "#admin-error" {
+	if got := rec.Header().Get("HX-Retarget"); got != "#page-error" {
 		t.Errorf("HX-Retarget = %q", got)
 	}
 
 	f.problem("POST /roles", 409, "A role with that name already exists")
 	rec = action(http.MethodPost, "/admin/roles", url.Values{"name": {"system"}})
 	assertStatus(t, rec, http.StatusConflict)
-	if got := rec.Header().Get("HX-Retarget"); got != "#admin-error" {
+	if got := rec.Header().Get("HX-Retarget"); got != "#page-error" {
 		t.Errorf("HX-Retarget = %q", got)
 	}
 	if got := rec.Header().Get("HX-Reswap"); got != "innerHTML" {
@@ -389,7 +389,7 @@ func TestAdminRefusalsShowTheAPIMessage(t *testing.T) {
 }
 
 func TestAdminErrorMessagesAreEscaped(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.problem("GET /users/me/permissions", 500, hostile)
 	rec := getPage("/admin/cards")
 	assertNoBody(t, rec, "<img src=x")
@@ -402,7 +402,7 @@ func TestAdminErrorMessagesAreEscaped(t *testing.T) {
 }
 
 func TestAdminAPIDownGivesAGenericMessage(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /users/me/permissions", 200, `["users.admin"]`)
 	config.APIURL = "http://127.0.0.1:1"
 	rec := getPage("/admin/cards")
@@ -432,7 +432,7 @@ func TestAdminDashboardShowsTheCardsForThePermissionsHeld(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			f := newFakeAdmin(t)
+			f := newFakeBackend(t)
 			f.on("GET /users/me/permissions", 200, tc.permissions)
 			rec := getPage("/admin/cards")
 			assertStatus(t, rec, http.StatusOK)
@@ -452,7 +452,7 @@ func TestAdminDashboardShowsTheCardsForThePermissionsHeld(t *testing.T) {
 }
 
 func TestAdminSavesLeaveUnchangedPaddedTextAlone(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedUserEditor(f)
 	form := userForm(url.Values{"loaded_username": {" bob "}, "username": {" bob "}})
 	assertBody(t, saveUser(form), ">Nothing to save<")
@@ -471,33 +471,33 @@ func TestAdminReloadFailureAfterAWriteIsNotReportedAsAFailedWrite(t *testing.T) 
 		name   string
 		reload string
 		req    func() *httptest.ResponseRecorder
-		seed   func(f *fakeAdmin)
+		seed   func(f *fakeBackend)
 	}{
 		{"grant", "GET /roles/" + idBee, func() *httptest.ResponseRecorder {
 			return action(http.MethodPost, "/admin/roles/"+idBee+"/permissions", url.Values{"grant_permission": {idPStore}})
-		}, func(f *fakeAdmin) {
+		}, func(f *fakeBackend) {
 			f.on("GET /permissions", 200, permissionsJSON)
 			f.on("PUT /roles/"+idBee+"/permissions/"+idPStore, 204, ``)
 		}},
 		{"value", "GET /roles/" + idBee, func() *httptest.ResponseRecorder {
 			return putRoleValue(idPRate, url.Values{"value_" + idPRate: {"5"}})
-		}, func(f *fakeAdmin) {
+		}, func(f *fakeBackend) {
 			f.on("GET /permissions", 200, permissionsJSON)
 			f.on("PUT /roles/"+idBee+"/permissions/"+idPRate, 204, ``)
 		}},
 		{"remove", "GET /roles/" + idBee, func() *httptest.ResponseRecorder {
 			return action(http.MethodDelete, "/admin/roles/"+idBee+"/permissions/"+idPBee, nil)
-		}, func(f *fakeAdmin) { f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``) }},
+		}, func(f *fakeBackend) { f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``) }},
 		{"permission create", "GET /permissions", func() *httptest.ResponseRecorder {
 			return action(http.MethodPost, "/admin/permissions", url.Values{"node": {"pets.write"}})
-		}, func(f *fakeAdmin) { f.on("POST /permissions", 201, `{}`) }},
+		}, func(f *fakeBackend) { f.on("POST /permissions", 201, `{}`) }},
 		{"permission delete", "GET /permissions", func() *httptest.ResponseRecorder {
 			return action(http.MethodDelete, "/admin/permissions/"+idPStore, nil)
-		}, func(f *fakeAdmin) { f.on("DELETE /permissions/"+idPStore, 204, ``) }},
+		}, func(f *fakeBackend) { f.on("DELETE /permissions/"+idPStore, 204, ``) }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			f := newFakeAdmin(t)
+			f := newFakeBackend(t)
 			tc.seed(f)
 			f.problem(tc.reload, 500, "the API is down")
 			rec := tc.req()
@@ -513,7 +513,7 @@ func TestAdminReloadFailureAfterAWriteIsNotReportedAsAFailedWrite(t *testing.T) 
 }
 
 func TestAdminReloadFailureAfterAWriteStillSignsOutAnExpiredSession(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("DELETE /permissions/"+idPStore, 204, ``)
 	f.problem("GET /permissions", 401, "expired")
 	rec := action(http.MethodDelete, "/admin/permissions/"+idPStore, nil)
@@ -525,7 +525,7 @@ func TestAdminReloadFailureAfterAWriteStillSignsOutAnExpiredSession(t *testing.T
 func TestAdminPathsEscapeIDsThatLookLikeURLs(t *testing.T) {
 	const id = "a/b?c#d%e"
 	const escaped = "a%2Fb%3Fc%23d%25e"
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("PUT /users/"+escaped, 200, `{"user_id":"x","roles":[]}`)
 	f.on("GET /users/"+escaped+"/links", 200, `[]`)
 	f.on("GET /users/"+escaped+"/permissions", 200, `[]`)
@@ -551,7 +551,7 @@ func TestAdminPathsEscapeIDsThatLookLikeURLs(t *testing.T) {
 func TestAccountContentShowsTheAdminLinkForEitherAdminPermission(t *testing.T) {
 	for _, permissions := range []string{`["users.admin"]`, `["roles.admin:1"]`, `["ratelimit:5","users.admin"]`} {
 		t.Run(permissions, func(t *testing.T) {
-			f := newFakeAdmin(t)
+			f := newFakeBackend(t)
 			seedAccount(f)
 			f.on("GET /users/me/permissions", 200, permissions)
 			rec := getPage("/account/content")
@@ -564,7 +564,7 @@ func TestAccountContentShowsTheAdminLinkForEitherAdminPermission(t *testing.T) {
 func TestAccountContentLeavesOutTheAdminLinkWithoutAnAdminPermission(t *testing.T) {
 	for _, permissions := range []string{`[]`, `["ratelimit:1000"]`, `["beenamegenerator.admin"]`, `["users.administrator"]`, `["xusers.admin"]`} {
 		t.Run(permissions, func(t *testing.T) {
-			f := newFakeAdmin(t)
+			f := newFakeBackend(t)
 			seedAccount(f)
 			f.on("GET /users/me/permissions", 200, permissions)
 			rec := getPage("/account/content")
@@ -576,7 +576,7 @@ func TestAccountContentLeavesOutTheAdminLinkWithoutAnAdminPermission(t *testing.
 }
 
 func TestAccountContentStillRendersWhenThePermissionsCannotBeRead(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedAccount(f)
 	f.problem("GET /users/me/permissions", 500, "down")
 	captureLog(t)
@@ -587,14 +587,14 @@ func TestAccountContentStillRendersWhenThePermissionsCannotBeRead(t *testing.T) 
 }
 
 func TestAccountContentIsOneRequestAfterTheShell(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedAccount(f)
 	f.on("GET /users/me/permissions", 200, `["users.admin"]`)
 	assertNoBody(t, getPage("/account/content"), `hx-get=`)
 }
 
 func TestShellsShowALoadingLineWhileTheirContentLoads(t *testing.T) {
-	newFakeAdmin(t)
+	newFakeBackend(t)
 	for _, target := range []string{"/admin", "/admin/users", "/admin/roles", "/admin/permissions", "/account", "/project/bee-name-generator/admin"} {
 		t.Run(target, func(t *testing.T) {
 			assertBody(t, getPage(target), `hx-trigger="load" hx-swap="outerHTML" data-page-load><p class=`, ">Loading…<", `<p id="page-status" role="status" class="sr-only"></p>`)
@@ -603,7 +603,7 @@ func TestShellsShowALoadingLineWhileTheirContentLoads(t *testing.T) {
 }
 
 func TestOnlyTheEditorsWithAStatusLineNameIt(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedAccount(f)
 	f.on("GET /users/me/permissions", 200, `[]`)
 	f.on("GET /permissions", 200, permissionsJSON)
@@ -618,8 +618,8 @@ func TestOnlyTheEditorsWithAStatusLineNameIt(t *testing.T) {
 }
 
 func TestAdminFragmentsEmptyTheBannerOutOfBand(t *testing.T) {
-	const clear = `<div id="admin-error" hx-swap-oob="innerHTML"></div>`
-	f := newFakeAdmin(t)
+	const clear = `<div id="page-error" hx-swap-oob="innerHTML"></div>`
+	f := newFakeBackend(t)
 	seedUserEditor(f)
 	seedRoleEditor(f)
 	f.on("PUT /users/"+idBob, 200, bobJSON)
@@ -630,8 +630,8 @@ func TestAdminFragmentsEmptyTheBannerOutOfBand(t *testing.T) {
 	cases := map[string]*httptest.ResponseRecorder{
 		"user save":   saveUser(userForm(url.Values{"username": {"robert"}})),
 		"grant":       action(http.MethodPost, "/admin/roles/"+idBee+"/permissions", url.Values{"grant_permission": {idPStore}}),
-		"grant value": adminReq{method: http.MethodGet, target: "/admin/roles/" + idBee + "/grant-value?grant_permission=" + idPMotd, htmx: true}.do(),
-		"user rows":   adminReq{method: http.MethodGet, target: "/admin/users/rows", htmx: true}.do(),
+		"grant value": pageReq{method: http.MethodGet, target: "/admin/roles/" + idBee + "/grant-value?grant_permission=" + idPMotd, htmx: true}.do(),
+		"user rows":   pageReq{method: http.MethodGet, target: "/admin/users/rows", htmx: true}.do(),
 	}
 	f.on("GET /permissions", 200, permissionsJSON)
 	cases["permission delete"] = action(http.MethodDelete, "/admin/permissions/"+idPStore, nil)
@@ -660,7 +660,7 @@ func TestAdminErrorsEmptyTheStatusLineOfTheEditorTheyCameFrom(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			f := newFakeAdmin(t)
+			f := newFakeBackend(t)
 			f.problem(tc.route, 409, "refused")
 			form := url.Values{"username": {"robert"}, "loaded_username": {"bob"}, "name": {"x"}}
 			rec := action(tc.method, tc.target, form)
@@ -677,7 +677,7 @@ func TestAdminErrorsEmptyTheStatusLineOfTheEditorTheyCameFrom(t *testing.T) {
 }
 
 func TestAdminActionRefusesAFormThatCannotBeRead(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	req := httptest.NewRequest(http.MethodPost, "/admin/roles", strings.NewReader("name=%zz"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("HX-Request", "true")
@@ -691,7 +691,7 @@ func TestAdminActionRefusesAFormThatCannotBeRead(t *testing.T) {
 }
 
 func TestAdminDeleteReadsItsFormFromTheQuery(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedRoleEditor(f)
 	f.on("DELETE /roles/"+idBee+"/permissions/"+idPBee, 204, ``)
 	target := "/admin/roles/" + idBee + "/permissions/" + idPBee + "?grant_permission=" + idPMotd + "&grant_value=from+query"
@@ -701,7 +701,7 @@ func TestAdminDeleteReadsItsFormFromTheQuery(t *testing.T) {
 func TestBeeAdminLinkShowsForTheBeeAdminPermission(t *testing.T) {
 	for _, permissions := range []string{`["beenamegenerator.admin"]`, `["ratelimit:5","beenamegenerator.admin:1"]`} {
 		t.Run(permissions, func(t *testing.T) {
-			f := newFakeAdmin(t)
+			f := newFakeBackend(t)
 			f.on("GET /users/me/permissions", 200, permissions)
 			rec := getPage("/project/bee-name-generator/admin-link")
 			assertStatus(t, rec, http.StatusOK)
@@ -713,7 +713,7 @@ func TestBeeAdminLinkShowsForTheBeeAdminPermission(t *testing.T) {
 func TestBeeAdminLinkIsEmptyWithoutTheBeeAdminPermission(t *testing.T) {
 	for _, permissions := range []string{`[]`, `["users.admin","roles.admin"]`, `["beenamegenerator|*"]`, `["beenamegenerator.administrator"]`, `["xbeenamegenerator.admin"]`} {
 		t.Run(permissions, func(t *testing.T) {
-			f := newFakeAdmin(t)
+			f := newFakeBackend(t)
 			f.on("GET /users/me/permissions", 200, permissions)
 			rec := getPage("/project/bee-name-generator/admin-link")
 			assertStatus(t, rec, http.StatusOK)
@@ -725,7 +725,7 @@ func TestBeeAdminLinkIsEmptyWithoutTheBeeAdminPermission(t *testing.T) {
 }
 
 func TestBeeAdminLinkIsEmptyWhenThePermissionsCannotBeRead(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.problem("GET /users/me/permissions", 500, "down")
 	rec := getPage("/project/bee-name-generator/admin-link")
 	assertStatus(t, rec, http.StatusOK)
@@ -741,7 +741,7 @@ func TestBeeNameGeneratorPageLoadsTheAdminLinkThroughHTMX(t *testing.T) {
 }
 
 func TestShellsHaveATitleEach(t *testing.T) {
-	newFakeAdmin(t)
+	newFakeBackend(t)
 	cases := []struct{ target, title string }{
 		{"/admin", "Admin - NeuralNexus"},
 		{"/admin/users", "Users - NeuralNexus"},
@@ -761,7 +761,7 @@ func TestShellsHaveATitleEach(t *testing.T) {
 }
 
 func TestPagesHaveLandmarksAndASkipLink(t *testing.T) {
-	newFakeAdmin(t)
+	newFakeBackend(t)
 	for _, target := range []string{"/", "/login", "/register", "/admin", "/account"} {
 		t.Run(target, func(t *testing.T) {
 			rec := getPage(target)
@@ -778,7 +778,7 @@ func TestPagesHaveLandmarksAndASkipLink(t *testing.T) {
 }
 
 func TestToggleIsASwitchWithAVisibleFocusRing(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	seedAccount(f)
 	f.on("GET /users/me/permissions", 200, `[]`)
 	rec := getPage("/account/content")

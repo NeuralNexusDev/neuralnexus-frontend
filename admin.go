@@ -20,14 +20,14 @@ func noStoreHandler(next http.Handler) http.Handler {
 	})
 }
 
-var adminRequestTimeout = 30 * time.Second
+var pageRequestTimeout = 30 * time.Second
 
-func adminRoute(handler func(http.ResponseWriter, *http.Request, adminAPI)) http.Handler {
+func pageRoute(handler func(http.ResponseWriter, *http.Request, apiSession)) http.Handler {
 	return noStoreHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), adminRequestTimeout)
+		ctx, cancel := context.WithTimeout(r.Context(), pageRequestTimeout)
 		defer cancel()
 		r = r.WithContext(ctx)
-		handler(w, r, adminAPI{r: r})
+		handler(w, r, apiSession{r: r})
 	}))
 }
 
@@ -54,9 +54,9 @@ func requireHTMXForWrites(mux *http.ServeMux) http.Handler {
 	})
 }
 
-// adminAction requires the HX-Request header, which a cross-site form cannot send.
-func adminAction(handler func(http.ResponseWriter, *http.Request, adminAPI)) http.Handler {
-	return adminRoute(func(w http.ResponseWriter, r *http.Request, a adminAPI) {
+// pageAction requires the HX-Request header, which a cross-site form cannot send.
+func pageAction(handler func(http.ResponseWriter, *http.Request, apiSession)) http.Handler {
+	return pageRoute(func(w http.ResponseWriter, r *http.Request, a apiSession) {
 		if r.Header.Get("HX-Request") != "true" {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
@@ -70,19 +70,19 @@ func adminAction(handler func(http.ResponseWriter, *http.Request, adminAPI)) htt
 }
 
 func errorStatus(err error) (int, string) {
-	var failure *adminError
+	var failure *apiError
 	if errors.As(err, &failure) {
 		return failure.Status, failure.Message
 	}
 	return http.StatusInternalServerError, "Something went wrong"
 }
 
-// adminShell is not cached, so a page left open after sign-out is not restored with what it loaded.
-func adminShell(page templ.Component) http.Handler {
+// shell is not cached, so a page left open after sign-out is not restored with what it loaded.
+func shell(page templ.Component) http.Handler {
 	return noStoreHandler(templ.Handler(page))
 }
 
-func adminShellFor(page func(id string) templ.Component) http.Handler {
+func shellFor(page func(id string) templ.Component) http.Handler {
 	return noStoreHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		templ.Handler(page(r.PathValue("id"))).ServeHTTP(w, r)
 	}))
@@ -98,25 +98,25 @@ func failFragment(w http.ResponseWriter, r *http.Request, err error, restore ...
 	if status >= http.StatusInternalServerError {
 		logFailure(r, status, err)
 	}
-	w.Header().Set("HX-Retarget", "#admin-error")
+	w.Header().Set("HX-Retarget", "#page-error")
 	w.Header().Set("HX-Reswap", "innerHTML")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	render(w, r, append([]templ.Component{components.AdminErrorText(message)}, restore...)...)
+	render(w, r, append([]templ.Component{components.ErrorText(message)}, restore...)...)
 }
 
 func failEditor(w http.ResponseWriter, r *http.Request, statusID string, err error, restore ...templ.Component) {
-	failFragment(w, r, err, append([]templ.Component{components.AdminStatus(statusID, "")}, restore...)...)
+	failFragment(w, r, err, append([]templ.Component{components.StatusLine(statusID, "")}, restore...)...)
 }
 
 func nothingToSave(w http.ResponseWriter, r *http.Request, statusID string) {
 	w.Header().Set("HX-Reswap", "none")
-	renderAll(w, r, components.AdminStatus(statusID, "Nothing to save"))
+	renderAll(w, r, components.StatusLine(statusID, "Nothing to save"))
 }
 
 // fieldRefusal returns the API's message when it refused input that the user can correct.
 func fieldRefusal(err error) string {
-	var failure *adminError
+	var failure *apiError
 	if errors.As(err, &failure) {
 		switch failure.Status {
 		case http.StatusBadRequest, http.StatusConflict, http.StatusUnprocessableEntity:
@@ -130,7 +130,7 @@ func logFailure(r *http.Request, status int, err error) {
 	if errors.Is(r.Context().Err(), context.Canceled) {
 		return
 	}
-	var failure *adminError
+	var failure *apiError
 	call := ""
 	if errors.As(err, &failure) {
 		call = failure.Method + " " + failure.Path
@@ -152,7 +152,7 @@ func render(w http.ResponseWriter, r *http.Request, parts ...templ.Component) {
 
 func renderAll(w http.ResponseWriter, r *http.Request, parts ...templ.Component) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	render(w, r, append(parts, components.AdminErrorClear())...)
+	render(w, r, append(parts, components.ErrorClear())...)
 }
 
 func redirectHTMX(w http.ResponseWriter, location string) {
@@ -180,9 +180,9 @@ func secondary(err error) (string, error) {
 	return message, nil
 }
 
-func permissionLink(link templ.Component, nodes ...string) func(http.ResponseWriter, *http.Request, adminAPI) {
-	return func(w http.ResponseWriter, r *http.Request, a adminAPI) {
-		permissions, err := adminGet[[]string](a, "/users/me/permissions", loadYourPermsFailed)
+func permissionLink(link templ.Component, nodes ...string) func(http.ResponseWriter, *http.Request, apiSession) {
+	return func(w http.ResponseWriter, r *http.Request, a apiSession) {
+		permissions, err := apiGet[[]string](a, "/users/me/permissions", loadYourPermsFailed)
 		if err != nil {
 			return
 		}
@@ -195,8 +195,8 @@ func permissionLink(link templ.Component, nodes ...string) func(http.ResponseWri
 	}
 }
 
-func adminCardsHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
-	permissions, err := adminGet[[]string](a, "/users/me/permissions", loadYourPermsFailed)
+func adminCardsHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
+	permissions, err := apiGet[[]string](a, "/users/me/permissions", loadYourPermsFailed)
 	if err != nil {
 		failFragment(w, r, err)
 		return
@@ -212,8 +212,8 @@ func afterWrite(err error) error {
 		return err
 	}
 	status, message := errorStatus(err)
-	wrapped := &adminError{Status: status, Message: "The change was made, but the page could not be refreshed: " + message, Err: err}
-	var failure *adminError
+	wrapped := &apiError{Status: status, Message: "The change was made, but the page could not be refreshed: " + message, Err: err}
+	var failure *apiError
 	if errors.As(err, &failure) {
 		wrapped.Method, wrapped.Path = failure.Method, failure.Path
 	}
@@ -224,5 +224,5 @@ func rowGone(prefix string, id string) []templ.Component {
 	if id == "" || strings.Trim(id, "0123456789") != "" {
 		return nil
 	}
-	return []templ.Component{components.AdminRowGone(prefix + id)}
+	return []templ.Component{components.RowGone(prefix + id)}
 }

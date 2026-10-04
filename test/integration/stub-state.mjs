@@ -139,7 +139,7 @@ const NODE = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$/;
  * A seeded failure answers "METHOD /path" with its status and detail after letting `skip` calls through, `times` times (default always).
  * A seeded delay holds the answer to "METHOD /path" for that many milliseconds.
  */
-export async function handleAdmin(req, res, pathname, searchParams) {
+export async function handleState(req, res, pathname, searchParams) {
   const cookie = /(?:^|;\s*)session=([^;]+)/.exec(req.headers.cookie || '');
   if (!cookie) {
     return problem(res, 401, 'Sign in to continue');

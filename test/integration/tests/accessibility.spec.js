@@ -21,9 +21,9 @@ for (const colorScheme of ['light', 'dark']) {
       await page.goto('/admin/roles');
       await expect(page.locator('#admin-role-create-name')).toBeVisible();
       await page.evaluate(() => {
-        document.getElementById('admin-error').textContent = 'Something went wrong';
+        document.getElementById('page-error').textContent = 'Something went wrong';
       });
-      const banner = page.locator('#admin-error');
+      const banner = page.locator('#page-error');
       const page_ = await pageBackground(page);
       const background = blend(await rgba(page, await computed(banner, 'backgroundColor')), page_);
       const text = await rgba(page, await computed(banner, 'color'));
@@ -99,10 +99,10 @@ test.describe('accessibility - page structure', () => {
     await signIn(page);
     await page.goto('/admin/roles');
     await expect(page.locator('#admin-role-create-name')).toBeVisible();
-    const box = await page.locator('#admin-error').boundingBox();
+    const box = await page.locator('#page-error').boundingBox();
     expect(box.height).toBe(0);
-    expect(await computed(page.locator('#admin-error'), 'marginBottom')).toBe('0px');
-    await expect(page.locator('#admin-error')).toHaveAttribute('role', 'alert');
+    expect(await computed(page.locator('#page-error'), 'marginBottom')).toBe('0px');
+    await expect(page.locator('#page-error')).toHaveAttribute('role', 'alert');
   });
 
   test('a shell announces that its content is loading and then loaded through a live region that is already on the page', async ({ page }) => {

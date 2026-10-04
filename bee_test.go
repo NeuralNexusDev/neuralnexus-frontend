@@ -9,7 +9,7 @@ import (
 )
 
 func TestBeeSuggestionsListThePendingNames(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /bee-name-generator/suggestion/100", 200, `{"suggestions":["buzz","honey"]}`)
 	rec := getPage("/project/bee-name-generator/admin/suggestions")
 	assertStatus(t, rec, http.StatusOK)
@@ -22,7 +22,7 @@ func TestBeeSuggestionsListThePendingNames(t *testing.T) {
 }
 
 func TestBeeSuggestionsEmpty(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /bee-name-generator/suggestion/100", 200, `{"suggestions":[]}`)
 	assertBody(t, getPage("/project/bee-name-generator/admin/suggestions"), `id="bee-suggestions-empty"`, "No pending suggestions")
 	f.on("GET /bee-name-generator/suggestion/100", 200, `{}`)
@@ -30,7 +30,7 @@ func TestBeeSuggestionsEmpty(t *testing.T) {
 }
 
 func TestBeeSuggestionsRefusedShowsTheAPIMessage(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.problem("GET /bee-name-generator/suggestion/100", 403, "You do not have permission to review suggestions")
 	rec := getPage("/project/bee-name-generator/admin/suggestions")
 	assertStatus(t, rec, http.StatusForbidden)
@@ -40,7 +40,7 @@ func TestBeeSuggestionsRefusedShowsTheAPIMessage(t *testing.T) {
 }
 
 func TestBeeSuggestionsEscapeTheNames(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("GET /bee-name-generator/suggestion/100", 200, fmt.Sprintf(`{"suggestions":[%q]}`, hostile))
 	rec := getPage("/project/bee-name-generator/admin/suggestions")
 	assertNoBody(t, rec, "<img src=x")
@@ -48,7 +48,7 @@ func TestBeeSuggestionsEscapeTheNames(t *testing.T) {
 }
 
 func TestBeeSuggestionsSignedOutRedirectsToLogin(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.problem("GET /bee-name-generator/suggestion/100", 401, "sign in")
 	rec := getPage("/project/bee-name-generator/admin/suggestions")
 	if got := rec.Header().Get("HX-Redirect"); got != "/login" {
@@ -72,7 +72,7 @@ func TestBeeReviewAcceptsAndRejectsByName(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.action+" "+tc.name, func(t *testing.T) {
-			f := newFakeAdmin(t)
+			f := newFakeBackend(t)
 			f.on("PUT /bee-name-generator/suggestion/"+url.PathEscape(tc.name), 200, ``)
 			f.on("DELETE /bee-name-generator/suggestion/"+url.PathEscape(tc.name), 204, ``)
 			f.on("GET /bee-name-generator/suggestion/100", 200, `{"suggestions":["honey"]}`)
@@ -98,7 +98,7 @@ func TestBeeReviewRefusesWhatCannotBeSent(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			f := newFakeAdmin(t)
+			f := newFakeBackend(t)
 			rec := reviewBee(tc.form)
 			assertStatus(t, rec, http.StatusBadRequest)
 			if got := bannerText(rec); got != tc.want {
@@ -110,7 +110,7 @@ func TestBeeReviewRefusesWhatCannotBeSent(t *testing.T) {
 }
 
 func TestBeeReviewRefusedShowsTheAPIMessage(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.problem("PUT /bee-name-generator/suggestion/buzz", 403, "no")
 	rec := reviewBee(url.Values{"name": {"buzz"}, "action": {"accept"}})
 	assertStatus(t, rec, http.StatusForbidden)
@@ -120,7 +120,7 @@ func TestBeeReviewRefusedShowsTheAPIMessage(t *testing.T) {
 }
 
 func TestBeeReviewReloadFailureIsNotReportedAsAFailedReview(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	f.on("DELETE /bee-name-generator/suggestion/buzz", 204, ``)
 	f.problem("GET /bee-name-generator/suggestion/100", 500, "down")
 	rec := reviewBee(url.Values{"name": {"buzz"}, "action": {"reject"}})
@@ -131,10 +131,10 @@ func TestBeeReviewReloadFailureIsNotReportedAsAFailedReview(t *testing.T) {
 }
 
 func TestBeeAdminPageIsAShell(t *testing.T) {
-	f := newFakeAdmin(t)
+	f := newFakeBackend(t)
 	rec := getPage("/project/bee-name-generator/admin")
 	assertStatus(t, rec, http.StatusOK)
-	assertBody(t, rec, `hx-get="/project/bee-name-generator/admin/suggestions"`, `hx-trigger="load"`, "htmx/v4.0.0/htmx.min.js", `id="admin-error"`)
+	assertBody(t, rec, `hx-get="/project/bee-name-generator/admin/suggestions"`, `hx-trigger="load"`, "htmx/v4.0.0/htmx.min.js", `id="page-error"`)
 	assertNoBody(t, rec, "loadBeeSuggestions")
 	if len(f.uris()) != 0 {
 		t.Errorf("the shell called the API: %v", f.uris())

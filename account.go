@@ -16,15 +16,15 @@ func accountPlatform(id string) (components.AccountPlatform, bool) {
 	return components.AccountPlatforms[index], true
 }
 
-func loadAccountSettings(a adminAPI) (components.AccountSettingsData, error) {
-	settings, err := adminGet[struct {
+func loadAccountSettings(a apiSession) (components.AccountSettingsData, error) {
+	settings, err := apiGet[struct {
 		PasswordAuth bool `json:"password_auth"`
 	}](a, "/users/me/settings", "Failed to load account settings")
 	return components.AccountSettingsData{PasswordAuth: settings.PasswordAuth}, err
 }
 
-func loadAccountLinks(a adminAPI) (map[string]components.LinkedAccount, error) {
-	links, err := adminGet[[]components.LinkedAccount](a, "/users/me/links", "Failed to load linked accounts")
+func loadAccountLinks(a apiSession) (map[string]components.LinkedAccount, error) {
+	links, err := apiGet[[]components.LinkedAccount](a, "/users/me/links", "Failed to load linked accounts")
 	byPlatform := make(map[string]components.LinkedAccount, len(links))
 	for _, link := range links {
 		byPlatform[link.Platform] = link
@@ -32,8 +32,8 @@ func loadAccountLinks(a adminAPI) (map[string]components.LinkedAccount, error) {
 	return byPlatform, err
 }
 
-func accountContentHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
-	account, err := adminGet[struct {
+func accountContentHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
+	account, err := apiGet[struct {
 		Username string `json:"username"`
 	}](a, "/users/me", "Failed to load your account")
 	if err != nil {
@@ -53,15 +53,15 @@ func accountContentHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
 			return
 		}
 	}
-	permissions, _ := adminGet[[]string](a, "/users/me/permissions", loadYourPermsFailed)
+	permissions, _ := apiGet[[]string](a, "/users/me/permissions", loadYourPermsFailed)
 	data.AdminLink = hasPermission(permissions, "users.admin") || hasPermission(permissions, "roles.admin")
 	renderAll(w, r, components.AccountContent(data))
 }
 
-func accountSettingsHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
+func accountSettingsHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
 	enabled := r.Form.Get("password_auth") == "true"
 	body := map[string]bool{"password_auth": enabled}
-	if _, err := adminSend[struct{}](a, http.MethodPatch, "/users/me/settings", body, "Failed to update account settings"); err != nil {
+	if _, err := apiSend[struct{}](a, http.MethodPatch, "/users/me/settings", body, "Failed to update account settings"); err != nil {
 		failFragment(w, r, err, components.AccountPasswordLogin(components.AccountSettingsData{PasswordAuth: !enabled}, true))
 		return
 	}
@@ -73,7 +73,7 @@ func accountSettingsHandler(w http.ResponseWriter, r *http.Request, a adminAPI) 
 	renderAll(w, r, components.AccountPasswordLogin(data, false))
 }
 
-func accountLinkRow(w http.ResponseWriter, r *http.Request, a adminAPI, platform components.AccountPlatform) {
+func accountLinkRow(w http.ResponseWriter, r *http.Request, a apiSession, platform components.AccountPlatform) {
 	links, err := loadAccountLinks(a)
 	if err != nil {
 		failFragment(w, r, afterWrite(err))
@@ -83,28 +83,28 @@ func accountLinkRow(w http.ResponseWriter, r *http.Request, a adminAPI, platform
 	renderAll(w, r, components.AccountLinkRow(platform, link, linked, false))
 }
 
-func accountLinkHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
+func accountLinkHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
 	platform, ok := accountPlatform(r.PathValue("platform"))
 	if !ok {
-		failFragment(w, r, &adminError{Status: http.StatusNotFound, Message: unknownPlatform})
+		failFragment(w, r, &apiError{Status: http.StatusNotFound, Message: unknownPlatform})
 		return
 	}
 	enabled := r.Form.Get("login_enabled") == "true"
 	body := map[string]bool{"login_enabled": enabled}
-	if _, err := adminSend[struct{}](a, http.MethodPatch, "/users/me/link/"+url.PathEscape(platform.ID), body, "Failed to update platform"); err != nil {
+	if _, err := apiSend[struct{}](a, http.MethodPatch, "/users/me/link/"+url.PathEscape(platform.ID), body, "Failed to update platform"); err != nil {
 		failFragment(w, r, err, components.AccountLoginInput(platform, !enabled, false, true))
 		return
 	}
 	accountLinkRow(w, r, a, platform)
 }
 
-func accountUnlinkHandler(w http.ResponseWriter, r *http.Request, a adminAPI) {
+func accountUnlinkHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
 	platform, ok := accountPlatform(r.PathValue("platform"))
 	if !ok {
-		failFragment(w, r, &adminError{Status: http.StatusNotFound, Message: unknownPlatform})
+		failFragment(w, r, &apiError{Status: http.StatusNotFound, Message: unknownPlatform})
 		return
 	}
-	if _, err := adminSend[struct{}](a, http.MethodDelete, "/users/me/link/"+url.PathEscape(platform.ID), nil, "Failed to unlink platform"); err != nil {
+	if _, err := apiSend[struct{}](a, http.MethodDelete, "/users/me/link/"+url.PathEscape(platform.ID), nil, "Failed to unlink platform"); err != nil {
 		failFragment(w, r, err)
 		return
 	}

@@ -1,6 +1,6 @@
 import http from 'node:http';
 import net from 'node:net';
-import { handleAdmin, handleControl } from './stub-admin.mjs';
+import { handleState, handleControl } from './stub-state.mjs';
 
 const PNG_1X1 = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
@@ -82,7 +82,7 @@ http
       return;
     }
     if (/^\/api\/v1\/(users|roles|permissions|bee-name-generator\/suggestion)(\/|$)/.test(pathname)) {
-      await handleAdmin(req, res, pathname, searchParams);
+      await handleState(req, res, pathname, searchParams);
       return;
     }
     received.push(req.url);

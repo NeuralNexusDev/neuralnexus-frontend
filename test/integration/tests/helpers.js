@@ -9,7 +9,7 @@ export const APP = process.env.BASE_URL || 'http://localhost:8099';
 const HTMX_CDN = 'https://s3.neuralnexus.dev/cdn/htmx/v4.0.0/htmx.min.js';
 const HTMX_FILE = fileURLToPath(new URL('../node_modules/htmx.org/dist/htmx.min.js', import.meta.url));
 
-// Snowflake-sized IDs, above 2^53, matching the ones stub-admin.mjs seeds.
+// Snowflake-sized IDs, above 2^53, matching the ones stub-state.mjs seeds.
 export const ID = {
   system: '3541025163146757610',
   owner: '3541025163146757620',
@@ -54,7 +54,7 @@ export async function expectNoInjection(page) {
   expect(await page.evaluate(() => window.__xss)).toBeUndefined();
 }
 
-export const error = (page) => page.locator('#admin-error');
+export const error = (page) => page.locator('#page-error');
 
 /** Resolves any CSS color the browser computes, including oklch and color-mix results, to [r, g, b, a] with a in 0 to 1. */
 export async function rgba(page, cssColor) {

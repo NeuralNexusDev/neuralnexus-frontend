@@ -41,7 +41,7 @@ test.describe('admin - user list', () => {
     await page.addInitScript(() => {
       window.__banner = [];
       new MutationObserver(() => {
-        const text = document.getElementById('admin-error')?.textContent;
+        const text = document.getElementById('page-error')?.textContent;
         if (text) window.__banner.push(text);
       }).observe(document, { subtree: true, childList: true, characterData: true });
     });
