@@ -3,6 +3,7 @@
     const requests = new WeakMap();
     const regions = new WeakMap();
     const elementRequests = new WeakMap();
+    const latestRequests = new WeakMap();
 
     const showBanner = (text) => {
         const banner = document.getElementById('page-error');
@@ -54,6 +55,7 @@
         const region = event.target.closest?.('[data-busy-region]');
         const request = { start: performance.now(), element: event.target, region, values: null, typed: new Map(), active: null, dropped: false };
         requests.set(event.detail.ctx, request);
+        latestRequests.set(event.target, request);
         markBusy(event.target);
         if (event.target.dataset.pageLoad !== undefined) {
             setPageStatus('Loading…');
@@ -67,8 +69,14 @@
         }
     });
 
+    // htmx 4.0.0 aborts a request that hx-sync replaces only while it is the current one, so a third request
+    // leaves the second running and its answer can land after the third's.
     document.addEventListener('htmx:before:swap', (event) => {
         const request = requests.get(event.detail.ctx);
+        if (request && latestRequests.get(request.element) !== request && request.element.getAttribute('hx-sync')?.endsWith(':replace')) {
+            event.preventDefault();
+            return;
+        }
         if (!request?.region) {
             return;
         }

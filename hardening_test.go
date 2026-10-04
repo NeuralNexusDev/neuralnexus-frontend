@@ -299,3 +299,16 @@ func TestUserListTellsHowManyUsersEachResponseHolds(t *testing.T) {
 	rec = pageReq{method: http.MethodGet, target: "/admin/users/rows?offset=200&search=u", htmx: true}.do()
 	assertBody(t, rec, "more users. Searched the first ")
 }
+
+func TestTheGlueScriptLoadsBeforeHTMX(t *testing.T) {
+	newFakeBackend(t)
+	for _, target := range []string{"/admin", "/account", "/project/bee-name-generator"} {
+		t.Run(target, func(t *testing.T) {
+			body := getPage(target).Body.String()
+			glue, htmx := strings.Index(body, `src="/public/js/htmx-glue.js"`), strings.Index(body, "htmx.min.js")
+			if glue < 0 || htmx < 0 || glue > htmx {
+				t.Errorf("htmx-glue.js at %d, htmx.min.js at %d, want the glue first so it hears the first request", glue, htmx)
+			}
+		})
+	}
+}

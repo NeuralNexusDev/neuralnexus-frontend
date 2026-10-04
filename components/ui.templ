@@ -41,8 +41,8 @@ var (
 
 templ htmxHead() {
 	<meta name="htmx-config" content={ htmxConfig }/>
-	<script src={ htmxURL } integrity={ htmxIntegrity } crossorigin="anonymous" defer></script>
 	<script src="/public/js/htmx-glue.js" defer></script>
+	<script src={ htmxURL } integrity={ htmxIntegrity } crossorigin="anonymous" defer></script>
 }
 
 templ htmxPage(title string, contents templ.Component) {
