@@ -195,6 +195,57 @@ func TestAPanicInAHandlerAnswers500AndLogsWhereItHappened(t *testing.T) {
 	}
 }
 
+func TestAPanicLogsTheRequestIDThatTheRequestCarries(t *testing.T) {
+	buf := captureLog(t)
+	handler := mw.CreateStack(mw.RecoveryMiddleware, mw.RequestIDMiddleware)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		panic("broken handler")
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/boom", nil)
+	req.Header.Set(mw.XRequestIDHeader, "424242")
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+	if !strings.Contains(buf.String(), "panic serving GET /boom: request_id=424242 broken handler") {
+		t.Errorf("the log line does not carry the request ID:\n%s", buf.String())
+	}
+
+	buf.Reset()
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/boom", nil))
+	if !strings.Contains(buf.String(), "request_id=") || strings.Contains(buf.String(), "request_id=N/A") {
+		t.Errorf("the log line does not carry a generated request ID:\n%s", buf.String())
+	}
+}
+
+func TestAPanicAfterTheHeaderLeavesTheResponseAlone(t *testing.T) {
+	cases := []struct {
+		name       string
+		handler    func(w http.ResponseWriter)
+		wantStatus int
+		wantBody   string
+	}{
+		{"before anything is written", func(http.ResponseWriter) {}, http.StatusInternalServerError, "Internal Server Error\n"},
+		{"after the body started", func(w http.ResponseWriter) { _, _ = w.Write([]byte("partial")) }, http.StatusOK, "partial"},
+		{"after the header", func(w http.ResponseWriter) { w.WriteHeader(http.StatusCreated) }, http.StatusCreated, ""},
+		{"after a redirect", func(w http.ResponseWriter) { w.Header().Set("HX-Redirect", "/x"); w.WriteHeader(http.StatusOK) }, http.StatusOK, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			buf := captureLog(t)
+			handler := mw.RecoveryMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				tc.handler(w)
+				panic("broken handler")
+			}))
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/boom", nil))
+			assertStatus(t, rec, tc.wantStatus)
+			if got := rec.Body.String(); got != tc.wantBody {
+				t.Errorf("body = %q, want %q", got, tc.wantBody)
+			}
+			if !strings.Contains(buf.String(), "panic serving GET /boom") {
+				t.Errorf("the panic was not logged:\n%s", buf.String())
+			}
+		})
+	}
+}
+
 func TestLinksRenderTheirPaths(t *testing.T) {
 	f := newFakeBackend(t)
 	f.on("GET /users", 200, usersJSON)
@@ -277,6 +328,111 @@ func TestRefusedUsernamesFlagTheUsernameField(t *testing.T) {
 	})
 }
 
+func TestRefusedRoleNamesFlagTheNameField(t *testing.T) {
+	roleForm := func(name string) url.Values {
+		return url.Values{"loaded_name": {"bee_admin"}, "name": {name}, "loaded_description": {"Bee Name Generator Admin"}, "description": {"Bee Name Generator Admin"}}
+	}
+	t.Run("emptied", func(t *testing.T) {
+		newFakeBackend(t)
+		rec := action(http.MethodPost, "/admin/roles/"+idBee, roleForm("  "))
+		assertStatus(t, rec, http.StatusBadRequest)
+		assertBody(t, rec, `id="admin-role-name-field" hx-swap-oob="true"`, `aria-invalid="true"`, ` autofocus`,
+			`aria-describedby="admin-role-name-error"`, `<p id="admin-role-name-error"`, ">Enter a name</p>")
+	})
+	t.Run("taken", func(t *testing.T) {
+		f := newFakeBackend(t)
+		f.problem("PATCH /roles/"+idBee, 409, "A role with this name already exists")
+		rec := action(http.MethodPost, "/admin/roles/"+idBee, roleForm("owner"))
+		assertStatus(t, rec, http.StatusConflict)
+		assertBody(t, rec, `id="admin-role-name-field" hx-swap-oob="true"`, `aria-invalid="true"`, ` autofocus`,
+			`value="owner"`, ">A role with this name already exists</p>")
+	})
+	t.Run("a refused description change leaves the name field alone", func(t *testing.T) {
+		f := newFakeBackend(t)
+		f.problem("PATCH /roles/"+idBee, 409, "That description is reserved")
+		form := roleForm("bee_admin")
+		form.Set("description", "changed")
+		rec := action(http.MethodPost, "/admin/roles/"+idBee, form)
+		assertStatus(t, rec, http.StatusConflict)
+		assertNoBody(t, rec, `admin-role-name-field`, `aria-invalid`)
+	})
+	t.Run("a failure on the server leaves the name field alone", func(t *testing.T) {
+		f := newFakeBackend(t)
+		f.problem("PATCH /roles/"+idBee, 500, "database down")
+		captureLog(t)
+		rec := action(http.MethodPost, "/admin/roles/"+idBee, roleForm("owner"))
+		assertStatus(t, rec, http.StatusInternalServerError)
+		assertNoBody(t, rec, `admin-role-name-field`, `aria-invalid`)
+	})
+}
+
+func TestFailedAPICallsLogTheRouteNotTheValuesInThePath(t *testing.T) {
+	t.Run("a bee review", func(t *testing.T) {
+		for _, name := range []string{"Zq9-distinctive-name", "Zq9 distinctive/name?", "Zq9%distinctive"} {
+			for _, choice := range []string{"accept", "reject"} {
+				f := newFakeBackend(t)
+				f.problem("PUT /bee-name-generator/suggestion/"+url.PathEscape(name), 502, "the API is down")
+				f.problem("DELETE /bee-name-generator/suggestion/"+url.PathEscape(name), 502, "the API is down")
+				buf := captureLog(t)
+				rec := reviewBee(url.Values{"name": {name}, "action": {choice}})
+				assertStatus(t, rec, http.StatusBadGateway)
+				want := map[string]string{"accept": "PUT", "reject": "DELETE"}[choice] + " /bee-name-generator/suggestion/{name}"
+				if !strings.Contains(buf.String(), `api="`+want+`"`) {
+					t.Errorf("%s %q: the log is missing the route %q:\n%s", choice, name, want, buf.String())
+				}
+				if strings.Contains(buf.String(), "Zq9") || strings.Contains(buf.String(), "distinctive") {
+					t.Errorf("%s %q: the log holds the name:\n%s", choice, name, buf.String())
+				}
+			}
+		}
+	})
+	t.Run("an ID in the address", func(t *testing.T) {
+		f := newFakeBackend(t)
+		f.problem("PUT /users/"+idBob, 500, "database down")
+		buf := captureLog(t)
+		assertStatus(t, saveUser(userForm(url.Values{"username": {"robert"}})), http.StatusInternalServerError)
+		failure, _, _ := strings.Cut(buf.String(), "\n")
+		if !strings.Contains(failure, `api="PUT /users/{id}"`) || strings.Contains(failure, idBob) {
+			t.Errorf("the failure line names the route or holds the ID:\n%s", failure)
+		}
+	})
+}
+
+func TestAPIRoutesNameEveryCallTheHandlersMake(t *testing.T) {
+	cases := []struct{ method, path, want string }{
+		{"GET", "/users?limit=200&offset=0", "GET /users"},
+		{"GET", "/users/" + idBob, "GET /users/{id}"},
+		{"PUT", "/users/" + idBob, "PUT /users/{id}"},
+		{"GET", "/users/" + idBob + "/links", "GET /users/{id}/links"},
+		{"GET", "/users/" + idBob + "/permissions", "GET /users/{id}/permissions"},
+		{"GET", "/users/me/links", "GET /users/me/links"},
+		{"GET", "/users/me/permissions", "GET /users/me/permissions"},
+		{"PATCH", "/users/me/settings", "PATCH /users/me/settings"},
+		{"PATCH", "/users/me/link/discord", "PATCH /users/me/link/{platform}"},
+		{"DELETE", "/users/me/link/discord", "DELETE /users/me/link/{platform}"},
+		{"GET", "/roles", "GET /roles"},
+		{"POST", "/roles", "POST /roles"},
+		{"GET", "/roles/" + idBee, "GET /roles/{id}"},
+		{"PATCH", "/roles/" + idBee, "PATCH /roles/{id}"},
+		{"DELETE", "/roles/" + idBee, "DELETE /roles/{id}"},
+		{"PUT", "/roles/" + idBee + "/permissions/" + idPBee, "PUT /roles/{id}/permissions/{permission}"},
+		{"DELETE", "/roles/" + idBee + "/permissions/" + idPBee, "DELETE /roles/{id}/permissions/{permission}"},
+		{"GET", "/permissions", "GET /permissions"},
+		{"POST", "/permissions", "POST /permissions"},
+		{"DELETE", "/permissions/" + idPBee, "DELETE /permissions/{id}"},
+		{"GET", "/bee-name-generator/suggestion/100", "GET /bee-name-generator/suggestion/{limit}"},
+		{"PUT", "/bee-name-generator/suggestion/royal%20jelly%2Fqueen%3F", "PUT /bee-name-generator/suggestion/{name}"},
+		{"DELETE", "/bee-name-generator/suggestion/100%25", "DELETE /bee-name-generator/suggestion/{name}"},
+		{"GET", "/somewhere/Zq9", "GET unlisted"},
+		{"TRACE", "/roles", "TRACE unlisted"},
+	}
+	for _, tc := range cases {
+		if got := apiRoute(tc.method, tc.path); got != tc.want {
+			t.Errorf("apiRoute(%s %s) = %q, want %q", tc.method, tc.path, got, tc.want)
+		}
+	}
+}
+
 func TestFieldHelpIsTiedToItsInput(t *testing.T) {
 	f := newFakeBackend(t)
 	f.on("GET /roles", 200, `[]`)
@@ -290,7 +446,11 @@ func TestUserListTellsHowManyUsersEachResponseHolds(t *testing.T) {
 	f := newFakeBackend(t)
 	f.on("GET /users", 200, usersJSON)
 	f.on("GET /roles", 200, `[]`)
-	assertBody(t, getPage("/admin/users/list"), `id="admin-users-count" role="status"`, ">3 users</p>")
+	shell := getPage("/admin/users")
+	assertBody(t, shell, `id="admin-users-count" role="status" class="`)
+	assertBody(t, shell, `></p>`)
+	assertNoBody(t, shell, `users</p>`)
+	assertBody(t, getPage("/admin/users/list"), `id="admin-users-count" role="status" hx-swap-oob="innerHTML"`, ">3 users</p>")
 	rec := pageReq{method: http.MethodGet, target: "/admin/users/rows?search=bob", htmx: true}.do()
 	assertBody(t, rec, `id="admin-users-count" role="status" hx-swap-oob="innerHTML"`, ">1 user</p>")
 	rec = pageReq{method: http.MethodGet, target: "/admin/users/rows?search=zzz", htmx: true}.do()

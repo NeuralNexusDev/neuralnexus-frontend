@@ -133,7 +133,7 @@ func logFailure(r *http.Request, status int, err error) {
 	var failure *apiError
 	call := ""
 	if errors.As(err, &failure) {
-		call = failure.Method + " " + failure.Path
+		call = apiRoute(failure.Method, failure.Path)
 	}
 	cause := err
 	for errors.Unwrap(cause) != nil {

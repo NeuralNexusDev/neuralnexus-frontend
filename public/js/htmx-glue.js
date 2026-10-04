@@ -20,6 +20,15 @@
         }
     };
 
+    // The button or submit that started the action being handled, which is gone once the current event ends.
+    let trigger = null;
+    const noteTrigger = (button) => {
+        trigger = button;
+        setTimeout(() => {
+            trigger = null;
+        });
+    };
+
     const isChoice = (field) => field.type === 'checkbox' || field.type === 'radio';
     const fieldKey = (field) => (isChoice(field) ? `${field.name}=${field.value}` : field.name);
     const fieldState = (field) => (isChoice(field) ? field.checked : field.value);
@@ -53,8 +62,12 @@
 
     document.addEventListener('htmx:before:request', (event) => {
         const region = event.target.closest?.('[data-busy-region]');
-        const request = { start: performance.now(), element: event.target, region, values: null, typed: new Map(), active: null, dropped: false };
+        const request = { start: performance.now(), trigger, timedOut: () => performance.now() - request.start >= htmx.config.defaultTimeout - 100, element: event.target, region, values: null, typed: new Map(), active: null, dropped: false };
         requests.set(event.detail.ctx, request);
+        // htmx logs a rejection with a reason to the console and skips one without, and it aborts a replaced request
+        // and a timed-out one the same way. Only the timeout is an error, so a replacement aborts with a null reason.
+        const abort = event.detail.ctx.request.abort;
+        event.detail.ctx.request.abort = () => abort(request.timedOut() ? undefined : null);
         latestRequests.set(event.target, request);
         markBusy(event.target);
         if (event.target.dataset.pageLoad !== undefined) {
@@ -151,7 +164,13 @@
         }
         clearBusy(request.element);
         if (request.element.dataset.pageLoad !== undefined) {
-            setPageStatus('Loaded');
+            const { ctx } = event.detail;
+            if (ctx.response?.status < 400 && !ctx.status.startsWith('error')) {
+                setPageStatus('Loaded');
+            } else {
+                request.element.querySelector('p')?.remove();
+                setPageStatus('Failed to load');
+            }
         }
         const region = request.region;
         if (!region) {
@@ -199,17 +218,30 @@
 
     const busyRegionOf = (target) => target.closest?.('[data-busy-region][aria-busy="true"]');
 
-    const reportDropped = (event) => {
+    // A second action that repeats the first (the same button over the same field values) loses nothing when it is
+    // dropped, so only an action with a changed field or another button asks the person to make it again.
+    const carriesNewAction = (region, button) => {
+        const [first] = regionState(region).active;
+        return !first || button !== first.trigger || fieldsIn(region).some((field) => first.values.get(fieldKey(field)) !== fieldState(field));
+    };
+
+    const reportDropped = (event, changed = false) => {
         const region = busyRegionOf(event.target);
         if (region) {
-            regionState(region).dropped = true;
+            const button = event.type === 'submit' ? event.submitter : event.target.closest?.('button');
+            regionState(region).dropped ||= changed || carriesNewAction(region, button);
             showBanner('The last change is still being saved. Try again in a moment.');
         }
     };
-    document.addEventListener('submit', reportDropped, true);
+    document.addEventListener('submit', (event) => {
+        reportDropped(event);
+        noteTrigger(event.submitter);
+    }, true);
     document.addEventListener('click', (event) => {
-        if (event.target.closest?.('button')) {
+        const button = event.target.closest?.('button');
+        if (button) {
             reportDropped(event);
+            noteTrigger(button);
         }
     }, true);
 
@@ -227,14 +259,13 @@
             setFieldState(field, first.values.get(fieldKey(field)));
         }
         event.stopImmediatePropagation();
-        reportDropped(event);
+        reportDropped(event, true);
     }, true);
 
     /** htmx reports a failed, a timed-out and a replaced request alike as htmx:error, and only a request that ran out its timeout was lost. */
     document.addEventListener('htmx:error', (event) => {
         const { ctx, error } = event.detail;
-        const timedOut = performance.now() - requests.get(ctx)?.start >= htmx.config.defaultTimeout - 100;
-        const failed = error instanceof TypeError || (error?.name === 'AbortError' && timedOut);
+        const failed = error instanceof TypeError || (error?.name === 'AbortError' && requests.get(ctx)?.timedOut());
         if (ctx && !ctx.response && failed) {
             showBanner('The server could not be reached. Try again in a moment.');
         }

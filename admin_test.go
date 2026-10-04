@@ -42,11 +42,13 @@ type fakeBackend struct {
 	mu     sync.Mutex
 	calls  []fakeCall
 	routes map[string]fakeResponse
+	// queued answers a route's first calls, one answer each, before routes takes over.
+	queued map[string][]fakeResponse
 }
 
 func newFakeBackend(t *testing.T) *fakeBackend {
 	t.Helper()
-	f := &fakeBackend{routes: map[string]fakeResponse{}}
+	f := &fakeBackend{routes: map[string]fakeResponse{}, queued: map[string][]fakeResponse{}}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		cookie := ""
@@ -56,7 +58,12 @@ func newFakeBackend(t *testing.T) *fakeBackend {
 		f.mu.Lock()
 		uri := strings.TrimPrefix(r.URL.RequestURI(), "/api/v1")
 		f.calls = append(f.calls, fakeCall{method: r.Method, uri: uri, body: string(body), cookie: cookie})
-		response, ok := f.routes[r.Method+" "+strings.TrimPrefix(r.URL.EscapedPath(), "/api/v1")]
+		route := r.Method + " " + strings.TrimPrefix(r.URL.EscapedPath(), "/api/v1")
+		response, ok := f.routes[route]
+		if queue := f.queued[route]; len(queue) > 0 {
+			response, ok = queue[0], true
+			f.queued[route] = queue[1:]
+		}
 		f.mu.Unlock()
 		if !ok {
 			response = fakeResponse{status: http.StatusInternalServerError, body: `{"detail":"unexpected call"}`}
@@ -80,6 +87,17 @@ func (f *fakeBackend) on(route string, status int, body string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.routes[route] = fakeResponse{status: status, body: body}
+}
+
+// thenProblem makes the call after the ones already set up on route fail.
+func (f *fakeBackend) thenProblem(route string, status int, detail string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	queue := f.queued[route]
+	if len(queue) == 0 {
+		queue = []fakeResponse{f.routes[route]}
+	}
+	f.queued[route] = append(queue, fakeResponse{status: status, body: fmt.Sprintf(`{"detail":%q}`, detail)})
 }
 
 func (f *fakeBackend) problem(route string, status int, detail string) {
@@ -765,7 +783,7 @@ func TestPagesHaveLandmarksAndASkipLink(t *testing.T) {
 	for _, target := range []string{"/", "/login", "/register", "/admin", "/account"} {
 		t.Run(target, func(t *testing.T) {
 			rec := getPage(target)
-			assertBody(t, rec, `<a href="#main" class="sr-only focus:not-sr-only`, "Skip to main content", `<header class=`, `<nav aria-label="Main"`, `<main id="main" class="relative isolate px-6 pt-14 lg:px-8">`)
+			assertBody(t, rec, `<a href="#main" class="sr-only focus:not-sr-only`, "Skip to main content", `<header class=`, `<nav aria-label="Main"`, `<main id="main" tabindex="-1" class="focus:outline-none relative isolate px-6 pt-14 lg:px-8">`)
 			body := rec.Body.String()
 			if strings.Index(body, `href="#main"`) > strings.Index(body, "<header") {
 				t.Errorf("the skip link comes after the header")

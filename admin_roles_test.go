@@ -381,6 +381,32 @@ func TestAdminRoleRemoveReloadFailureWithoutTheCatalogueReplacesTheGrantForm(t *
 	assertNoBody(t, rec, "<option")
 }
 
+func TestAdminRoleGrantReloadFailureDrawsTheGrantedRowAndTheFormWithoutIt(t *testing.T) {
+	f := newFakeBackend(t)
+	f.on("GET /permissions", 200, permissionsJSON)
+	f.on("PUT /roles/"+idBee+"/permissions/"+idPRate, 204, ``)
+	f.problem("GET /roles/"+idBee, 500, "down")
+	rec := action(http.MethodPost, "/admin/roles/"+idBee+"/permissions", url.Values{
+		"grant_permission": {idPRate}, "grant_value": {"250"}, "granted": {idPBee},
+	})
+	assertStatus(t, rec, http.StatusInternalServerError)
+	assertBody(t, rec, `id="admin-role-granted" class="space-y-2" hx-swap-oob="true"`,
+		`id="granted-`+idPBee+`"`, `id="granted-`+idPRate+`"`, `value="250"`,
+		`id="admin-role-grant" hx-swap-oob="true"`, `<option value="`+idPStore+`"`)
+	assertNoBody(t, rec, `<option value="`+idPRate+`"`, `<option value="`+idPBee+`"`)
+}
+
+func TestAdminRoleGrantReloadFailureWithoutTheCatalogueReplacesTheGrantForm(t *testing.T) {
+	f := newFakeBackend(t)
+	f.on("GET /permissions", 200, permissionsJSON)
+	f.on("PUT /roles/"+idBee+"/permissions/"+idPStore, 204, ``)
+	f.problem("GET /roles/"+idBee, 500, "down")
+	f.thenProblem("GET /permissions", 500, "down")
+	rec := action(http.MethodPost, "/admin/roles/"+idBee+"/permissions", url.Values{"grant_permission": {idPStore}})
+	assertBody(t, rec, `id="admin-role-grant-unavailable"`)
+	assertNoBody(t, rec, "<option")
+}
+
 func TestAdminRoleSaveWithoutAChangeSendsNothing(t *testing.T) {
 	f := newFakeBackend(t)
 	seedRoleEditor(f)

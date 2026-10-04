@@ -309,10 +309,11 @@ templ adminUsers() {
 	@pageShell("max-w-xl", "", "/admin/users/list") {
 		@pageHeading("Users", "Select an account to edit it")
 		@backLink("/admin", "Back to the admin dashboard")
+		@usersCountLine("", false)
 	}
 }
 
-// AdminUsersList renders the search box and the first page of users.
+// AdminUsersList renders the search box and the first page of users, and fills the shell's count line.
 templ AdminUsersList(d AdminUsersData) {
 	<div class="space-y-6">
 		@formField("admin-users-search", "Search", "") {
@@ -330,23 +331,28 @@ templ AdminUsersList(d AdminUsersData) {
 				class={ inputClass }
 			/>
 		}
-		@AdminUsersCount(d, false)
 		<ul id="admin-users" class="space-y-2">
 			@AdminUserRows(d)
 		</ul>
 	</div>
+	@AdminUsersCount(d, true)
 }
 
-// AdminUsersCount renders the line that says how many users a response listed, or its out-of-band copy.
+// AdminUsersCount renders the line that says how many users a response listed, which fills the status element of the shell out of band.
 templ AdminUsersCount(d AdminUsersData, oob bool) {
+	@usersCountLine(usersSummary(d), oob)
+}
+
+// usersCountLine is the status element that announces the count. The shell holds it empty so that it is on the page before its first text.
+templ usersCountLine(text string, oob bool) {
 	<p
 		id="admin-users-count"
 		role="status"
 		if oob {
 			hx-swap-oob="innerHTML"
 		}
-		class={ mutedSmallClass }
-	>{ usersSummary(d) }</p>
+		class={ mutedSmallClass + " empty:m-0" }
+	>{ text }</p>
 }
 
 func usersSummary(d AdminUsersData) string {
@@ -688,14 +694,19 @@ templ AdminRoleForm(d AdminRoleData) {
 	>
 		<input type="hidden" name="loaded_name" value={ d.Role.Name }/>
 		<input type="hidden" name="loaded_description" value={ d.Role.Description }/>
-		@formField("admin-role-name", "Name", "") {
-			@textInput("admin-role-name", "name", d.Role.Name, "", true, "", false)
-		}
+		@AdminRoleName(d.Role.Name, "", false)
 		@formField("admin-role-description", "Description", "") {
 			@proseInput("admin-role-description", "description", d.Role.Description)
 		}
 		<button id="admin-role-save" type="submit" class={ submitClass }>Save</button>
 	</form>
+}
+
+// AdminRoleName renders the name field of the editor, or its out-of-band copy with the message the name was refused with.
+templ AdminRoleName(value string, errText string, oob bool) {
+	@fieldWithError("admin-role-name", "Name", "", errText, oob) {
+		@textInput("admin-role-name", "name", value, "", true, fieldDescription("admin-role-name", "", errText), errText != "")
+	}
 }
 
 // AdminRoleCreateName renders the name field of the create form, or its out-of-band copy with the message the API refused the name with.
@@ -724,14 +735,20 @@ templ AdminRoleDelete(d AdminRoleData, oob bool) {
 // AdminRoleGrants renders the granted permissions and the grant form, which a change swaps by region.
 templ AdminRoleGrants(d AdminRoleData) {
 	<div id="admin-role-grants" class="space-y-6" hx-target:inherited="#admin-role-granted" hx-swap:inherited="outerHTML">
-		@AdminRoleGranted(d)
+		@AdminRoleGranted(d, false)
 		@AdminRoleGrantForm(d, false)
 	</div>
 }
 
-// AdminRoleGranted renders the granted permissions, which htmx swaps in after a change to one of them.
-templ AdminRoleGranted(d AdminRoleData) {
-	<div id="admin-role-granted" class="space-y-2">
+// AdminRoleGranted renders the granted permissions, which htmx swaps in after a change to one of them, or the out-of-band copy a refused grant sends.
+templ AdminRoleGranted(d AdminRoleData, oob bool) {
+	<div
+		id="admin-role-granted"
+		class="space-y-2"
+		if oob {
+			hx-swap-oob="true"
+		}
+	>
 		for _, permission := range d.Role.Permissions {
 			<input type="hidden" name="granted" value={ permission.ID }/>
 		}

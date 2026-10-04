@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -75,7 +77,7 @@ func adminRoleSaveHandler(w http.ResponseWriter, r *http.Request, a apiSession) 
 	if raw := r.Form.Get("name"); raw != r.Form.Get("loaded_name") {
 		name := strings.TrimSpace(raw)
 		if name == "" {
-			failEditor(w, r, components.AdminRoleStatusID, invalidInput("Enter a name"))
+			failEditor(w, r, components.AdminRoleStatusID, invalidInput("Enter a name"), components.AdminRoleName(raw, "Enter a name", true))
 			return
 		}
 		body["name"] = name
@@ -89,7 +91,11 @@ func adminRoleSaveHandler(w http.ResponseWriter, r *http.Request, a apiSession) 
 	}
 	role, err := apiSend[components.Role](a, http.MethodPatch, "/roles/"+url.PathEscape(id), body, "Failed to save the role")
 	if err != nil {
-		failEditor(w, r, components.AdminRoleStatusID, err)
+		var restore []templ.Component
+		if message := fieldRefusal(err); message != "" && body["name"] != "" {
+			restore = append(restore, components.AdminRoleName(r.Form.Get("name"), message, true))
+		}
+		failEditor(w, r, components.AdminRoleStatusID, err, restore...)
 		return
 	}
 	data := components.AdminRoleData{Role: role}
@@ -179,37 +185,61 @@ func renderGrantsChanged(w http.ResponseWriter, r *http.Request, a apiSession, d
 	data.GrantPermission = grantPermission
 	data.GrantValue = grantValue
 	data.FocusList = focusList || len(data.Available()) == 0
-	renderAll(w, r, components.AdminRoleGranted(data), components.AdminRoleGrantForm(data, true), components.StatusLine(components.AdminRoleStatusID, ""))
+	renderAll(w, r, components.AdminRoleGranted(data, false), components.AdminRoleGrantForm(data, true), components.StatusLine(components.AdminRoleStatusID, ""))
 }
 
-func putGrant(w http.ResponseWriter, r *http.Request, a apiSession, permissionID string, raw string) bool {
+func putGrant(w http.ResponseWriter, r *http.Request, a apiSession, permissionID string, raw string) (components.Permission, bool) {
 	permission, err := findPermission(a, permissionID)
 	if err != nil {
 		failEditor(w, r, components.AdminRoleStatusID, err)
-		return false
+		return permission, false
 	}
 	body, err := grantBody(permission, raw)
 	if err != nil {
 		failEditor(w, r, components.AdminRoleStatusID, err)
-		return false
+		return permission, false
 	}
 	path := "/roles/" + url.PathEscape(r.PathValue("id")) + "/permissions/" + url.PathEscape(permissionID)
 	if _, err := apiSend[struct{}](a, http.MethodPut, path, body, "Failed to grant the permission"); err != nil {
 		failEditor(w, r, components.AdminRoleStatusID, err)
-		return false
+		return permission, false
 	}
-	return true
+	return permission, true
 }
 
 func adminRoleGrantHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
-	if putGrant(w, r, a, r.Form.Get("grant_permission"), r.Form.Get("grant_value")) {
-		renderGrantsChanged(w, r, a, roleDrafts(r.Form, ""), "", "", false, nil)
+	permission, ok := putGrant(w, r, a, r.Form.Get("grant_permission"), r.Form.Get("grant_value"))
+	if !ok {
+		return
 	}
+	drafts := roleDrafts(r.Form, "")
+	renderGrantsChanged(w, r, a, drafts, "", "", false, func() []templ.Component {
+		return grantedWith(a, r, permission, drafts)
+	})
+}
+
+// grantedWith draws the list and the form as they stand once permission is granted, for a grant whose reload failed.
+func grantedWith(a apiSession, r *http.Request, granted components.Permission, drafts map[string]string) []templ.Component {
+	catalogue, err := apiGet[[]components.Permission](a, "/permissions", loadPermissionsFailed)
+	if err != nil {
+		return []templ.Component{components.AdminRoleGrantUnavailable()}
+	}
+	data := components.AdminRoleData{Role: components.Role{ID: r.PathValue("id")}, Catalogue: catalogue, Drafts: drafts}
+	for _, id := range append(slices.Clone(r.Form["granted"]), granted.ID) {
+		for _, permission := range catalogue {
+			if permission.ID == id {
+				data.Role.Permissions = append(data.Role.Permissions, components.RolePermission{Permission: permission})
+			}
+		}
+	}
+	data.Drafts = maps.Clone(drafts)
+	data.Drafts[granted.ID] = r.Form.Get("grant_value")
+	return []templ.Component{components.AdminRoleGranted(data, true), components.AdminRoleGrantForm(data, true)}
 }
 
 func adminRoleValueHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
 	permissionID := r.PathValue("permission")
-	if !putGrant(w, r, a, permissionID, r.Form.Get("value_"+permissionID)) {
+	if _, ok := putGrant(w, r, a, permissionID, r.Form.Get("value_"+permissionID)); !ok {
 		return
 	}
 	data, err := loadRole(a, r.PathValue("id"))
@@ -219,7 +249,7 @@ func adminRoleValueHandler(w http.ResponseWriter, r *http.Request, a apiSession)
 	}
 	data.Drafts = roleDrafts(r.Form, permissionID)
 	data.FocusList = true
-	renderAll(w, r, components.AdminRoleGranted(data), components.StatusLine(components.AdminRoleStatusID, ""))
+	renderAll(w, r, components.AdminRoleGranted(data, false), components.StatusLine(components.AdminRoleStatusID, ""))
 }
 
 func adminRoleRemoveHandler(w http.ResponseWriter, r *http.Request, a apiSession) {

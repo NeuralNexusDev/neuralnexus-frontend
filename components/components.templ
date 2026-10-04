@@ -44,7 +44,7 @@ templ WrapContentsWithHead(title string, head templ.Component, contents templ.Co
 			<div hidden id="api-base-url">{ config.APIURL }</div>
 			<div hidden id="steam-openid-login-url">{ STEAM_OPENID_LOGIN_URL }</div>
 			@Header()
-			<main id="main" class="relative isolate px-6 pt-14 lg:px-8">
+			<main id="main" tabindex="-1" class="focus:outline-none relative isolate px-6 pt-14 lg:px-8">
 				@contents
 			</main>
 		</body>

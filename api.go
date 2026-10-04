@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/config"
@@ -42,6 +43,36 @@ func (e *apiError) Error() string {
 
 func (e *apiError) Unwrap() error {
 	return e.Err
+}
+
+// apiRoutes holds one pattern per API call the handlers make, in the form of ServeMux patterns. logFailure logs the
+// pattern a call matches instead of its path, so a name or an ID that a person typed never reaches the log.
+var apiRoutes = func() *http.ServeMux {
+	mux := http.NewServeMux()
+	for _, pattern := range []string{
+		"GET /users", "GET /users/{id}", "PUT /users/{id}", "GET /users/{id}/links", "GET /users/{id}/permissions",
+		"GET /users/me/links", "GET /users/me/permissions", "PATCH /users/me/settings",
+		"PATCH /users/me/link/{platform}", "DELETE /users/me/link/{platform}",
+		"GET /roles", "POST /roles", "GET /roles/{id}", "PATCH /roles/{id}", "DELETE /roles/{id}",
+		"PUT /roles/{id}/permissions/{permission}", "DELETE /roles/{id}/permissions/{permission}",
+		"GET /permissions", "POST /permissions", "DELETE /permissions/{id}",
+		"GET /bee-name-generator/suggestion/{limit}", "PUT /bee-name-generator/suggestion/{name}", "DELETE /bee-name-generator/suggestion/{name}",
+	} {
+		mux.HandleFunc(pattern, func(http.ResponseWriter, *http.Request) {})
+	}
+	return mux
+}()
+
+// apiRoute returns the pattern that the call matches, or "METHOD unlisted" for a call that no pattern covers.
+func apiRoute(method string, path string) string {
+	target, err := url.Parse(path)
+	if err != nil {
+		return method + " unlisted"
+	}
+	if _, pattern := apiRoutes.Handler(&http.Request{Method: method, URL: target}); pattern != "" {
+		return pattern
+	}
+	return method + " unlisted"
 }
 
 func invalidInput(message string) error {

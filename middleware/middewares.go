@@ -125,9 +125,35 @@ func SecurityHeadersMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// RecoveryMiddleware - Log a panic from a handler and answer 500
+// headerTracker - Remember whether the response has started, since a status line cannot be sent twice
+type headerTracker struct {
+	http.ResponseWriter
+	started bool
+}
+
+// WriteHeader - Write the header, and note it unless it is an informational one that the final status follows
+func (w *headerTracker) WriteHeader(statusCode int) {
+	if statusCode >= http.StatusOK || statusCode == http.StatusSwitchingProtocols {
+		w.started = true
+	}
+	w.ResponseWriter.WriteHeader(statusCode)
+}
+
+// Write - Write the body, which sends the header first when the handler has not
+func (w *headerTracker) Write(data []byte) (int, error) {
+	w.started = true
+	return w.ResponseWriter.Write(data)
+}
+
+// Unwrap - Give http.ResponseController the writer underneath
+func (w *headerTracker) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
+// RecoveryMiddleware - Log a panic from a handler and answer 500, unless the handler has already started the response
 func RecoveryMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tracked := &headerTracker{ResponseWriter: w}
 		defer func() {
 			recovered := recover()
 			if recovered == nil {
@@ -136,11 +162,24 @@ func RecoveryMiddleware(next http.Handler) http.Handler {
 			if recovered == http.ErrAbortHandler {
 				panic(recovered)
 			}
-			log.Printf("panic serving %s %s: %v\n%s", r.Method, r.URL.Path, recovered, debug.Stack())
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			log.Printf("panic serving %s %s: request_id=%v %v\n%s", r.Method, r.URL.Path, requestIDOf(r), recovered, debug.Stack())
+			if !tracked.started {
+				http.Error(tracked, "Internal Server Error", http.StatusInternalServerError)
+			}
 		}()
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(tracked, r)
 	})
+}
+
+// requestIDOf - Read the request ID that RequestIDMiddleware set. It sets it on the header of the request it received, which this request shares, but only on a copy of the context
+func requestIDOf(r *http.Request) any {
+	if id := r.Context().Value(RequestIDKey); id != nil {
+		return id
+	}
+	if id, err := strconv.Atoi(r.Header.Get(XRequestIDHeader)); err == nil {
+		return id
+	}
+	return "N/A"
 }
 
 // SessionMiddleware - Read the session cookie from the request

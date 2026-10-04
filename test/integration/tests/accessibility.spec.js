@@ -63,6 +63,27 @@ test.describe('accessibility - switches', () => {
   });
 });
 
+test.describe('accessibility - target size', () => {
+  test('the Link and Unlink buttons are at least 24 px both ways, with a negative margin that keeps the row layout', async ({ page }) => {
+    await signIn(page, {
+      account: { username: 'testuser', password_auth: true },
+      myLinks: [
+        { platform: 'discord', platform_username: 'someone#1234', verified: true, login_enabled: true },
+        { platform: 'twitch', platform_username: 'streamer99', verified: false, login_enabled: false },
+      ],
+    });
+    await page.goto('/account');
+    for (const platform of ['discord', 'twitch', 'microsoft', 'xboxlive', 'steam']) {
+      const button = page.locator(`#link-${platform}-action`);
+      await expect(button).toBeVisible();
+      const box = await button.boundingBox();
+      expect(box.width, `${platform} width`).toBeGreaterThanOrEqual(24);
+      expect(box.height, `${platform} height`).toBeGreaterThanOrEqual(24);
+      expect(await computed(button, 'marginTop'), `${platform} margin`).toBe('-4px');
+    }
+  });
+});
+
 test.describe('accessibility - page structure', () => {
   test('every shell has its own title', async ({ page }) => {
     await signIn(page);
@@ -90,6 +111,8 @@ test.describe('accessibility - page structure', () => {
     expect((await skip.boundingBox()).width).toBeGreaterThan(50);
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/#main$/);
+    await expect(page.getByRole('main')).toBeFocused();
+    expect(await computed(page.getByRole('main'), 'outlineStyle')).toBe('none');
     await expect(page.getByRole('main')).toHaveCount(1);
     await expect(page.getByRole('banner')).toHaveCount(1);
     await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
@@ -122,6 +145,16 @@ test.describe('accessibility - page structure', () => {
     await expect(page.locator('#page-status')).toHaveText('Loaded');
     expect(await page.evaluate(() => window.__announced)).toEqual(['Loading…', 'Loaded']);
   });
+
+  for (const status of [403, 429, 500, 502]) {
+    test(`a shell whose content fails to load with ${status} drops the Loading line and says so in the live region`, async ({ page }) => {
+      await signIn(page, { failures: { 'GET /users': { status, detail: 'users are down', times: 1 } } });
+      await page.goto('/admin/users');
+      await expect(page.locator('#page-error')).not.toBeEmpty();
+      await expect(page.getByText('Loading…')).toHaveCount(0);
+      await expect(page.locator('#page-status')).toHaveText('Failed to load');
+    });
+  }
 });
 
 test.describe('accessibility - fields', () => {
@@ -184,10 +217,32 @@ test.describe('accessibility - fields', () => {
   });
 });
 
+test.describe('accessibility - role name', () => {
+  test('a blank role name and a taken one are flagged on the name field', async ({ page }) => {
+    await signIn(page, { failures: { [`PATCH /roles/${ID.bee}`]: { status: 409, detail: 'A role with this name already exists', times: 1 } } });
+    await page.goto(`/admin/roles/${ID.bee}`);
+    const input = page.locator('#admin-role-name');
+    await input.fill('  ');
+    await input.press('Enter');
+    await expect(page.locator('#admin-role-name-error')).toHaveText('Enter a name');
+    await expect(input).toHaveAttribute('aria-invalid', 'true');
+    await expect(input).toHaveAttribute('aria-describedby', 'admin-role-name-error');
+    await expect(input).toBeFocused();
+    await input.fill('owner');
+    await expect(page.locator('#admin-role-name-error')).toHaveCount(0);
+    await input.press('Enter');
+    await expect(page.locator('#admin-role-name-error')).toHaveText('A role with this name already exists');
+    await expect(input).toHaveAttribute('aria-invalid', 'true');
+    await expect(input).toBeFocused();
+    await expect(input).toHaveValue('owner');
+  });
+});
+
 test.describe('accessibility - live regions', () => {
   test('search and Load more announce a count in a status line that is on the page from the start', async ({ page }) => {
     await signIn(page, { generateUsers: 247 });
-    await page.goto('/admin/users');
+    const response = await page.goto('/admin/users');
+    expect(await response.text()).toMatch(/<p id="admin-users-count" role="status"[^>]*><\/p>/);
     const count = page.locator('#admin-users-count');
     await expect(count).toHaveAttribute('role', 'status');
     await expect(count).toHaveText('200 users');

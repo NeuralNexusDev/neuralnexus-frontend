@@ -152,6 +152,18 @@ test.describe('admin - roles', () => {
     await expect(page.locator('#admin-role-grant-permission option')).toHaveText(['beenamegenerator.admin', 'petpictures.pets', 'motd', 'datastore.admin']);
   });
 
+  test('a grant whose editor could not be loaded again lists the permission and stops offering it', async ({ page }) => {
+    const { writes } = await signIn(page, { failures: { [`GET /roles/${ID.bee}`]: { status: 500, detail: 'roles are down', skip: 1, times: 1 } } });
+    await page.goto(editor);
+    await page.locator('#admin-role-grant-permission').selectOption({ label: 'datastore.admin' });
+    await page.locator('#admin-role-grant-submit').click();
+    await expect(error(page)).toHaveText('The change was made, but the page could not be refreshed: roles are down');
+    expect(await writes()).toEqual([{ method: 'PUT', path: `/roles/${ID.bee}/permissions/${ID.pStore}`, body: null }]);
+    await expect(granted(page)).toHaveCount(3);
+    await expect(granted(page).nth(2)).toContainText('datastore.admin');
+    await expect(page.locator('#admin-role-grant-permission option')).toHaveText(['petpictures.pets', 'motd']);
+  });
+
   test('a half-typed grant value survives removing another permission', async ({ page }) => {
     await signIn(page);
     await page.goto(editor);

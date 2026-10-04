@@ -36,8 +36,10 @@ test.describe('admin - user list', () => {
     expect((await calls()).filter((call) => call.path === '/users').length).toBeGreaterThan(1);
   });
 
-  test('a search that a newer search replaces shows no error', async ({ page }) => {
+  test('a search that a newer search replaces shows no error and logs none', async ({ page }) => {
     const { gate } = await signIn(page);
+    const logged = [];
+    page.on('console', (message) => message.type() === 'error' && message.text().startsWith('htmx') && logged.push(message.text()));
     await page.addInitScript(() => {
       window.__banner = [];
       new MutationObserver(() => {
@@ -57,6 +59,7 @@ test.describe('admin - user list', () => {
     await expect(rows(page)).toContainText('alice');
     await expect(error(page)).toHaveText('');
     expect(await page.evaluate(() => window.__banner)).toEqual([]);
+    expect(logged).toEqual([]);
   });
 
   test('a search that times out shows the banner message and keeps the list', async ({ page }) => {
@@ -228,6 +231,21 @@ test.describe('admin - user editor', () => {
     await expect(status(page)).toHaveText('Saved. Changes made while saving are not saved yet.');
     await expect(error(page)).toHaveText('The change made while saving was not sent. Make it again.');
     await expect(username(page)).toHaveValue('robertX');
+    expect(await writes()).toEqual([{ method: 'PUT', path: `/users/${ID.bob}`, body: { username: 'robert' } }]);
+  });
+
+  test('pressing Enter again on an unchanged form while a save is in flight does not say a change was lost', async ({ page }) => {
+    const { writes, gate } = await signIn(page);
+    await page.goto(editor);
+    const put = await gate(`PUT /users/${ID.bob}`);
+    await username(page).fill('robert');
+    await username(page).press('Enter');
+    await put.arrived();
+    await username(page).press('Enter');
+    await expect(error(page)).toHaveText('The last change is still being saved. Try again in a moment.');
+    await put.release();
+    await expect(status(page)).toHaveText('Saved');
+    await expect(error(page)).toHaveText('');
     expect(await writes()).toEqual([{ method: 'PUT', path: `/users/${ID.bob}`, body: { username: 'robert' } }]);
   });
 
