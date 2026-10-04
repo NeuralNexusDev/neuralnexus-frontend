@@ -18,25 +18,10 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Generate templates
-        run: go tool templ generate
-
-      - name: Check gofmt
-        run: make fmt-check
-
-      - name: Check templ formatting
-        run: make templ-check
-
-      - name: Run go vet
+      - name: Check formatting and run go vet
         run: make vet
 
-      - name: Run Go tests
-        run: make test-go
-
-      - name: Run Go tests with the race detector
-        run: make test-race
-
-      - name: Run integration test suite
+      - name: Run the tests
         run: make test
 
       - name: Upload the Playwright report and traces

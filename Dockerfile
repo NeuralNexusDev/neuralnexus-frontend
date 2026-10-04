@@ -12,15 +12,13 @@ COPY Makefile ./
 
 COPY . .
 
-RUN make generate
-
-RUN go build -o webserver .
+RUN make build
 
 FROM alpine:edge AS release-stage
 
 WORKDIR /app
 
 COPY --from=build /app/public ./public
-COPY --from=build /app/webserver .
+COPY --from=build /app/build/webserver .
 
 CMD ["/app/webserver"]
