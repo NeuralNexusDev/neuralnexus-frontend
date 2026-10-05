@@ -78,6 +78,19 @@ func (f *FakeAPI) Calls() []Call {
 	return slices.Clone(f.calls)
 }
 
+// Lines returns one string per recorded call, oldest first, as "METHOD URI", followed by a space and the body when the body is not empty.
+func (f *FakeAPI) Lines() []string {
+	calls := f.Calls()
+	lines := make([]string, len(calls))
+	for i, call := range calls {
+		lines[i] = call.Method + " " + call.URI
+		if call.Body != "" {
+			lines[i] += " " + call.Body
+		}
+	}
+	return lines
+}
+
 func (f *FakeAPI) serve(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(r.Body)
 	r.Body = io.NopCloser(strings.NewReader(string(body)))
