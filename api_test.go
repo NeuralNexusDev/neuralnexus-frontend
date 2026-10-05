@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/p0t4t0sandwich/neuralnexus-frontend/config"
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/test/testutil"
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/test/testutil/fakeapi"
 )
@@ -353,15 +354,13 @@ func TestAPISessionCall(t *testing.T) {
 	})
 
 	t.Run("AP-18_an_unreachable_API_maps_to_502_with_the_fallback", func(t *testing.T) {
-		closed := httptest.NewServer(http.NotFoundHandler())
-		closed.Close()
-		fakeapi.PointAPIAt(t, closed.URL)
+		fakeapi.PointAPIAtClosed(t)
 		_, err := newSession(testutil.NewRequest()).call("GET", "/roles", nil, testFallback)
 		got := assertAPIError(t, err, 502, testFallback, "GET", "/roles")
 		if got.Err == nil {
 			t.Error("Err is nil, want the cause")
 		}
-		for _, leaked := range []string{strings.TrimPrefix(closed.URL, "http://"), "refused"} {
+		for _, leaked := range []string{strings.TrimPrefix(config.APIURL, "http://"), "refused"} {
 			if strings.Contains(err.Error(), leaked) {
 				t.Errorf("Error() = %q, holds %q", err.Error(), leaked)
 			}

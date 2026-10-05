@@ -54,9 +54,38 @@ func PointAPIAt(t testing.TB, rawURL string) {
 	t.Cleanup(func() { config.APIURL = previous })
 }
 
+// PointSiteAt sets config.SiteURL to rawURL and restores it when the test ends.
+func PointSiteAt(t testing.TB, rawURL string) {
+	t.Helper()
+	previous := config.SiteURL
+	config.SiteURL = rawURL
+	t.Cleanup(func() { config.SiteURL = previous })
+}
+
+// PointAPIAtClosed starts a server, closes it at once, and points config.APIURL at its address until the test ends.
+func PointAPIAtClosed(t testing.TB) {
+	t.Helper()
+	closed := httptest.NewServer(http.NotFoundHandler())
+	closed.Close()
+	PointAPIAt(t, closed.URL)
+}
+
 // On answers a route, written as "METHOD /path" without /api/v1, with a status and a JSON body.
 func (f *FakeAPI) On(route string, status int, body string) {
 	f.Handle(route, answer(status, body))
+}
+
+// OnType answers a route with a status, an explicit Content-Type and a body. An empty contentType sends no Content-Type, and Go does not sniff one.
+func (f *FakeAPI) OnType(route string, status int, contentType, body string) {
+	f.Handle(route, func(w http.ResponseWriter, r *http.Request) {
+		if contentType == "" {
+			w.Header()["Content-Type"] = nil
+		} else {
+			w.Header().Set("Content-Type", contentType)
+		}
+		w.WriteHeader(status)
+		fmt.Fprint(w, body)
+	})
 }
 
 // Problem answers a route with a status and a problem+json body that holds detail.
