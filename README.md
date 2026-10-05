@@ -46,4 +46,4 @@ A gate holds one request until the test lets it finish.
 - `await held.arrived()` waits until the request is in flight.
 - `await held.release()` lets it finish. You can pass a status and detail to make it fail.
 
-CI runs `make vet` and `make test`. When a step fails, it uploads the Playwright report and traces. `docs/admin.md` explains how the pages load and change.
+CI runs `make vet` and `make test`. When a step fails, it uploads the Playwright report and traces.
