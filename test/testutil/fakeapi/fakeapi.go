@@ -71,6 +71,35 @@ func (f *FakeAPI) Handle(route string, h http.HandlerFunc) {
 	f.routes[route] = h
 }
 
+// Refuse answers a route with a status and a problem+json body that holds detail, or an empty body when detail is empty.
+func (f *FakeAPI) Refuse(route string, status int, detail string) {
+	if detail == "" {
+		f.On(route, status, ``)
+		return
+	}
+	f.Problem(route, status, detail)
+}
+
+// AssertLines fails the test unless the recorded calls are exactly want, in order, and none when want is empty.
+func (f *FakeAPI) AssertLines(t testing.TB, want ...string) {
+	t.Helper()
+	if got := f.Lines(); !slices.Equal(got, want) {
+		t.Errorf("API calls = %q, want %q", got, want)
+	}
+}
+
+// AssertContentType fails the test unless the call's Content-Type header is want, or absent when want is empty.
+func AssertContentType(t testing.TB, call Call, want string) {
+	t.Helper()
+	got := call.Header.Values("Content-Type")
+	switch {
+	case want == "" && len(got) != 0:
+		t.Errorf("Content-Type = %q, want none", got)
+	case want != "" && call.Header.Get("Content-Type") != want:
+		t.Errorf("Content-Type = %q, want %q", got, want)
+	}
+}
+
 // Calls returns a copy of the requests that the fake API received, oldest first.
 func (f *FakeAPI) Calls() []Call {
 	f.mu.Lock()
