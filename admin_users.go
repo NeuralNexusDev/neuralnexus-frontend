@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -16,22 +17,6 @@ const (
 	usersPageSize = 200
 	searchPages   = 5
 )
-
-func sameSet(a []string, b []string) bool {
-	held := make(map[string]bool, len(b))
-	for _, id := range b {
-		held[id] = true
-	}
-	if len(a) != len(held) {
-		return false
-	}
-	for _, id := range a {
-		if !held[id] {
-			return false
-		}
-	}
-	return true
-}
 
 func listRoles(a apiSession) ([]components.Role, bool, error) {
 	roles, err := apiGet[[]components.Role](a, "/roles", loadRolesFailed)
@@ -180,7 +165,15 @@ func adminUserSaveHandler(w http.ResponseWriter, r *http.Request, a apiSession) 
 	}
 	if r.Form.Get("roles_editable") == "1" {
 		roles := append(append([]string{}, r.Form["roles"]...), r.Form["kept_roles"]...)
-		if !sameSet(roles, r.Form["loaded_roles"]) {
+		loaded := r.Form["loaded_roles"]
+		same := true
+		for _, id := range roles {
+			same = same && slices.Contains(loaded, id)
+		}
+		for _, id := range loaded {
+			same = same && slices.Contains(roles, id)
+		}
+		if !same {
 			body["roles"] = roles
 		}
 	}
