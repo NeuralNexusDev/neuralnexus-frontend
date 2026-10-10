@@ -176,6 +176,7 @@ func TestAdminRoleCreateHandler(t *testing.T) {
 				rec := serveRequest("POST", "/admin/roles", url.Values{"name": {" Bad Name "}, "description": {"Keep me"}})
 				assertFailure(t, rec, status, "Name is invalid")
 				assertBodyHas(t, rec, `id="admin-role-create-name"`, `value=" Bad Name "`, `id="admin-role-create-name-error"`)
+				assertOutOfBand(t, rec, "admin-role-create-name-field", true)
 				if got := rec.Header().Get("HX-Redirect"); got != "" {
 					t.Errorf("HX-Redirect = %q, want none", got)
 				}
@@ -497,6 +498,8 @@ func TestAdminRoleSaveHandler(t *testing.T) {
 		assertStatusCode(t, rec, 200)
 		assertHTMLContent(t, rec)
 		assertBodyHas(t, rec, "moderators", `id="admin-role-form"`, `id="admin-role-header"`, `id="admin-role-delete"`, `hx-swap-oob="innerHTML">Saved</p>`)
+		assertOutOfBand(t, rec, "admin-role-header", true)
+		assertOutOfBand(t, rec, "admin-role-delete", true)
 	})
 
 	t.Run("RL-26_a_changed_description_alone_is_sent_with_only_the_description", func(t *testing.T) {
@@ -584,6 +587,7 @@ func TestAdminRoleSaveHandler(t *testing.T) {
 				rec := serveRequest("POST", "/admin/roles/5", saveForm(" moderators", "admins", "Site admins", "Site admins"))
 				assertFailure(t, rec, status, "Name is taken")
 				assertBodyHas(t, rec, `id="admin-role-name"`, `id="admin-role-name-error"`, `value=" moderators"`)
+				assertOutOfBand(t, rec, "admin-role-name-field", true)
 				assertBodyLacks(t, rec, "Saved")
 				f.AssertLines(t, `PATCH /roles/5 {"name":"moderators"}`)
 			})
@@ -1035,6 +1039,8 @@ func TestRenderGrantsChanged(t *testing.T) {
 		assertStatusCode(t, rec, 200)
 		assertHTMLContent(t, rec)
 		assertBodyHas(t, rec, `id="granted-1"`, `id="granted-2"`, `id="admin-role-grant-form"`, `id="admin-role-status"`)
+		assertOutOfBand(t, rec, "admin-role-grant", true)
+		assertOutOfBand(t, rec, "admin-role-granted", false)
 		f.AssertLines(t, "GET /roles/5", "GET /permissions")
 		if calls != 0 {
 			t.Errorf("restore was called %d times, want 0", calls)
@@ -1334,6 +1340,8 @@ func TestAdminRoleGrantHandler(t *testing.T) {
 		assertStatusCode(t, rec, 200)
 		assertHTMLContent(t, rec)
 		assertBodyHas(t, rec, `id="granted-3"`, "pets.tags", `id="admin-role-grant-form"`, ">pets.motto</option>", `id="admin-role-status"`)
+		assertOutOfBand(t, rec, "admin-role-grant", true)
+		assertOutOfBand(t, rec, "admin-role-granted", false)
 		assertBodyLacks(t, rec, ">pets.tags</option>", "autofocus")
 	})
 
@@ -1466,6 +1474,7 @@ func TestAdminRoleValueHandler(t *testing.T) {
 		fakeapi.AssertContentType(t, f.Calls()[1], "application/json")
 		assertStatusCode(t, rec, 200)
 		assertBodyHas(t, rec, `id="granted-2"`, `id="admin-role-status"`, "autofocus")
+		assertOutOfBand(t, rec, "admin-role-granted", false)
 		assertBodyLacks(t, rec, `id="admin-role-grant-form"`)
 	})
 
@@ -1710,6 +1719,7 @@ func TestGrantFormWithout(t *testing.T) {
 				failedReload(t)
 				rec := remove(url.Values{"granted": tc.granted})
 				assertBodyHas(t, rec, tc.has...)
+				assertOutOfBand(t, rec, "admin-role-grant", true)
 				assertBodyLacks(t, rec, tc.lacks...)
 			})
 		}

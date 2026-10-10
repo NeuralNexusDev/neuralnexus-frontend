@@ -1218,6 +1218,7 @@ func TestAdminUserSaveHandler(t *testing.T) {
 				f, rec := saveWith(t, userSaveForm(url.Values{"username": {tc.username}, "loaded_username": {tc.held}}), carol)
 				assertFailure(t, rec, 400, "Enter a username")
 				assertBodyHas(t, rec, "admin-user-username-error", `id="admin-user-status" hx-swap-oob="innerHTML"></p>`)
+				assertOutOfBand(t, rec, "admin-user-username-field", true)
 				if tc.username != "" {
 					assertBodyHas(t, rec, `value="`+tc.username+`"`)
 				}
@@ -1355,6 +1356,8 @@ func TestAdminUserSaveHandler(t *testing.T) {
 				rec := serveRequest("POST", save, userSaveForm(url.Values{"username": {"carol"}}))
 				assertFailure(t, rec, tc.want, savedPrefix+tc.message)
 				assertBodyHas(t, rec, "carol", "u1", `name="loaded_username" value="carol"`, `name="loaded_roles" value="r1"`, `name="loaded_roles" value="r2"`)
+				assertOutOfBand(t, rec, "admin-user-header", true)
+				assertOutOfBand(t, rec, "admin-user-loaded", true)
 				f.AssertLines(t, put+`{"username":"carol"}`, "GET /roles")
 			})
 		}

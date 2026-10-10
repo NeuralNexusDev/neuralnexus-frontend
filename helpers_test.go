@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/p0t4t0sandwich/neuralnexus-frontend/test/testutil"
 )
 
 func serveRequest(method, target string, form url.Values) *httptest.ResponseRecorder {
@@ -73,5 +75,17 @@ func assertLoginRedirect(t *testing.T, rec *httptest.ResponseRecorder) {
 	}
 	if rec.Body.Len() != 0 {
 		t.Errorf("body = %q, want empty", rec.Body.String())
+	}
+}
+
+func assertOutOfBand(t *testing.T, rec *httptest.ResponseRecorder, id string, want bool) {
+	t.Helper()
+	tag := testutil.TagByID(rec.Body.String(), id)
+	if tag == "" {
+		t.Errorf("the body has no element with id %q:\n%s", id, rec.Body.String())
+		return
+	}
+	if got := strings.Contains(tag, " hx-swap-oob"); got != want {
+		t.Errorf("hx-swap-oob on %q present = %t, want %t; tag %s", id, got, want, tag)
 	}
 }

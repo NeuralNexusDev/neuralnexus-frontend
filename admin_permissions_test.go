@@ -232,6 +232,7 @@ func TestPermissionsCreateHandler(t *testing.T) {
 				rec := serveRequest("POST", "/admin/permissions", url.Values{"node": {" Bad Node "}})
 				assertFailure(t, rec, status, "Node is invalid")
 				assertBodyHas(t, rec, `id="admin-permission-create-node"`, `value=" Bad Node "`)
+				assertOutOfBand(t, rec, "admin-permission-create-node-field", true)
 				if got := f.Lines(); len(got) != 1 || !strings.HasPrefix(got[0], post) {
 					t.Errorf("API calls = %q, want only the POST", got)
 				}
