@@ -343,10 +343,10 @@ templ usersCountLine(text string, oob bool) {
 func usersSummary(d AdminUsersData) string {
 	count := len(d.Users)
 	switch {
-	case count == 0 && d.Start > 0:
-		return "No more users"
 	case count == 0 && d.Search != "" && d.More:
 		return "No matches in the first " + strconv.Itoa(d.NextOffset) + " users"
+	case count == 0 && d.Start > 0:
+		return "No more users"
 	case count == 0 && d.Search != "":
 		return "No matches"
 	case count == 0:

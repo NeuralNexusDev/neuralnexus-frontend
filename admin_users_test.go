@@ -626,6 +626,21 @@ func TestAdminUserRowsHandler(t *testing.T) {
 		assertBodyLacks(t, rec, `href="/admin/users/u3"`)
 	})
 
+	t.Run("US-38_a_search_from_an_offset_reads_five_pages_from_that_offset_and_the_Load_more_button_keeps_both", func(t *testing.T) {
+		f := fakeapi.NewFakeAPI(t)
+		serveUserPages(f, userList(0, 2000, usernames()))
+		f.On("GET /roles", 200, roleListJSON)
+		rec := serveRequest("GET", rows+"?offset=400&search=zzz", nil)
+		assertStatusCode(t, rec, 200)
+		f.AssertLines(t, usersCall+"400", usersCall+"600", usersCall+"800", usersCall+"1000", usersCall+"1200", "GET /roles")
+		button := testutil.TagByID(rec.Body.String(), "admin-users-more-button")
+		if button == "" || !strings.Contains(button, "offset=1400") || !strings.Contains(button, "search=zzz") {
+			t.Errorf("Load more button = %q, want offset=1400 and search=zzz", button)
+		}
+		assertBodyHas(t, rec, ">No matches in the first 1400 users<")
+		assertBodyLacks(t, rec, "No more users")
+	})
+
 	t.Run("US-39_a_page_past_the_end_reports_no_more_users_and_takes_focus", func(t *testing.T) {
 		f := fakeapi.NewFakeAPI(t)
 		f.On("GET /users", 200, `[]`)
