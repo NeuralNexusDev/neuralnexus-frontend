@@ -110,3 +110,39 @@ func innerHTML(page, id string) (inner string, ok bool) {
 	}
 	return "", false
 }
+
+func openTags(page, element string) []string {
+	var tags []string
+	open := "<" + element
+	for at := 0; ; {
+		next := strings.Index(page[at:], open)
+		if next < 0 {
+			return tags
+		}
+		start := at + next
+		after := start + len(open)
+		if after >= len(page) || strings.IndexByte(" \t\r\n>/", page[after]) < 0 {
+			at = after
+			continue
+		}
+		var quote byte
+		end := -1
+		for i := after; i < len(page) && end < 0; i++ {
+			switch c := page[i]; {
+			case quote != 0:
+				if c == quote {
+					quote = 0
+				}
+			case c == '"' || c == '\'':
+				quote = c
+			case c == '>':
+				end = i
+			}
+		}
+		if end < 0 {
+			return tags
+		}
+		tags = append(tags, page[start:end+1])
+		at = end + 1
+	}
+}
