@@ -666,10 +666,11 @@ func TestUsersSummary(t *testing.T) {
 		want string
 	}
 
-	t.Run("CA-057_an_empty_page_after_the_first_one_says_there_are_no_more_users_whatever_else_is_set", func(t *testing.T) {
+	t.Run("CA-057_an_empty_page_after_the_first_one_says_there_are_no_more_users_unless_a_search_stopped_early", func(t *testing.T) {
 		check(t, "CA-057", []summary{
 			{"plain", AdminUsersData{Start: 200}, "No more users"},
-			{"with_a_search", AdminUsersData{Start: 200, Search: "bob", More: true, NextOffset: 1000}, "No more users"},
+			{"search_reached_the_end", AdminUsersData{Start: 200, Search: "bob"}, "No more users"},
+			{"search_stopped_early", AdminUsersData{Start: 200, Search: "bob", More: true, NextOffset: 1000}, "No matches in the first 1000 users"},
 		})
 	})
 

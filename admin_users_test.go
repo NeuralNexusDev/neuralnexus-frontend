@@ -99,63 +99,6 @@ func userIDs(users []components.UserAccount) []string {
 	return ids
 }
 
-func TestSameSet(t *testing.T) {
-	t.Run("US-01_the_same_members_compare_equal_whatever_their_order", func(t *testing.T) {
-		cases := []struct {
-			name string
-			a    []string
-		}{
-			{"same_order", []string{"r1", "r2"}},
-			{"other_order", []string{"r2", "r1"}},
-		}
-		for _, tc := range cases {
-			t.Run("US-01_"+tc.name, func(t *testing.T) {
-				if !sameSet(tc.a, []string{"r1", "r2"}) {
-					t.Errorf("sameSet(%q, [r1 r2]) = false", tc.a)
-				}
-			})
-		}
-	})
-
-	t.Run("US-02_empty_and_nil_lists_compare_equal_and_unequal_to_a_list_with_members", func(t *testing.T) {
-		cases := []struct {
-			name string
-			a, b []string
-			want bool
-		}{
-			{"nil_nil", nil, nil, true},
-			{"empty_nil", []string{}, nil, true},
-			{"member_nil", []string{"r1"}, nil, false},
-			{"nil_member", nil, []string{"r1"}, false},
-		}
-		for _, tc := range cases {
-			t.Run("US-02_"+tc.name, func(t *testing.T) {
-				if got := sameSet(tc.a, tc.b); got != tc.want {
-					t.Errorf("sameSet(%q, %q) = %t, want %t", tc.a, tc.b, got, tc.want)
-				}
-			})
-		}
-	})
-
-	t.Run("US-03_lists_with_different_members_compare_unequal", func(t *testing.T) {
-		cases := []struct {
-			name string
-			a, b []string
-		}{
-			{"other_member", []string{"r1", "r2"}, []string{"r1", "r3"}},
-			{"subset", []string{"r1"}, []string{"r1", "r2"}},
-			{"superset", []string{"r1", "r2"}, []string{"r1"}},
-		}
-		for _, tc := range cases {
-			t.Run("US-03_"+tc.name, func(t *testing.T) {
-				if sameSet(tc.a, tc.b) {
-					t.Errorf("sameSet(%q, %q) = true", tc.a, tc.b)
-				}
-			})
-		}
-	})
-}
-
 func TestListRoles(t *testing.T) {
 	t.Run("US-05_a_200_answer_returns_the_roles_in_order_and_marks_them_readable", func(t *testing.T) {
 		f := fakeapi.NewFakeAPI(t)
@@ -683,6 +626,21 @@ func TestAdminUserRowsHandler(t *testing.T) {
 		assertBodyLacks(t, rec, `href="/admin/users/u3"`)
 	})
 
+	t.Run("US-38_a_search_from_an_offset_reads_five_pages_from_that_offset_and_the_Load_more_button_keeps_both", func(t *testing.T) {
+		f := fakeapi.NewFakeAPI(t)
+		serveUserPages(f, userList(0, 2000, usernames()))
+		f.On("GET /roles", 200, roleListJSON)
+		rec := serveRequest("GET", rows+"?offset=400&search=zzz", nil)
+		assertStatusCode(t, rec, 200)
+		f.AssertLines(t, usersCall+"400", usersCall+"600", usersCall+"800", usersCall+"1000", usersCall+"1200", "GET /roles")
+		button := testutil.TagByID(rec.Body.String(), "admin-users-more-button")
+		if button == "" || !strings.Contains(button, "offset=1400") || !strings.Contains(button, "search=zzz") {
+			t.Errorf("Load more button = %q, want offset=1400 and search=zzz", button)
+		}
+		assertBodyHas(t, rec, ">No matches in the first 1400 users<")
+		assertBodyLacks(t, rec, "No more users")
+	})
+
 	t.Run("US-39_a_page_past_the_end_reports_no_more_users_and_takes_focus", func(t *testing.T) {
 		f := fakeapi.NewFakeAPI(t)
 		f.On("GET /users", 200, `[]`)
@@ -1119,6 +1077,57 @@ func TestAdminUserSaveHandler(t *testing.T) {
 		return f, serveRequest("POST", save, form)
 	}
 	carol := userJSON("u1", "carol", "r1")
+
+	t.Run("US-01_posted_roles_that_match_the_loaded_roles_as_a_set_are_not_sent", func(t *testing.T) {
+		cases := []struct {
+			name          string
+			roles, loaded []string
+		}{
+			{"same_members_same_order", []string{"r1", "r2"}, []string{"r1", "r2"}},
+			{"duplicate_in_the_posted_roles", []string{"r1", "r1"}, []string{"r1"}},
+			{"duplicate_in_the_loaded_roles", []string{"r1"}, []string{"r1", "r1"}},
+		}
+		for _, tc := range cases {
+			t.Run("US-01_"+tc.name, func(t *testing.T) {
+				f, rec := saveWith(t, userSaveForm(url.Values{"roles": tc.roles, "loaded_roles": tc.loaded}), carol)
+				assertStatusCode(t, rec, 200)
+				assertBodyHas(t, rec, "Nothing to save")
+				f.AssertLines(t)
+			})
+		}
+	})
+
+	t.Run("US-02_posted_and_loaded_roles_that_are_both_empty_match_and_posted_roles_over_no_loaded_roles_are_sent", func(t *testing.T) {
+		t.Run("US-02_both_empty", func(t *testing.T) {
+			f, rec := saveWith(t, userSaveForm(url.Values{"roles": {}, "loaded_roles": {}}), carol)
+			assertStatusCode(t, rec, 200)
+			assertBodyHas(t, rec, "Nothing to save")
+			f.AssertLines(t)
+		})
+
+		t.Run("US-02_posted_role_and_no_loaded_roles", func(t *testing.T) {
+			f, _ := saveWith(t, userSaveForm(url.Values{"roles": {"r1"}, "loaded_roles": {}}), carol)
+			f.AssertLines(t, append([]string{put + `{"roles":["r1"]}`}, reload...)...)
+		})
+	})
+
+	t.Run("US-03_posted_roles_that_differ_from_the_loaded_roles_as_a_set_are_sent", func(t *testing.T) {
+		cases := []struct {
+			name          string
+			roles, loaded []string
+			body          string
+		}{
+			{"other_member", []string{"r1", "r2"}, []string{"r1", "r3"}, `{"roles":["r1","r2"]}`},
+			{"subset", []string{"r1"}, []string{"r1", "r2"}, `{"roles":["r1"]}`},
+			{"duplicate_hides_a_missing_member", []string{"r1", "r1"}, []string{"r1", "r2"}, `{"roles":["r1","r1"]}`},
+		}
+		for _, tc := range cases {
+			t.Run("US-03_"+tc.name, func(t *testing.T) {
+				f, _ := saveWith(t, userSaveForm(url.Values{"roles": tc.roles, "loaded_roles": tc.loaded}), carol)
+				f.AssertLines(t, append([]string{put + tc.body}, reload...)...)
+			})
+		}
+	})
 
 	t.Run("US-62_a_changed_username_sends_only_the_username_then_reloads_roles_and_permissions", func(t *testing.T) {
 		f, rec := saveWith(t, userSaveForm(url.Values{"username": {"carol"}}), carol)
