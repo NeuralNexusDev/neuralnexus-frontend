@@ -2,662 +2,1206 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"net"
+	"html"
+	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf8"
 
-	"github.com/p0t4t0sandwich/neuralnexus-frontend/config"
+	"github.com/p0t4t0sandwich/neuralnexus-frontend/components"
+	"github.com/p0t4t0sandwich/neuralnexus-frontend/test/testutil"
+	"github.com/p0t4t0sandwich/neuralnexus-frontend/test/testutil/fakeapi"
 )
 
-const testSiteURL = "http://site.test"
+const mcSiteURL = "http://site.test"
 
-type fakeAPI struct {
-	server  *httptest.Server
-	request *http.Request
-}
-
-func newFakeAPI(t *testing.T, status int, body string) *fakeAPI {
+func assertPlainMcStatusPage(t *testing.T, rec *httptest.ResponseRecorder) {
 	t.Helper()
-	contentType := "application/json"
-	if status >= http.StatusBadRequest {
-		contentType = "application/problem+json"
-	}
-	return newFakeAPIWithType(t, status, contentType, body)
-}
-
-func newFakeAPIWithType(t *testing.T, status int, contentType, body string) *fakeAPI {
-	t.Helper()
-	f := &fakeAPI{}
-	f.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		f.request = r
-		w.Header().Set("Content-Type", contentType)
-		w.WriteHeader(status)
-		fmt.Fprint(w, body)
-	}))
-	t.Cleanup(f.server.Close)
-
-	apiURL, siteURL := config.APIURL, config.SiteURL
-	config.APIURL, config.SiteURL = f.server.URL, testSiteURL
-	t.Cleanup(func() { config.APIURL, config.SiteURL = apiURL, siteURL })
-	return f
-}
-
-func getEmbed(host, rawQuery string) *httptest.ResponseRecorder {
-	target := "/project/mc-status/" + url.PathEscape(host)
-	if rawQuery != "" {
-		target += "?" + rawQuery
-	}
-	req := httptest.NewRequest(http.MethodGet, target, nil)
-	req.SetPathValue("host", host)
-	rec := httptest.NewRecorder()
-	McStatusPageHandler(rec, req)
-	return rec
-}
-
-func head(t *testing.T, body string) string {
-	t.Helper()
-	start, end := strings.Index(body, "<head"), strings.Index(body, "</head>")
-	if start < 0 || end < start {
-		t.Fatalf("no <head> in response: %s", body)
-	}
-	return body[start:end]
-}
-
-const bedrockBody = `{"host":"a.com","port":19132,"motd":"Hi","num_players":1,"max_players":2,"version":"v"}`
-
-const onlineBody = `{"host":"a.com","port":25565,"motd":"§aHello\\n§c§lWorld","num_players":3,"max_players":20,"version":"Paper 1.21"}`
-
-func TestEmbedOnline(t *testing.T) {
-	f := newFakeAPI(t, http.StatusOK, `{"host":"play.example.net","port":80,"motd":"§aHello\\n§c§lWorld","num_players":3,"max_players":20,"version":"Paper 1.21"}`)
-	rec := getEmbed("Play.Example.NET:00080", "")
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d", rec.Code)
-	}
-	if got := rec.Header().Get("Cache-Control"); got != "public, max-age=60" {
-		t.Errorf("Cache-Control = %q", got)
-	}
-	if f.request == nil {
-		t.Fatal("the API was not called")
-	}
-	if f.request.URL.Path != "/api/v1/mcstatus/Play.Example.NET:00080" {
-		t.Errorf("API path = %q", f.request.URL.Path)
-	}
-	if got := f.request.URL.Query().Get("query"); got != "true" {
-		t.Errorf("query = %q, want true by default", got)
-	}
-
-	h := head(t, rec.Body.String())
-	for _, want := range []string{
-		"<title>play.example.net:80</title>",
-		`property="og:title" content="play.example.net:80"`,
-		"Hello\nWorld\nPlayers: 3/20\nVersion: Paper 1.21",
-		`property="og:url" content="` + testSiteURL + `/project/mc-status/play.example.net:80"`,
-		`property="og:image" content="` + f.server.URL + `/api/v1/mcstatus/icon/play.example.net:80"`,
-		`property="og:image:alt" content="play.example.net:80 server icon"`,
-		`property="og:image:width" content="64"`,
-		`property="og:image:height" content="64"`,
-		`property="og:type" content="website"`,
-		`name="twitter:card" content="summary"`,
-		`name="robots" content="noindex"`,
-		`rel="canonical" href="` + testSiteURL + `/project/mc-status/play.example.net:80"`,
-		`property="og:site_name"`,
-		`name="theme-color"`,
-	} {
-		if !strings.Contains(h, want) {
-			t.Errorf("head is missing %q:\n%s", want, h)
-		}
-	}
-	if strings.Contains(rec.Body.String(), "§") {
-		t.Error("colour codes leaked into the page")
-	}
-}
-
-func TestEmbedIPv6Host(t *testing.T) {
-	cases := []struct {
-		name, query, body, wantURI, wantHost, wantSuffix string
-	}{
-		{"java", "", `{"host":"2001:db8::1","port":25565,"num_players":1}`, "/api/v1/mcstatus/%5B2001:DB8::1%5D:25565?query=true", "[2001:db8::1]", ""},
-		{"java with a port", "", `{"host":"2001:db8::1","port":25566,"num_players":1}`, "/api/v1/mcstatus/%5B2001:DB8::1%5D:25565?query=true", "[2001:db8::1]:25566", ""},
-		{"bedrock", "bedrock=true", `{"host":"2001:db8::1","port":19132,"num_players":1}`, "/api/v1/mcstatus/%5B2001:DB8::1%5D:25565?bedrock=true", "[2001:db8::1]", "?bedrock=true"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			f := newFakeAPI(t, http.StatusOK, tc.body)
-			rec := getEmbed("[2001:DB8::1]:25565", tc.query)
-			if rec.Code != http.StatusOK {
-				t.Fatalf("status = %d", rec.Code)
-			}
-			if f.request == nil || f.request.RequestURI != tc.wantURI {
-				t.Errorf("API request = %v, want %s", f.request, tc.wantURI)
-			}
-			path := strings.NewReplacer("[", "%5B", "]", "%5D").Replace(tc.wantHost)
-			pageURL := testSiteURL + "/project/mc-status/" + path + tc.wantSuffix
-			h := head(t, rec.Body.String())
-			for _, want := range []string{
-				"<title>" + tc.wantHost + "</title>",
-				`property="og:title" content="` + tc.wantHost + `"`,
-				`property="og:url" content="` + pageURL + `"`,
-				`rel="canonical" href="` + pageURL + `"`,
-				`property="og:image" content="` + f.server.URL + `/api/v1/mcstatus/icon/` + path + tc.wantSuffix + `"`,
-				`property="og:image:alt" content="` + tc.wantHost + ` server icon"`,
-			} {
-				if !strings.Contains(h, want) {
-					t.Errorf("head is missing %q:\n%s", want, h)
-				}
-			}
-		})
-	}
-}
-
-func TestEmbedShowsThePortOnlyWhenItIsNotTheDefault(t *testing.T) {
-	cases := []struct {
-		name, query, host string
-		port              int
-		wantHost          string
-	}{
-		{"java default", "", "a.com", 25565, "a.com"},
-		{"java other", "", "a.com", 25566, "a.com:25566"},
-		{"java on the Bedrock default", "", "a.com", 19132, "a.com:19132"},
-		{"bedrock default", "bedrock=true", "a.com", 19132, "a.com"},
-		{"bedrock other", "bedrock=true", "a.com", 19133, "a.com:19133"},
-		{"bedrock on the Java default", "bedrock=true", "a.com", 25565, "a.com:25565"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			newFakeAPI(t, http.StatusOK, fmt.Sprintf(`{"host":%q,"port":%d,"num_players":1}`, tc.host, tc.port))
-			suffix := ""
-			if tc.query != "" {
-				suffix = "?" + tc.query
-			}
-			h := head(t, getEmbed(tc.host, tc.query).Body.String())
-			for _, want := range []string{
-				"<title>" + tc.wantHost + "</title>",
-				`property="og:url" content="` + testSiteURL + "/project/mc-status/" + tc.wantHost + suffix + `"`,
-				`rel="canonical" href="` + testSiteURL + "/project/mc-status/" + tc.wantHost + suffix + `"`,
-				`/api/v1/mcstatus/icon/` + tc.wantHost + suffix + `"`,
-			} {
-				if !strings.Contains(h, want) {
-					t.Errorf("head is missing %q:\n%s", want, h)
-				}
-			}
-		})
-	}
-}
-
-func TestEmbedEscapesTheAPIHost(t *testing.T) {
-	f := newFakeAPI(t, http.StatusOK, `{"host":"x\"><script>alert(1)</script>.com","port":25566,"num_players":1}`)
-	body := getEmbed("a.com", "").Body.String()
-	h := head(t, body)
-	if strings.Contains(body, "<script>alert") {
-		t.Error("the API host appears unescaped in the page")
-	}
-	const escaped = `x&#34;&gt;&lt;script&gt;alert(1)&lt;/script&gt;.com:25566`
-	pageURL := testSiteURL + `/project/mc-status/x%22%3E%3Cscript%3Ealert%281%29%3C%2Fscript%3E.com:25566`
-	for _, want := range []string{
-		"<title>" + escaped + "</title>",
-		`property="og:title" content="` + escaped + `"`,
-		`property="og:image:alt" content="` + escaped + ` server icon"`,
-		`property="og:url" content="` + pageURL + `"`,
-		`rel="canonical" href="` + pageURL + `"`,
-		`property="og:image" content="` + f.server.URL + `/api/v1/mcstatus/icon/x%22%3E%3Cscript%3Ealert%281%29%3C%2Fscript%3E.com:25566"`,
-	} {
-		if !strings.Contains(h, want) {
-			t.Errorf("head is missing %q:\n%s", want, h)
-		}
-	}
-}
-
-func TestEmbedForwardsOptions(t *testing.T) {
-	cases := []struct {
-		name, query string
-		wantAPI     url.Values
-		wantURL     string
-	}{
-		{"query off", "query=false", url.Values{}, "/project/mc-status/a.com?query=false"},
-		{"query port", "query_port=25575", url.Values{"query": {"true"}, "query_port": {"25575"}}, "/project/mc-status/a.com?query_port=25575"},
-		{"highest query port", "query_port=65535", url.Values{"query": {"true"}, "query_port": {"65535"}}, "/project/mc-status/a.com?query_port=65535"},
-		{"query port above the highest", "query_port=65536", url.Values{"query": {"true"}}, "/project/mc-status/a.com"},
-		{"query port with leading zeros", "query_port=0025575", url.Values{"query": {"true"}, "query_port": {"25575"}}, "/project/mc-status/a.com?query_port=25575"},
-		{"signed query port is dropped", "query_port=%2B80", url.Values{"query": {"true"}}, "/project/mc-status/a.com"},
-		{"invalid query port is dropped", "query_port=99999", url.Values{"query": {"true"}}, "/project/mc-status/a.com"},
-		{"query port is ignored when the query is off", "query=false&query_port=25575", url.Values{}, "/project/mc-status/a.com?query=false"},
-		{"bedrock", "bedrock=true", url.Values{"bedrock": {"true"}}, "/project/mc-status/a.com?bedrock=true"},
-		{"bedrock ignores the query and its port", "bedrock=true&query_port=25575", url.Values{"bedrock": {"true"}}, "/project/mc-status/a.com?bedrock=true"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			body := onlineBody
-			if strings.HasPrefix(tc.query, "bedrock=true") {
-				body = bedrockBody
-			}
-			f := newFakeAPI(t, http.StatusOK, body)
-			rec := getEmbed("a.com", tc.query)
-			if f.request == nil {
-				t.Fatal("the API was not called")
-			}
-			if got := f.request.URL.Query(); got.Encode() != tc.wantAPI.Encode() {
-				t.Errorf("API query = %q, want %q", got.Encode(), tc.wantAPI.Encode())
-			}
-			if want := `property="og:url" content="` + testSiteURL + tc.wantURL + `"`; !strings.Contains(head(t, rec.Body.String()), want) {
-				t.Errorf("og:url should be %q:\n%s", tc.wantURL, head(t, rec.Body.String()))
-			}
-			if want := `rel="canonical" href="` + testSiteURL + tc.wantURL + `"`; !strings.Contains(head(t, rec.Body.String()), want) {
-				t.Errorf("canonical should be %q:\n%s", tc.wantURL, head(t, rec.Body.String()))
-			}
-		})
-	}
-}
-
-func TestEmbedBedrockHasAnImage(t *testing.T) {
-	f := newFakeAPI(t, http.StatusOK, bedrockBody)
-	rec := getEmbed("a.com", "bedrock=true")
-	want := `property="og:image" content="` + f.server.URL + `/api/v1/mcstatus/icon/a.com?bedrock=true"`
-	if !strings.Contains(head(t, rec.Body.String()), want) {
-		t.Errorf("missing %s", want)
-	}
-}
-
-func TestEmbedOffline(t *testing.T) {
-	f := newFakeAPI(t, http.StatusNotFound, `{"host":"a.com","port":25565,"status":404}`)
-	rec := getEmbed("a.com", "")
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d", rec.Code)
-	}
-	if got := rec.Header().Get("Cache-Control"); got != "public, max-age=30" {
-		t.Errorf("Cache-Control = %q", got)
-	}
-	h := head(t, rec.Body.String())
-	if !strings.Contains(h, "Server offline or unreachable") {
-		t.Errorf("missing offline description:\n%s", h)
-	}
-	if !strings.Contains(h, "<title>a.com</title>") {
-		t.Errorf("missing the host as the title:\n%s", h)
-	}
-	want := `property="og:image" content="` + f.server.URL + `/api/v1/mcstatus/icon/a.com"`
-	if !strings.Contains(h, want) {
-		t.Errorf("missing %s", want)
-	}
-}
-
-func assertBarePage(t *testing.T, rec *httptest.ResponseRecorder) {
-	t.Helper()
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d, want 200", rec.Code)
-	}
+	assertStatusCode(t, rec, 200)
 	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
-		t.Errorf("Cache-Control = %q, want %q", got, "no-store")
+		t.Errorf("Cache-Control = %q, want no-store", got)
 	}
-	body := rec.Body.String()
-	if !strings.Contains(body, `id="mc-status-host"`) {
-		t.Error("the checker form should still be served")
-	}
-	if h := head(t, body); strings.Contains(h, "og:") || !strings.Contains(h, "<title>NeuralNexus</title>") {
-		t.Errorf("the generic head should carry no preview tags:\n%s", h)
-	}
+	assertBodyHas(t, rec, `<title>NeuralNexus</title>`, `id="mc-status-host"`)
+	assertBodyLacks(t, rec, "og:title", `rel="canonical"`)
 }
 
-func TestEmbedLookupFailures(t *testing.T) {
-	cases := []struct {
-		name      string
-		apiStatus int
-		body      string
-	}{
-		{"rate limited", http.StatusTooManyRequests, `{"detail":"boom"}`},
-		{"api error", http.StatusInternalServerError, `{"detail":"boom"}`},
-		{"empty object", http.StatusOK, `{}`},
-		{"null", http.StatusOK, `null`},
-		{"not json", http.StatusOK, `<html>boom`},
-		{"mistyped field", http.StatusOK, `{"motd":"Hi","num_players":"x"}`},
-		{"oversized body", http.StatusOK, bodyOfSize(1<<20 + 1)},
-		{"undocumented status", http.StatusTeapot, `{"detail":"boom"}`},
-		{"unauthorized", http.StatusUnauthorized, `{"detail":"boom"}`},
-		{"bad gateway", http.StatusBadGateway, `{"detail":"boom"}`},
-		{"service unavailable", http.StatusServiceUnavailable, `{"detail":"boom"}`},
-		{"gateway timeout", http.StatusGatewayTimeout, `{"detail":"boom"}`},
-		{"rejected host", http.StatusBadRequest, `{"detail":"The host must be a domain name, an IPv4 address or an IPv6 address, optionally followed by a port."}`},
-		{"online without a host", http.StatusOK, `{"port":25565,"motd":"Hi","num_players":1,"max_players":2}`},
-		{"online without a port", http.StatusOK, `{"host":"a.com","motd":"Hi","num_players":1,"max_players":2}`},
-		{"offline without a host", http.StatusNotFound, `{"port":25565,"status":404}`},
-		{"offline without a port", http.StatusNotFound, `{"host":"a.com","status":404}`},
-		{"offline without a body", http.StatusNotFound, ``},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			newFakeAPI(t, tc.apiStatus, tc.body)
-			assertBarePage(t, getEmbed("a.com", ""))
-		})
-	}
+func mcStatusAnswer(t testing.TB, host string, port int, motd, version string) string {
+	t.Helper()
+	return testutil.JSONString(t, apiMcStatus{Host: host, Port: port, Motd: motd, NumPlayers: 3, MaxPlayers: 20, Version: version})
 }
 
-func TestEmbedAPIUnreachable(t *testing.T) {
-	f := newFakeAPI(t, http.StatusOK, onlineBody)
-	f.server.Close()
-	assertBarePage(t, getEmbed("a.com", ""))
-}
-
-func TestEmbedCancelsTheUpstreamLookupWhenTheClientGoesAway(t *testing.T) {
-	arrived := make(chan struct{})
-	released := make(chan struct{})
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		close(arrived)
-		<-r.Context().Done()
-		close(released)
-	}))
-	t.Cleanup(server.Close)
-	apiURL := config.APIURL
-	config.APIURL = server.URL
-	t.Cleanup(func() { config.APIURL = apiURL })
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	req := httptest.NewRequest(http.MethodGet, "/project/mc-status/a.com", nil).WithContext(ctx)
-	req.SetPathValue("host", "a.com")
-	done := make(chan struct{})
-	go func() {
-		McStatusPageHandler(httptest.NewRecorder(), req)
-		close(done)
-	}()
-
-	select {
-	case <-arrived:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the lookup never reached the API")
-	}
-	cancel()
-	for _, ch := range []chan struct{}{released, done} {
-		select {
-		case <-ch:
-		case <-time.After(5 * time.Second):
-			t.Fatal("cancelling the client request did not cancel the upstream lookup")
-		}
-	}
-}
-
-func TestEmbedClosesTheUpstreamBody(t *testing.T) {
-	cases := []struct {
-		name        string
-		status      int
-		contentType string
-		body        string
-	}{
-		{"online", http.StatusOK, "application/json", onlineBody + strings.Repeat(" ", 1<<16)},
-		{"offline", http.StatusNotFound, "application/problem+json", `{"host":"a.com","port":25565,"status":404}`},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			var opened, open atomic.Int32
-			server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", tc.contentType)
-				w.WriteHeader(tc.status)
-				fmt.Fprint(w, tc.body)
-			}))
-			server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
-				switch state {
-				case http.StateNew:
-					opened.Add(1)
-					open.Add(1)
-				case http.StateClosed:
-					open.Add(-1)
-				}
-			}
-			server.Start()
-			t.Cleanup(server.Close)
-			apiURL := config.APIURL
-			config.APIURL = server.URL
-			t.Cleanup(func() { config.APIURL = apiURL })
-
-			rec := getEmbed("a.com", "")
-			http.DefaultTransport.(*http.Transport).CloseIdleConnections()
-			if rec.Code != http.StatusOK {
-				t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-			}
-			if n := opened.Load(); n != 1 {
-				t.Fatalf("upstream connections opened = %d, want 1", n)
-			}
-			deadline := time.Now().Add(2 * time.Second)
-			for open.Load() != 0 && time.Now().Before(deadline) {
-				time.Sleep(10 * time.Millisecond)
-			}
-			if n := open.Load(); n != 0 {
-				t.Errorf("upstream connection still open after handler returned: %d", n)
-			}
-		})
-	}
-}
-
-func TestEmbedRejectsAnInvalidAPIURL(t *testing.T) {
-	apiURL := config.APIURL
-	config.APIURL = "http://a b"
-	t.Cleanup(func() { config.APIURL = apiURL })
-	assertBarePage(t, getEmbed("a.com", ""))
-}
-
-func TestEmbedAcceptsAHostAtTheLimit(t *testing.T) {
-	f := newFakeAPI(t, http.StatusOK, onlineBody)
-	if rec := getEmbed(strings.Repeat("a", 260), ""); rec.Code != http.StatusOK || f.request == nil {
-		t.Errorf("status = %d, API called = %v", rec.Code, f.request != nil)
-	}
-}
-
-func TestEmbedGuardsTheRequestPath(t *testing.T) {
-	f := newFakeAPI(t, http.StatusOK, onlineBody)
-	cases := []struct{ name, host string }{
-		{"dot", "."},
-		{"dot dot", ".."},
-		{"over the limit", strings.Repeat("a", 261)},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			f.request = nil
-			assertBarePage(t, getEmbed(tc.host, ""))
-			if f.request != nil {
-				t.Error("the host must not reach the API")
-			}
-		})
-	}
-}
-
-func TestEmbedPassesTheHostThroughToTheAPI(t *testing.T) {
-	cases := map[string]string{
-		"Example.COM":         "Example.COM",
-		"example.com:00080":   "example.com:00080",
-		"[2001:DB8::1]:25565": "%5B2001:DB8::1%5D:25565",
-		"2001:db8::1":         "2001:db8::1",
-		"bad host":            "bad%20host",
-		"a.com/b":             "a.com%2Fb",
-		"a.com?x=1":           "a.com%3Fx=1",
-		"a.com#f":             "a.com%23f",
-		"%41":                 "%2541",
-	}
-	for raw, want := range cases {
-		t.Run(raw, func(t *testing.T) {
-			f := newFakeAPI(t, http.StatusOK, onlineBody)
-			getEmbed(raw, "")
-			if f.request == nil || f.request.RequestURI != "/api/v1/mcstatus/"+want+"?query=true" {
-				t.Errorf("API request = %v, want /api/v1/mcstatus/%s?query=true", f.request, want)
-			}
-		})
-	}
-}
-
-func TestEmbedServesTheBareCheckerWhenTheAPIRejectsTheHost(t *testing.T) {
-	f := newFakeAPI(t, http.StatusBadRequest, `{"detail":"The host must be a domain name, an IPv4 address or an IPv6 address, optionally followed by a port."}`)
-	assertBarePage(t, getEmbed("localhost", ""))
-	if f.request == nil || f.request.URL.Path != "/api/v1/mcstatus/localhost" {
-		t.Errorf("API request = %v", f.request)
-	}
-}
-
-func TestEmbedDescriptionIsTruncatedAndEscaped(t *testing.T) {
-	motd := strings.Repeat("é", 300)
-	version := strings.Repeat("v", 100)
-	newFakeAPI(t, http.StatusOK, fmt.Sprintf(`{"host":"a.com","port":25565,"motd":%q,"num_players":1,"max_players":2,"version":%q}`, motd, version))
-	h := head(t, getEmbed("a.com", "").Body.String())
-
-	if !strings.Contains(h, strings.Repeat("é", 200)+"…\nPlayers: 1/2\nVersion: "+strings.Repeat("v", 64)+"…") {
-		t.Errorf("MOTD and version should be truncated:\n%s", h)
-	}
-	if strings.Contains(h, strings.Repeat("é", 201)) {
-		t.Error("MOTD was not truncated at the limit")
-	}
-}
-
-func TestEmbedKeepsTextAtTheLimit(t *testing.T) {
-	motd := strings.Repeat("é", 200)
-	version := strings.Repeat("v", 64)
-	newFakeAPI(t, http.StatusOK, fmt.Sprintf(`{"host":"a.com","port":25565,"motd":%q,"num_players":1,"max_players":2,"version":%q}`, motd, version))
-	h := head(t, getEmbed("a.com", "").Body.String())
-	if strings.Contains(h, "…") {
-		t.Errorf("text exactly at the limit must not be truncated:\n%s", h)
-	}
-	if !strings.Contains(h, motd+"\nPlayers: 1/2\nVersion: "+version) {
-		t.Errorf("full MOTD and version expected:\n%s", h)
-	}
-}
-
-func TestEmbedEscapesServerText(t *testing.T) {
-	newFakeAPI(t, http.StatusOK, `{"host":"a.com","port":25565,"motd":"<script>alert(1)</script>\"><img src=x>","num_players":1,"max_players":2,"version":"<b>1</b>"}`)
-	body := getEmbed("a.com", "").Body.String()
-	if !strings.Contains(body, "&lt;script&gt;alert(1)&lt;/script&gt;") {
-		t.Error("the MOTD should still appear, escaped")
-	}
-	for _, bad := range []string{"<script>alert", "<img src=x>", "<b>1</b>"} {
-		if strings.Contains(body, bad) {
-			t.Errorf("unescaped server text %q in response", bad)
-		}
-	}
-}
-
-func TestEmbedOmitsEmptyVersion(t *testing.T) {
-	newFakeAPI(t, http.StatusOK, `{"host":"a.com","port":25565,"motd":"Hi","num_players":0,"max_players":5,"version":""}`)
-	h := head(t, getEmbed("a.com", "").Body.String())
-	if strings.Contains(h, "Version:") {
-		t.Errorf("an empty version should not render a Version line:\n%s", h)
-	}
-}
-
-func TestEmbedMotdLines(t *testing.T) {
-	cases := []struct{ name, motd, want string }{
-		{"colour codes and a line break", `§aHello\n§c§lWorld`, "Hello\nWorld\n"},
-		{"hex colour", `§x§f§f§0§0§0§0Red`, "Red\n"},
-		{"padding and blank lines", `  padded  \n\n  lines  `, "padded\nlines\n"},
-		{"no codes", `no codes`, "no codes\n"},
-		{"a real newline", "already\nsplit", "already\nsplit\n"},
-		{"nothing but a code", `§a`, ""},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			newFakeAPI(t, http.StatusOK, fmt.Sprintf(`{"host":"a.com","port":25565,"motd":%q,"num_players":1,"max_players":2,"version":"v"}`, tc.motd))
-			h := head(t, getEmbed("a.com", "").Body.String())
-			if want := tc.want + "Players: 1/2\nVersion: v"; !strings.Contains(h, `content="`+want+`"`) {
-				t.Errorf("description should be %q:\n%s", want, h)
-			}
-		})
-	}
-}
-
-func bodyOfSize(size int) string {
-	const prefix, suffix = `{"host":"a.com","port":25565,"motd":"`, `","num_players":1,"max_players":2,"version":"v"}`
+func mcAnswerOfSize(size int) string {
+	const prefix, suffix = `{"host":"a.example","port":25565,"motd":"`, `"}`
 	return prefix + strings.Repeat("a", size-len(prefix)-len(suffix)) + suffix
 }
 
-func TestEmbedAcceptsABodyAtTheLimit(t *testing.T) {
-	newFakeAPI(t, http.StatusOK, bodyOfSize(1<<20))
-	if rec := getEmbed("a.com", ""); rec.Code != http.StatusOK || rec.Header().Get("Cache-Control") != "public, max-age=60" {
-		t.Errorf("status = %d, Cache-Control = %q", rec.Code, rec.Header().Get("Cache-Control"))
+func metaContent(t testing.TB, body, key string) string {
+	t.Helper()
+	found := regexp.MustCompile(`<meta (?:property|name)="` + regexp.QuoteMeta(key) + `" content="([^"]*)"`).FindStringSubmatch(body)
+	if found == nil {
+		t.Errorf("no meta tag for %q in:\n%s", key, body)
+		return ""
 	}
+	return html.UnescapeString(found[1])
 }
 
-func TestEmbedTreatsOnlyProblemJSON404AsOffline(t *testing.T) {
-	cases := []struct {
-		name, contentType string
-		wantOffline       bool
-	}{
-		{"problem+json", "application/problem+json", true},
-		{"problem+json with a charset", "application/problem+json; charset=utf-8", true},
-		{"whitespace before the parameters", "application/problem+json ; charset=utf-8", true},
-		{"mixed case", "Application/Problem+JSON", true},
-		{"problem+xml", "application/problem+xml", false},
-		{"problem+json as a parameter", "text/x; a=application/problem+json", false},
-		{"other +json type", "application/vnd.api+json", false},
-		{"problem+json with a suffix", "application/problem+json2", false},
-		{"plain json", "application/json", false},
-		{"html from a proxy", "text/html", false},
-		{"no content type", "", false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			newFakeAPIWithType(t, http.StatusNotFound, tc.contentType, `{"host":"a.com","port":25565,"status":404}`)
-			rec := getEmbed("a.com", "")
-			if !tc.wantOffline {
-				assertBarePage(t, rec)
-				return
-			}
-			if rec.Code != http.StatusOK {
-				t.Errorf("status = %d, want 200", rec.Code)
-			}
-			if got := rec.Header().Get("Cache-Control"); got != "public, max-age=30" {
-				t.Errorf("Cache-Control = %q, want %q", got, "public, max-age=30")
-			}
-			if !strings.Contains(head(t, rec.Body.String()), "Server offline or unreachable") {
-				t.Error("an offline server should get the offline description")
-			}
-		})
-	}
+func TestDecodeMcStatus(t *testing.T) {
+	decode := func(body string) (apiMcStatus, bool) { return decodeMcStatus(strings.NewReader(body)) }
+
+	t.Run("MC-01_a_complete_answer_decodes_into_its_fields", func(t *testing.T) {
+		got, ok := decode(`{"host":"play.example.net","port":25565,"motd":"Hi","num_players":3,"max_players":20,"version":"1.21"}`)
+		want := apiMcStatus{Host: "play.example.net", Port: 25565, Motd: "Hi", NumPlayers: 3, MaxPlayers: 20, Version: "1.21"}
+		if !ok || got != want {
+			t.Errorf("decode = %+v, %t, want %+v, true", got, ok, want)
+		}
+	})
+
+	t.Run("MC-02_an_answer_without_a_host_is_refused", func(t *testing.T) {
+		for name, body := range map[string]string{"missing": `{"port":25565}`, "empty": `{"host":"","port":25565}`} {
+			t.Run("MC-02_"+name, func(t *testing.T) {
+				if _, ok := decode(body); ok {
+					t.Errorf("decode(%s) ok = true", body)
+				}
+			})
+		}
+	})
+
+	t.Run("MC-03_an_answer_without_a_port_or_with_port_0_is_refused", func(t *testing.T) {
+		for name, body := range map[string]string{"missing": `{"host":"a.example"}`, "zero": `{"host":"a.example","port":0}`} {
+			t.Run("MC-03_"+name, func(t *testing.T) {
+				if _, ok := decode(body); ok {
+					t.Errorf("decode(%s) ok = true", body)
+				}
+			})
+		}
+	})
+
+	t.Run("MC-04_a_body_that_does_not_decode_into_an_answer_is_refused", func(t *testing.T) {
+		cases := []struct{ name, body string }{
+			{"empty", ``},
+			{"not_json", `not json`},
+			{"cut_short", `{"host":"a.example","port":25565`},
+			{"array", `[]`},
+			{"string", `"text"`},
+			{"null", `null`},
+			{"empty_object", `{}`},
+			{"port_as_string", `{"host":"a.example","port":"25565"}`},
+			{"players_as_string", `{"host":"a.example","port":25565,"num_players":"3"}`},
+			{"host_as_number", `{"host":7,"port":25565}`},
+		}
+		for _, tc := range cases {
+			t.Run("MC-04_"+tc.name, func(t *testing.T) {
+				if _, ok := decode(tc.body); ok {
+					t.Errorf("decode(%s) ok = true", tc.body)
+				}
+			})
+		}
+	})
+
+	t.Run("MC-05_only_the_host_and_port_are_required", func(t *testing.T) {
+		got, ok := decode(`{"host":"a.example","port":25565}`)
+		if want := (apiMcStatus{Host: "a.example", Port: 25565}); !ok || got != want {
+			t.Errorf("decode = %+v, %t, want %+v, true", got, ok, want)
+		}
+	})
+
+	t.Run("MC-06_unknown_fields_and_data_after_the_first_JSON_value_are_ignored", func(t *testing.T) {
+		for name, body := range map[string]string{
+			"unknown_field": `{"host":"a.example","port":25565,"extra":{"x":1}}`,
+			"trailing_text": `{"host":"a.example","port":25565} trailing text`,
+		} {
+			t.Run("MC-06_"+name, func(t *testing.T) {
+				got, ok := decode(body)
+				if !ok || got.Host != "a.example" || got.Port != 25565 {
+					t.Errorf("decode = %+v, %t, want a.example and 25565", got, ok)
+				}
+			})
+		}
+	})
+
+	t.Run("MC-07_only_the_first_1_MiB_of_the_body_is_read", func(t *testing.T) {
+		cases := []struct {
+			name string
+			body string
+			ok   bool
+		}{
+			{"exactly_the_limit", mcAnswerOfSize(1 << 20), true},
+			{"one_byte_over", mcAnswerOfSize(1<<20 + 1), false},
+			{"spaces_fill_the_limit", strings.Repeat(" ", 1<<20) + `{"host":"a.example","port":25565}`, false},
+		}
+		for _, tc := range cases {
+			t.Run("MC-07_"+tc.name, func(t *testing.T) {
+				got, ok := decode(tc.body)
+				if ok != tc.ok {
+					t.Fatalf("ok = %t, want %t", ok, tc.ok)
+				}
+				if ok && (got.Host != "a.example" || got.Port != 25565) {
+					t.Errorf("decode = %+v, want a.example and 25565", got)
+				}
+			})
+		}
+	})
 }
 
-func TestEmbedRouteWiring(t *testing.T) {
-	f := newFakeAPI(t, http.StatusOK, `{"host":"play.example.com","port":25570,"num_players":1}`)
-	router := NewWebServer("", false).Setup()
+func TestMcStatusPageHandler(t *testing.T) {
+	const host = "play.example.net"
+	const path = "/project/mc-status/" + host
 
-	get := httptest.NewRecorder()
-	router.ServeHTTP(get, httptest.NewRequest(http.MethodGet, "/project/mc-status/Play.Example.com:25570?query=false", nil))
-	if get.Code != http.StatusOK || !strings.Contains(get.Body.String(), `property="og:title" content="play.example.com:25570"`) {
-		t.Fatalf("GET /project/mc-status/{host} did not reach the handler: %d %s", get.Code, get.Body.String())
+	online := func(t *testing.T) string { return mcStatusAnswer(t, host, 25565, "A Minecraft Server", "Paper 1.21.4") }
+	served := func(t *testing.T, status int, body string) *fakeapi.FakeAPI {
+		f := fakeapi.NewFakeAPI(t)
+		f.On("GET /mcstatus/"+host, status, body)
+		return f
 	}
-	if f.request == nil || f.request.URL.Path != "/api/v1/mcstatus/Play.Example.com:25570" {
-		t.Errorf("the host path value did not reach the API: %v", f.request)
-	}
-
-	catchAll := httptest.NewRecorder()
-	router.ServeHTTP(catchAll, httptest.NewRequest(http.MethodGet, "/", nil))
-	f.request = nil
-	bare := httptest.NewRecorder()
-	router.ServeHTTP(bare, httptest.NewRequest(http.MethodGet, "/project/mc-status", nil))
-	if bare.Code != http.StatusOK || !strings.Contains(bare.Body.String(), `id="mc-status-host"`) || strings.Contains(bare.Body.String(), "og:title") {
-		t.Errorf("GET /project/mc-status should serve the bare checker: %d", bare.Code)
-	}
-	if bare.Header().Get("Cache-Control") != "" {
-		t.Errorf("the bare checker should not set Cache-Control, got %q", bare.Header().Get("Cache-Control"))
-	}
-	if f.request != nil {
-		t.Error("the bare checker must not call the API")
+	lookupURI := func(t *testing.T, query string) string {
+		f := served(t, 200, online(t))
+		serveRequest("GET", path+query, nil)
+		calls := f.Calls()
+		if len(calls) != 1 {
+			t.Fatalf("API calls = %q, want one", f.Lines())
+		}
+		return calls[0].URI
 	}
 
-	for _, path := range []string{"/project/mc-status", "/project/mc-status/a.com"} {
-		for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch} {
-			rec := httptest.NewRecorder()
-			router.ServeHTTP(rec, httptest.NewRequest(method, path, nil))
-			if rec.Code != catchAll.Code || rec.Body.String() != catchAll.Body.String() {
-				t.Errorf("%s %s should fall through to the catch-all route, got %d", method, path, rec.Code)
+	t.Run("MC-08_a_request_without_a_host_serves_the_plain_checker_page_and_does_not_call_the_API", func(t *testing.T) {
+		f := fakeapi.NewFakeAPI(t)
+		rec := serveRequest("GET", "/project/mc-status", nil)
+		assertStatusCode(t, rec, 200)
+		assertHTMLContent(t, rec)
+		assertBodyHas(t, rec, `<title>NeuralNexus</title>`, `id="mc-status-host"`)
+		assertBodyLacks(t, rec, "og:title", `rel="canonical"`)
+		if got := rec.Header().Get("Cache-Control"); got != "" {
+			t.Errorf("Cache-Control = %q, want none", got)
+		}
+		f.AssertLines(t)
+	})
+
+	t.Run("MC-09_a_host_longer_than_260_bytes_is_refused_before_any_API_call", func(t *testing.T) {
+		for _, length := range []int{261, 1000} {
+			t.Run("MC-09_"+strconv.Itoa(length)+"_bytes", func(t *testing.T) {
+				f := fakeapi.NewFakeAPI(t)
+				assertPlainMcStatusPage(t, serveRequest("GET", "/project/mc-status/"+strings.Repeat("a", length), nil))
+				f.AssertLines(t)
+			})
+		}
+	})
+
+	t.Run("MC-10_a_host_of_exactly_260_bytes_is_looked_up", func(t *testing.T) {
+		long := strings.Repeat("a", 260)
+		f := fakeapi.NewFakeAPI(t)
+		f.On("GET /mcstatus/"+long, 200, mcStatusAnswer(t, "a.example", 25565, "Hi", "1.21"))
+		rec := serveRequest("GET", "/project/mc-status/"+long, nil)
+		assertStatusCode(t, rec, 200)
+		assertBodyHas(t, rec, "og:title")
+		f.AssertLines(t, "GET /mcstatus/"+long+"?query=true")
+	})
+
+	t.Run("MC-11_the_length_limit_counts_decoded_bytes_not_runes_and_not_encoded_characters", func(t *testing.T) {
+		cases := []struct {
+			name, path, route string
+			looked            bool
+		}{
+			{"130_e_acute", strings.Repeat("%C3%A9", 130), strings.Repeat("%C3%A9", 130), true},
+			{"131_e_acute", strings.Repeat("%C3%A9", 131), "", false},
+			{"260_encoded_a", strings.Repeat("%61", 260), strings.Repeat("a", 260), true},
+			{"261_encoded_a", strings.Repeat("%61", 261), "", false},
+		}
+		for _, tc := range cases {
+			t.Run("MC-11_"+tc.name, func(t *testing.T) {
+				f := fakeapi.NewFakeAPI(t)
+				if tc.looked {
+					f.On("GET /mcstatus/"+tc.route, 200, mcStatusAnswer(t, "a.example", 25565, "Hi", "1.21"))
+				}
+				rec := serveRequest("GET", "/project/mc-status/"+tc.path, nil)
+				if !tc.looked {
+					assertPlainMcStatusPage(t, rec)
+					f.AssertLines(t)
+					return
+				}
+				assertStatusCode(t, rec, 200)
+				f.AssertLines(t, "GET /mcstatus/"+tc.route+"?query=true")
+			})
+		}
+	})
+
+	t.Run("MC-12_the_hosts_dot_and_dot_dot_are_refused_before_any_API_call", func(t *testing.T) {
+		for name, encoded := range map[string]string{"dot": "%2E", "dot_dot_upper": "%2E%2E", "dot_dot_lower": "%2e%2e"} {
+			t.Run("MC-12_"+name, func(t *testing.T) {
+				f := fakeapi.NewFakeAPI(t)
+				assertPlainMcStatusPage(t, serveRequest("GET", "/project/mc-status/"+encoded, nil))
+				f.AssertLines(t)
+			})
+		}
+	})
+
+	t.Run("MC-13_hosts_that_only_resemble_dot_segments_are_looked_up", func(t *testing.T) {
+		cases := []struct{ name, path string }{
+			{"three_dots", "..."},
+			{"leading_dot", ".a"},
+			{"trailing_dot", "a."},
+			{"space_dot", "%20."},
+			{"dot_space", ".%20"},
+			{"encoded_dots_encoded_again", "%252e%252e"},
+		}
+		for _, tc := range cases {
+			t.Run("MC-13_"+tc.name, func(t *testing.T) {
+				f := fakeapi.NewFakeAPI(t)
+				f.On("GET /mcstatus/"+tc.path, 200, mcStatusAnswer(t, "a.example", 25565, "Hi", "1.21"))
+				assertStatusCode(t, serveRequest("GET", "/project/mc-status/"+tc.path, nil), 200)
+				f.AssertLines(t, "GET /mcstatus/"+tc.path+"?query=true")
+			})
+		}
+	})
+
+	t.Run("MC-14_the_upstream_request_is_one_bodiless_GET_for_the_host_with_the_default_options", func(t *testing.T) {
+		f := served(t, 200, online(t))
+		serveRequest("GET", path, nil)
+		calls := f.Calls()
+		if len(calls) != 1 {
+			t.Fatalf("API calls = %q, want one", f.Lines())
+		}
+		if calls[0].Method != "GET" || calls[0].URI != "/mcstatus/play.example.net?query=true" || calls[0].Body != "" {
+			t.Errorf("call = %+v, want a bodiless GET of /mcstatus/play.example.net?query=true", calls[0])
+		}
+	})
+
+	t.Run("MC-15_the_host_is_path_escaped_into_the_upstream_path_and_cannot_add_to_the_query", func(t *testing.T) {
+		cases := []struct{ name, path, route string }{
+			{"slash", "a%2Fb", "a%2Fb"},
+			{"question_mark", "a%3Fb", "a%3Fb"},
+			{"hash", "a%23b", "a%23b"},
+			{"percent", "100%25", "100%25"},
+			{"space", "a%20b", "a%20b"},
+			{"e_acute", "%C3%A9", "%C3%A9"},
+			{"invalid_utf8_byte", "%FF", "%FF"},
+			{"line_feed", "a%0Ab", "a%0Ab"},
+			{"slashes_around_dots", "x%2F..%2Fy", "x%2F..%2Fy"},
+			{"semicolon_and_comma", "a%3Bb%2Cc", "a%3Bb%2Cc"},
+			{"ampersand_query", "a%26query=false", "a&query=false"},
+			{"question_mark_bedrock", "a%3Fbedrock%3Dtrue", "a%3Fbedrock=true"},
+			{"host_and_port", "play.example.net:25565", "play.example.net:25565"},
+			{"ipv6_and_port", "%5B2001:db8::1%5D:25566", "%5B2001:db8::1%5D:25566"},
+		}
+		for _, tc := range cases {
+			t.Run("MC-15_"+tc.name, func(t *testing.T) {
+				f := fakeapi.NewFakeAPI(t)
+				f.On("GET /mcstatus/"+tc.route, 200, mcStatusAnswer(t, "a.example", 25565, "Hi", "1.21"))
+				serveRequest("GET", "/project/mc-status/"+tc.path, nil)
+				f.AssertLines(t, "GET /mcstatus/"+tc.route+"?query=true")
+			})
+		}
+	})
+
+	t.Run("MC-16_the_Bedrock_option_sends_only_bedrock_true", func(t *testing.T) {
+		for name, query := range map[string]string{
+			"alone":      "?bedrock=true",
+			"query_port": "?bedrock=true&query_port=25575",
+			"query_off":  "?bedrock=true&query=false",
+		} {
+			t.Run("MC-16_"+name, func(t *testing.T) {
+				if got := lookupURI(t, query); got != "/mcstatus/play.example.net?bedrock=true" {
+					t.Errorf("URI = %q", got)
+				}
+			})
+		}
+	})
+
+	t.Run("MC-17_turning_the_query_option_off_sends_no_query_string", func(t *testing.T) {
+		for name, query := range map[string]string{"alone": "?query=false", "query_port": "?query=false&query_port=25575"} {
+			t.Run("MC-17_"+name, func(t *testing.T) {
+				if got := lookupURI(t, query); got != "/mcstatus/play.example.net" {
+					t.Errorf("URI = %q", got)
+				}
+			})
+		}
+	})
+
+	t.Run("MC-18_a_valid_query_port_is_sent_along_with_query_true", func(t *testing.T) {
+		cases := []struct{ name, query, want string }{
+			{"typical", "?query_port=25575", "?query=true&query_port=25575"},
+			{"lowest_with_query_true", "?query=true&query_port=1", "?query=true&query_port=1"},
+			{"highest", "?query_port=65535", "?query=true&query_port=65535"},
+		}
+		for _, tc := range cases {
+			t.Run("MC-18_"+tc.name, func(t *testing.T) {
+				if got := lookupURI(t, tc.query); got != "/mcstatus/play.example.net"+tc.want {
+					t.Errorf("URI = %q", got)
+				}
+			})
+		}
+	})
+
+	t.Run("MC-19_a_query_port_that_is_not_a_number_from_1_to_65535_is_dropped", func(t *testing.T) {
+		cases := []struct{ name, query string }{
+			{"zero", "?query_port=0"},
+			{"over_the_range", "?query_port=65536"},
+			{"negative", "?query_port=-1"},
+			{"plus_sign", "?query_port=%2B25575"},
+			{"letters", "?query_port=abc"},
+			{"empty", "?query_port="},
+			{"decimal", "?query_port=1.5"},
+			{"leading_space", "?query_port=%2025575"},
+			{"overflow", "?query_port=99999999999999999999"},
+		}
+		for _, tc := range cases {
+			t.Run("MC-19_"+tc.name, func(t *testing.T) {
+				f := served(t, 200, online(t))
+				assertStatusCode(t, serveRequest("GET", path+tc.query, nil), 200)
+				f.AssertLines(t, "GET /mcstatus/play.example.net?query=true")
+			})
+		}
+	})
+
+	t.Run("MC-20_only_the_exact_values_bedrock_true_and_query_false_change_the_options_and_the_first_value_of_a_repeated_parameter_wins", func(t *testing.T) {
+		cases := []struct{ name, query, want string }{
+			{"bedrock_capitalised", "?bedrock=True", "?query=true"},
+			{"bedrock_one", "?bedrock=1", "?query=true"},
+			{"bedrock_false", "?bedrock=false", "?query=true"},
+			{"bedrock_empty", "?bedrock=", "?query=true"},
+			{"query_capitalised", "?query=False", "?query=true"},
+			{"query_zero", "?query=0", "?query=true"},
+			{"query_empty", "?query=", "?query=true"},
+			{"bedrock_false_first", "?bedrock=false&bedrock=true", "?query=true"},
+			{"bedrock_true_first", "?bedrock=true&bedrock=false", "?bedrock=true"},
+		}
+		for _, tc := range cases {
+			t.Run("MC-20_"+tc.name, func(t *testing.T) {
+				if got := lookupURI(t, tc.query); got != "/mcstatus/play.example.net"+tc.want {
+					t.Errorf("URI = %q", got)
+				}
+			})
+		}
+	})
+
+	t.Run("MC-21_other_query_parameters_and_the_visitors_credentials_are_not_sent_to_the_API", func(t *testing.T) {
+		f := served(t, 200, online(t))
+		req := httptest.NewRequest("GET", path+"?foo=bar&host=evil.example&icon=1", nil)
+		req.AddCookie(&http.Cookie{Name: "session", Value: "abc123"})
+		req.AddCookie(&http.Cookie{Name: "theme", Value: "dark"})
+		req.Header.Set("Authorization", "Bearer t")
+		NewWebServer("", false).Setup().ServeHTTP(httptest.NewRecorder(), req)
+		calls := f.Calls()
+		if len(calls) != 1 {
+			t.Fatalf("API calls = %q, want one", f.Lines())
+		}
+		if calls[0].URI != "/mcstatus/play.example.net?query=true" {
+			t.Errorf("URI = %q", calls[0].URI)
+		}
+		for _, header := range []string{"Cookie", "Authorization"} {
+			if got := calls[0].Header.Values(header); len(got) != 0 {
+				t.Errorf("the API saw %s = %q, want none", header, got)
 			}
 		}
+	})
+
+	t.Run("MC-22_an_online_answer_renders_the_preview_page_with_a_one_minute_public_cache", func(t *testing.T) {
+		fakeapi.PointSiteAt(t, mcSiteURL)
+		f := served(t, 200, online(t))
+		rec := serveRequest("GET", path, nil)
+		assertStatusCode(t, rec, 200)
+		assertHTMLContent(t, rec)
+		if got := rec.Header().Get("Cache-Control"); got != "public, max-age=60" {
+			t.Errorf("Cache-Control = %q, want public, max-age=60", got)
+		}
+		body := rec.Body.String()
+		canonical := mcSiteURL + "/project/mc-status/play.example.net"
+		assertBodyHas(t, rec, `<title>play.example.net</title>`, `<link rel="canonical" href="`+canonical+`">`, `name="robots" content="noindex"`)
+		for key, want := range map[string]string{
+			"og:title":       "play.example.net",
+			"og:description": "A Minecraft Server\nPlayers: 3/20\nVersion: Paper 1.21.4",
+			"og:url":         canonical,
+			"og:image":       f.URL + "/api/v1/mcstatus/icon/play.example.net",
+		} {
+			if got := metaContent(t, body, key); got != want {
+				t.Errorf("%s = %q, want %q", key, got, want)
+			}
+		}
+	})
+
+	t.Run("MC-23_the_page_shows_the_host_and_port_from_the_answer_not_the_path_value", func(t *testing.T) {
+		fakeapi.PointSiteAt(t, mcSiteURL)
+		f := fakeapi.NewFakeAPI(t)
+		f.On("GET /mcstatus/PLAY.Example.net", 200, mcStatusAnswer(t, host, 25566, "Hi", "1.21"))
+		rec := serveRequest("GET", "/project/mc-status/PLAY.Example.net", nil)
+		assertBodyHas(t, rec, `<title>play.example.net:25566</title>`, `href="`+mcSiteURL+`/project/mc-status/play.example.net:25566"`)
+		assertBodyLacks(t, rec, "PLAY")
+	})
+
+	t.Run("MC-24_the_request_options_appear_in_the_canonical_URL_and_icon_URL_and_only_one_share_option_is_kept", func(t *testing.T) {
+		cases := []struct {
+			name, query string
+			port        int
+			share, icon string
+		}{
+			{"no_parameter", "", 25565, "", ""},
+			{"bedrock", "?bedrock=true", 19132, "?bedrock=true", "?bedrock=true"},
+			{"query_off", "?query=false", 25565, "?query=false", ""},
+			{"query_port", "?query_port=25575", 25565, "?query_port=25575", ""},
+			{"query_off_and_port", "?query=false&query_port=25575", 25565, "?query=false", ""},
+			{"bedrock_and_query_off_and_port", "?bedrock=true&query=false&query_port=25575", 19132, "?bedrock=true", "?bedrock=true"},
+		}
+		for _, tc := range cases {
+			t.Run("MC-24_"+tc.name, func(t *testing.T) {
+				fakeapi.PointSiteAt(t, mcSiteURL)
+				f := fakeapi.NewFakeAPI(t)
+				f.On("GET /mcstatus/h.example", 200, mcStatusAnswer(t, "h.example", tc.port, "Hi", "1.21"))
+				rec := serveRequest("GET", "/project/mc-status/h.example"+tc.query, nil)
+				canonical := mcSiteURL + "/project/mc-status/h.example" + tc.share
+				assertBodyHas(t, rec, `<link rel="canonical" href="`+canonical+`">`)
+				if got := metaContent(t, rec.Body.String(), "og:url"); got != canonical {
+					t.Errorf("og:url = %q, want %q", got, canonical)
+				}
+				if got, want := metaContent(t, rec.Body.String(), "og:image"), f.URL+"/api/v1/mcstatus/icon/h.example"+tc.icon; got != want {
+					t.Errorf("og:image = %q, want %q", got, want)
+				}
+			})
+		}
+	})
+
+	motdCases := func(t *testing.T, row string, cases []struct{ name, motd, want string }) {
+		for _, tc := range cases {
+			t.Run(row+"_"+tc.name, func(t *testing.T) {
+				served(t, 200, mcStatusAnswer(t, host, 25565, tc.motd, "Paper 1.21.4"))
+				rec := serveRequest("GET", path, nil)
+				assertStatusCode(t, rec, 200)
+				if got := metaContent(t, rec.Body.String(), "og:description"); got != tc.want {
+					t.Errorf("og:description = %q, want %q", got, tc.want)
+				}
+			})
+		}
+	}
+	const tail = "Players: 3/20\nVersion: Paper 1.21.4"
+
+	t.Run("MC-25_the_MOTD_is_split_into_trimmed_lines_and_blank_lines_are_dropped", func(t *testing.T) {
+		motdCases(t, "MC-25", []struct{ name, motd, want string }{
+			{"json_newline", "A\nB", "A\nB\n" + tail},
+			{"backslash_n", "A\\nB", "A\nB\n" + tail},
+			{"padding_and_blank_lines", "  A  \r\n   \n\tB\t", "A\nB\n" + tail},
+			{"backslash_n_then_newline", "A\\n\nB", "A\nB\n" + tail},
+		})
+	})
+
+	t.Run("MC-26_section_sign_color_codes_are_removed_from_the_MOTD", func(t *testing.T) {
+		motdCases(t, "MC-26", []struct{ name, motd, want string }{
+			{"green_bold", "§aGreen §lBold§r", "Green Bold\n" + tail},
+			{"gold_gray", "§6§lGold §7Gray", "Gold Gray\n" + tail},
+			{"two_lines", "§4Red\n§9Blue", "Red\nBlue\n" + tail},
+		})
+	})
+
+	t.Run("MC-27_a_color_code_takes_the_character_after_it_including_a_newline_and_a_final_section_sign_stays", func(t *testing.T) {
+		motdCases(t, "MC-27", []struct{ name, motd, want string }{
+			{"final_section_sign", "A§", "A§\n" + tail},
+			{"section_sign_code", "§§aX", "aX\n" + tail},
+			{"code_takes_the_newline", "A§\nB", "AB\n" + tail},
+			{"code_takes_a_two_byte_rune", "§éX", "X\n" + tail},
+			{"code_takes_a_four_byte_rune", "§😀X", "X\n" + tail},
+		})
+	})
+
+	t.Run("MC-28_a_MOTD_with_no_visible_text_adds_no_MOTD_line", func(t *testing.T) {
+		motdCases(t, "MC-28", []struct{ name, motd, want string }{
+			{"empty", "", tail},
+			{"spaces", "   ", tail},
+			{"blank_lines", "\n\t\n", tail},
+			{"only_codes", "§a§l", tail},
+		})
+	})
+
+	t.Run("MC-29_a_long_MOTD_and_version_are_cut_in_the_page", func(t *testing.T) {
+		served(t, 200, mcStatusAnswer(t, host, 25565, strings.Repeat("x", 300), strings.Repeat("v", 100)))
+		rec := serveRequest("GET", path, nil)
+		want := strings.Repeat("x", 200) + "…\nPlayers: 3/20\nVersion: " + strings.Repeat("v", 64) + "…"
+		if got := metaContent(t, rec.Body.String(), "og:description"); got != want {
+			t.Errorf("og:description = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("MC-30_server_supplied_MOTD_and_version_text_is_escaped_in_the_page", func(t *testing.T) {
+		cases := []struct {
+			name, motd, version string
+			want                []string
+		}{
+			{"script_in_motd_and_version", `"><script>alert(1)</script>`, `"><script>alert(2)</script>`,
+				[]string{`&#34;&gt;&lt;script&gt;alert(1)&lt;/script&gt;`, `&#34;&gt;&lt;script&gt;alert(2)&lt;/script&gt;`}},
+			{"image_tag", `<img src=x onerror=alert(1)>`, "1.21", []string{`&lt;img src=x onerror=alert(1)&gt;`}},
+			{"ampersand_and_quotes", `&amp; ' "`, "1.21", []string{`&amp;amp; &#39; &#34;`}},
+		}
+		for _, tc := range cases {
+			t.Run("MC-30_"+tc.name, func(t *testing.T) {
+				served(t, 200, mcStatusAnswer(t, host, 25565, tc.motd, tc.version))
+				rec := serveRequest("GET", path, nil)
+				assertBodyHas(t, rec, tc.want...)
+				assertBodyLacks(t, rec, "<script>alert(", "<img src=x", `"><script>`)
+			})
+		}
+	})
+
+	t.Run("MC-31_a_host_from_the_answer_is_escaped_in_the_title_the_tags_and_the_URLs_for_online_and_offline_answers", func(t *testing.T) {
+		const hostile = `evil"><script>alert(3)</script>`
+		const shown = `evil&#34;&gt;&lt;script&gt;alert(3)&lt;/script&gt;`
+		for name, status := range map[string]int{"online": 200, "offline": 404} {
+			t.Run("MC-31_"+name, func(t *testing.T) {
+				fakeapi.PointSiteAt(t, mcSiteURL)
+				served(t, status, mcStatusAnswer(t, hostile, 25565, "Hi", "1.21"))
+				rec := serveRequest("GET", path, nil)
+				assertBodyHas(t, rec, `<title>`+shown+`</title>`, `property="og:title" content="`+shown+`"`, `property="og:image:alt" content="`+shown+` server icon"`)
+				body := rec.Body.String()
+				for _, value := range []string{metaContent(t, body, "og:url"), metaContent(t, body, "og:image")} {
+					if !strings.Contains(value, "evil%22%3E%3Cscript%3E") {
+						t.Errorf("URL %q lacks the escaped host", value)
+					}
+				}
+				if !strings.Contains(body, `rel="canonical" href="`+mcSiteURL+`/project/mc-status/evil%22%3E%3Cscript%3E`) {
+					t.Errorf("the canonical link lacks the escaped host:\n%s", body)
+				}
+				assertBodyLacks(t, rec, "<script>alert(3)", `evil"><`)
+			})
+		}
+	})
+
+	offlineBody := `{"host":"play.example.net","port":25565}`
+
+	t.Run("MC-32_a_404_problem_json_answer_renders_the_offline_page_with_a_30_second_public_cache", func(t *testing.T) {
+		fakeapi.PointSiteAt(t, mcSiteURL)
+		f := served(t, 404, offlineBody)
+		rec := serveRequest("GET", path, nil)
+		assertStatusCode(t, rec, 200)
+		if got := rec.Header().Get("Cache-Control"); got != "public, max-age=30" {
+			t.Errorf("Cache-Control = %q, want public, max-age=30", got)
+		}
+		assertBodyHas(t, rec, `<title>play.example.net</title>`, `href="`+mcSiteURL+`/project/mc-status/play.example.net"`)
+		body := rec.Body.String()
+		if got := metaContent(t, body, "og:description"); got != "Server offline or unreachable" {
+			t.Errorf("og:description = %q", got)
+		}
+		if got, want := metaContent(t, body, "og:image"), f.URL+"/api/v1/mcstatus/icon/play.example.net"; got != want {
+			t.Errorf("og:image = %q, want %q", got, want)
+		}
+		assertBodyLacks(t, rec, "Players:")
+	})
+
+	t.Run("MC-33_the_problem_json_media_type_is_matched_without_regard_to_case_or_parameters", func(t *testing.T) {
+		for name, contentType := range map[string]string{"with_a_parameter": "application/problem+json; charset=utf-8", "upper_case": "APPLICATION/PROBLEM+JSON"} {
+			t.Run("MC-33_"+name, func(t *testing.T) {
+				f := fakeapi.NewFakeAPI(t)
+				f.OnType("GET /mcstatus/"+host, 404, contentType, offlineBody)
+				rec := serveRequest("GET", path, nil)
+				assertStatusCode(t, rec, 200)
+				if got := rec.Header().Get("Cache-Control"); got != "public, max-age=30" {
+					t.Errorf("Cache-Control = %q, want public, max-age=30", got)
+				}
+				assertBodyHas(t, rec, `<title>play.example.net</title>`, "Server offline or unreachable")
+			})
+		}
+	})
+
+	t.Run("MC-34_a_404_that_is_not_problem_json_gets_the_plain_page", func(t *testing.T) {
+		cases := []struct{ name, contentType string }{
+			{"json", "application/json"},
+			{"html", "text/html"},
+			{"problem_xml", "application/problem+xml"},
+			{"problem_jsonx", "application/problem+jsonx"},
+			{"no_content_type", ""},
+		}
+		for _, tc := range cases {
+			t.Run("MC-34_"+tc.name, func(t *testing.T) {
+				f := fakeapi.NewFakeAPI(t)
+				f.OnType("GET /mcstatus/"+host, 404, tc.contentType, offlineBody)
+				assertPlainMcStatusPage(t, serveRequest("GET", path, nil))
+			})
+		}
+	})
+
+	t.Run("MC-35_a_404_problem_json_answer_without_a_usable_host_and_port_gets_the_plain_page", func(t *testing.T) {
+		cases := []struct{ name, body string }{
+			{"detail_only", `{"detail":"Not found"}`},
+			{"host_only", `{"host":"a.example"}`},
+			{"port_only", `{"port":25565}`},
+			{"empty", ``},
+			{"not_json", `not json`},
+		}
+		for _, tc := range cases {
+			t.Run("MC-35_"+tc.name, func(t *testing.T) {
+				served(t, 404, tc.body)
+				assertPlainMcStatusPage(t, serveRequest("GET", path, nil))
+			})
+		}
+	})
+
+	t.Run("MC-36_an_offline_Bedrock_answer_is_shown_without_the_default_port_and_keeps_its_options", func(t *testing.T) {
+		cases := []struct {
+			name  string
+			port  int
+			title string
+		}{
+			{"default_port", 19132, "h.example"},
+			{"other_port", 25565, "h.example:25565"},
+		}
+		for _, tc := range cases {
+			t.Run("MC-36_"+tc.name, func(t *testing.T) {
+				fakeapi.PointSiteAt(t, mcSiteURL)
+				f := fakeapi.NewFakeAPI(t)
+				f.On("GET /mcstatus/h.example", 404, `{"host":"h.example","port":`+strconv.Itoa(tc.port)+`}`)
+				rec := serveRequest("GET", "/project/mc-status/h.example?bedrock=true", nil)
+				assertBodyHas(t, rec, `<title>`+tc.title+`</title>`)
+				if tc.port == 19132 {
+					assertBodyHas(t, rec, `href="`+mcSiteURL+`/project/mc-status/h.example?bedrock=true"`)
+				}
+				if got := rec.Header().Get("Cache-Control"); got != "public, max-age=30" {
+					t.Errorf("Cache-Control = %q, want public, max-age=30", got)
+				}
+			})
+		}
+	})
+
+	t.Run("MC-37_any_other_API_status_gets_the_plain_page", func(t *testing.T) {
+		cases := []struct {
+			status int
+			body   string
+		}{
+			{201, ""}, {400, offlineBody}, {401, offlineBody}, {403, offlineBody}, {429, offlineBody}, {500, offlineBody}, {502, offlineBody}, {503, offlineBody},
+		}
+		for _, tc := range cases {
+			t.Run("MC-37_"+strconv.Itoa(tc.status), func(t *testing.T) {
+				body := tc.body
+				if body == "" {
+					body = online(t)
+				}
+				served(t, tc.status, body)
+				assertPlainMcStatusPage(t, serveRequest("GET", path, nil))
+			})
+		}
+	})
+
+	t.Run("MC-38_a_200_answer_that_does_not_decode_into_a_host_and_port_gets_the_plain_page", func(t *testing.T) {
+		cases := []struct{ name, body string }{
+			{"empty", ``},
+			{"not_json", `not json`},
+			{"empty_object", `{}`},
+			{"host_only", `{"host":"a.example"}`},
+			{"port_only", `{"port":25565}`},
+			{"port_as_text", `{"host":"a.example","port":"x"}`},
+			{"array", `[]`},
+			{"null", `null`},
+		}
+		for _, tc := range cases {
+			t.Run("MC-38_"+tc.name, func(t *testing.T) {
+				served(t, 200, tc.body)
+				assertPlainMcStatusPage(t, serveRequest("GET", path, nil))
+			})
+		}
+	})
+
+	t.Run("MC-39_an_answer_larger_than_1_MiB_gets_the_plain_page", func(t *testing.T) {
+		for name, status := range map[string]int{"online": 200, "offline": 404} {
+			t.Run("MC-39_"+name, func(t *testing.T) {
+				served(t, status, mcAnswerOfSize(1<<20+1))
+				assertPlainMcStatusPage(t, serveRequest("GET", path, nil))
+			})
+		}
+	})
+
+	t.Run("MC-40_an_unreachable_API_gets_the_plain_page", func(t *testing.T) {
+		fakeapi.PointAPIAtClosed(t)
+		rec := serveRequest("GET", path, nil)
+		assertPlainMcStatusPage(t, rec)
+		assertBodyLacks(t, rec, "refused", "dial")
+	})
+
+	t.Run("MC-41_an_API_URL_that_cannot_form_a_request_gets_the_plain_page_without_a_call", func(t *testing.T) {
+		f := fakeapi.NewFakeAPI(t)
+		fakeapi.PointAPIAt(t, "http://[::1")
+		assertPlainMcStatusPage(t, serveRequest("GET", path, nil))
+		f.AssertLines(t)
+	})
+
+	t.Run("MC-42_a_visitor_who_disconnects_ends_the_upstream_call_and_the_handler_returns_without_a_preview_page", func(t *testing.T) {
+		f := fakeapi.NewFakeAPI(t)
+		started := make(chan struct{})
+		f.Handle("GET /mcstatus/"+host, testutil.HangHandler(started, nil))
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		req := httptest.NewRequest("GET", path, nil).WithContext(ctx)
+		req.SetPathValue("host", host)
+		rec := httptest.NewRecorder()
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			McStatusPageHandler(rec, req)
+		}()
+		select {
+		case <-started:
+		case <-time.After(5 * time.Second):
+			t.Fatal("the lookup never reached the API")
+		}
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("canceling the request did not end the handler")
+		}
+		if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+			t.Errorf("Cache-Control = %q, want no-store", got)
+		}
+		if strings.Contains(rec.Body.String(), "og:title") {
+			t.Errorf("the body holds og:title:\n%s", rec.Body.String())
+		}
+	})
+
+	t.Run("MC-43_the_API_response_body_is_closed_once_on_every_outcome", func(t *testing.T) {
+		cases := []struct {
+			name, contentType, body string
+			status                  int
+		}{
+			{"online", "application/json", mcStatusAnswer(t, host, 25565, "Hi", "1.21"), 200},
+			{"online_not_json", "application/json", "not json", 200},
+			{"offline", "application/problem+json", offlineBody, 404},
+			{"not_found_html", "text/html", offlineBody, 404},
+			{"server_error", "application/problem+json", `{"detail":"x"}`, 500},
+		}
+		for _, tc := range cases {
+			t.Run("MC-43_"+tc.name, func(t *testing.T) {
+				fakeapi.PointAPIAt(t, "http://api.test")
+				closes := 0
+				previous := http.DefaultClient.Transport
+				t.Cleanup(func() { http.DefaultClient.Transport = previous })
+				http.DefaultClient.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+					return &http.Response{
+						StatusCode: tc.status,
+						Header:     http.Header{"Content-Type": {tc.contentType}},
+						Body:       &closeCounter{ReadCloser: io.NopCloser(strings.NewReader(tc.body)), closes: &closes},
+						Request:    req,
+					}, nil
+				})
+				serveRequest("GET", path, nil)
+				if closes != 1 {
+					t.Errorf("Close was called %d times, want 1", closes)
+				}
+			})
+		}
+	})
+
+	t.Run("MC-44_a_write_method_does_not_reach_the_handler", func(t *testing.T) {
+		for _, method := range []string{"POST", "PUT", "DELETE", "PATCH"} {
+			t.Run("MC-44_"+method, func(t *testing.T) {
+				f := fakeapi.NewFakeAPI(t)
+				rec := serveRequest(method, path, nil)
+				assertStatusCode(t, rec, 200)
+				assertBodyHas(t, rec, `id="auth-error"`)
+				assertBodyLacks(t, rec, `id="mc-status-host"`)
+				f.AssertLines(t)
+			})
+		}
+	})
+
+	t.Run("MC-45_a_host_path_with_an_extra_segment_or_a_trailing_slash_is_not_routed_to_the_handler", func(t *testing.T) {
+		for name, target := range map[string]string{"extra_segment": "/project/mc-status/a/b", "trailing_slash": "/project/mc-status/"} {
+			t.Run("MC-45_"+name, func(t *testing.T) {
+				f := fakeapi.NewFakeAPI(t)
+				rec := serveRequest("GET", target, nil)
+				assertStatusCode(t, rec, 200)
+				assertBodyHas(t, rec, `id="auth-error"`)
+				assertBodyLacks(t, rec, `id="mc-status-host"`)
+				f.AssertLines(t)
+			})
+		}
+	})
+}
+
+func TestMcStatusEmbedDataOptions(t *testing.T) {
+	check := func(t *testing.T, row string, cases []struct {
+		name string
+		data components.McStatusEmbedData
+		want string
+	}) {
+		for _, tc := range cases {
+			t.Run(row+"_"+tc.name, func(t *testing.T) {
+				if got := tc.data.Options().Encode(); got != tc.want {
+					t.Errorf("Options().Encode() = %q, want %q", got, tc.want)
+				}
+			})
+		}
+	}
+	type options = struct {
+		name string
+		data components.McStatusEmbedData
+		want string
 	}
 
-	f.request = nil
-	gone := httptest.NewRecorder()
-	router.ServeHTTP(gone, httptest.NewRequest(http.MethodGet, "/mcstatus/a.com", nil))
-	if gone.Code != catchAll.Code || gone.Body.String() != catchAll.Body.String() {
-		t.Errorf("GET /mcstatus/{host} should no longer be a route, got %d", gone.Code)
+	t.Run("MC-46_the_default_Java_lookup_asks_for_the_query_protocol_with_the_port_when_one_is_set", func(t *testing.T) {
+		check(t, "MC-46", []options{
+			{"without_a_port", components.McStatusEmbedData{Query: true}, "query=true"},
+			{"with_a_port", components.McStatusEmbedData{Query: true, QueryPort: 25575}, "query=true&query_port=25575"},
+		})
+	})
+
+	t.Run("MC-47_the_Bedrock_option_wins_over_the_query_options", func(t *testing.T) {
+		check(t, "MC-47", []options{
+			{"with_query_options", components.McStatusEmbedData{Bedrock: true, Query: true, QueryPort: 25575}, "bedrock=true"},
+			{"alone", components.McStatusEmbedData{Bedrock: true}, "bedrock=true"},
+		})
+	})
+
+	t.Run("MC-48_with_the_query_option_off_the_lookup_has_no_parameters_even_with_a_query_port", func(t *testing.T) {
+		for name, data := range map[string]components.McStatusEmbedData{"zero_value": {}, "with_a_port": {QueryPort: 25575}} {
+			t.Run("MC-48_"+name, func(t *testing.T) {
+				if got := data.Options(); len(got) != 0 || got.Encode() != "" {
+					t.Errorf("Options() = %v, want empty", got)
+				}
+			})
+		}
+	})
+}
+
+func TestMcStatusEmbedDataShareOptions(t *testing.T) {
+	check := func(t *testing.T, row string, cases []struct {
+		name string
+		data components.McStatusEmbedData
+		want string
+	}) {
+		for _, tc := range cases {
+			t.Run(row+"_"+tc.name, func(t *testing.T) {
+				if got := tc.data.ShareOptions().Encode(); got != tc.want {
+					t.Errorf("ShareOptions().Encode() = %q, want %q", got, tc.want)
+				}
+			})
+		}
 	}
-	if f.request != nil {
-		t.Error("the removed route must not reach the API")
+	type options = struct {
+		name string
+		data components.McStatusEmbedData
+		want string
 	}
+
+	t.Run("MC-49_the_default_lookup_adds_nothing_to_a_shared_URL_and_a_query_port_is_shared", func(t *testing.T) {
+		check(t, "MC-49", []options{
+			{"default", components.McStatusEmbedData{Query: true}, ""},
+			{"query_port", components.McStatusEmbedData{Query: true, QueryPort: 25575}, "query_port=25575"},
+		})
+	})
+
+	t.Run("MC-50_the_Bedrock_option_is_the_only_shared_option_when_it_is_set", func(t *testing.T) {
+		check(t, "MC-50", []options{
+			{"alone", components.McStatusEmbedData{Bedrock: true}, "bedrock=true"},
+			{"with_query_options", components.McStatusEmbedData{Bedrock: true, Query: true, QueryPort: 25575}, "bedrock=true"},
+			{"with_query_off", components.McStatusEmbedData{Bedrock: true, Query: false}, "bedrock=true"},
+		})
+	})
+
+	t.Run("MC-51_turning_the_query_option_off_is_shared_as_query_false_and_hides_the_query_port", func(t *testing.T) {
+		check(t, "MC-51", []options{
+			{"zero_value", components.McStatusEmbedData{}, "query=false"},
+			{"with_a_port", components.McStatusEmbedData{QueryPort: 25575}, "query=false"},
+		})
+	})
+}
+
+func TestMcStatusEmbedDataDisplayHost(t *testing.T) {
+	check := func(t *testing.T, row string, cases []struct {
+		name string
+		data components.McStatusEmbedData
+		want string
+	}) {
+		for _, tc := range cases {
+			t.Run(row+"_"+tc.name, func(t *testing.T) {
+				if got := tc.data.DisplayHost(); got != tc.want {
+					t.Errorf("DisplayHost() = %q, want %q", got, tc.want)
+				}
+			})
+		}
+	}
+	type display = struct {
+		name string
+		data components.McStatusEmbedData
+		want string
+	}
+
+	t.Run("MC-52_the_port_is_shown_unless_it_is_the_default_of_the_edition", func(t *testing.T) {
+		check(t, "MC-52", []display{
+			{"java_default", components.McStatusEmbedData{Host: "play.example.net", Port: 25565}, "play.example.net"},
+			{"java_other_port", components.McStatusEmbedData{Host: "play.example.net", Port: 25566}, "play.example.net:25566"},
+			{"java_with_the_bedrock_port", components.McStatusEmbedData{Host: "play.example.net", Port: 19132}, "play.example.net:19132"},
+			{"bedrock_default", components.McStatusEmbedData{Bedrock: true, Host: "play.example.net", Port: 19132}, "play.example.net"},
+			{"bedrock_with_the_java_port", components.McStatusEmbedData{Bedrock: true, Host: "play.example.net", Port: 25565}, "play.example.net:25565"},
+			{"ipv4", components.McStatusEmbedData{Host: "192.0.2.1", Port: 25565}, "192.0.2.1"},
+		})
+	})
+
+	t.Run("MC-53_an_IPv6_host_is_put_in_brackets_before_the_port_is_added", func(t *testing.T) {
+		check(t, "MC-53", []display{
+			{"java_default", components.McStatusEmbedData{Host: "2001:db8::1", Port: 25565}, "[2001:db8::1]"},
+			{"java_other_port", components.McStatusEmbedData{Host: "2001:db8::1", Port: 25566}, "[2001:db8::1]:25566"},
+			{"bedrock_default", components.McStatusEmbedData{Bedrock: true, Host: "2001:db8::1", Port: 19132}, "[2001:db8::1]"},
+		})
+	})
+}
+
+func TestMcStatusEmbedDataPageURL(t *testing.T) {
+	const base = "http://site.test/project/mc-status/"
+
+	t.Run("MC-54_the_page_URL_is_the_site_URL_the_path_escaped_display_host_and_the_share_options", func(t *testing.T) {
+		fakeapi.PointSiteAt(t, mcSiteURL)
+		cases := []struct {
+			name string
+			data components.McStatusEmbedData
+			want string
+		}{
+			{"default", components.McStatusEmbedData{Host: "play.example.net", Port: 25565, Query: true}, base + "play.example.net"},
+			{"port_and_query_port", components.McStatusEmbedData{Host: "play.example.net", Port: 25566, Query: true, QueryPort: 25575}, base + "play.example.net:25566?query_port=25575"},
+			{"bedrock", components.McStatusEmbedData{Host: "play.example.net", Port: 19132, Bedrock: true, Query: true}, base + "play.example.net?bedrock=true"},
+			{"query_off", components.McStatusEmbedData{Host: "play.example.net", Port: 25565}, base + "play.example.net?query=false"},
+		}
+		for _, tc := range cases {
+			t.Run("MC-54_"+tc.name, func(t *testing.T) {
+				if got := tc.data.PageURL(); got != tc.want {
+					t.Errorf("PageURL() = %q, want %q", got, tc.want)
+				}
+			})
+		}
+	})
+
+	t.Run("MC-55_an_IPv6_host_is_escaped_in_the_page_URL", func(t *testing.T) {
+		fakeapi.PointSiteAt(t, mcSiteURL)
+		data := components.McStatusEmbedData{Host: "2001:db8::1", Port: 25566, Query: true}
+		if got, want := data.PageURL(), base+"%5B2001:db8::1%5D:25566"; got != want {
+			t.Errorf("PageURL() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("MC-56_characters_that_could_break_out_of_the_path_are_escaped_in_the_host", func(t *testing.T) {
+		fakeapi.PointSiteAt(t, mcSiteURL)
+		cases := []struct{ name, host, escaped string }{
+			{"slash", "a/b", "a%2Fb"},
+			{"question_mark", "a?b", "a%3Fb"},
+			{"hash", "a#b", "a%23b"},
+			{"percent", "100%", "100%25"},
+			{"space", "a b", "a%20b"},
+			{"markup", `evil"><script>`, "evil%22%3E%3Cscript%3E"},
+		}
+		for _, tc := range cases {
+			t.Run("MC-56_"+tc.name, func(t *testing.T) {
+				got := components.McStatusEmbedData{Host: tc.host, Port: 25565, Query: true}.PageURL()
+				if got != base+tc.escaped {
+					t.Errorf("PageURL() = %q, want %q", got, base+tc.escaped)
+				}
+				if strings.Contains(got, "?") {
+					t.Errorf("PageURL() = %q holds a query string", got)
+				}
+			})
+		}
+	})
+}
+
+func TestMcStatusEmbedDataIconURL(t *testing.T) {
+	const base = "http://api.test/api/v1/mcstatus/icon/"
+
+	t.Run("MC-57_the_icon_URL_is_the_API_icon_route_for_the_display_host_with_the_Bedrock_option_only", func(t *testing.T) {
+		fakeapi.PointAPIAt(t, "http://api.test")
+		cases := []struct {
+			name string
+			data components.McStatusEmbedData
+			want string
+		}{
+			{"query_options_are_left_out", components.McStatusEmbedData{Host: "play.example.net", Port: 25565, Query: true, QueryPort: 25575}, base + "play.example.net"},
+			{"port_is_kept", components.McStatusEmbedData{Host: "play.example.net", Port: 25566, Query: false}, base + "play.example.net:25566"},
+			{"bedrock", components.McStatusEmbedData{Host: "play.example.net", Port: 19132, Bedrock: true}, base + "play.example.net?bedrock=true"},
+		}
+		for _, tc := range cases {
+			t.Run("MC-57_"+tc.name, func(t *testing.T) {
+				if got := tc.data.IconURL(); got != tc.want {
+					t.Errorf("IconURL() = %q, want %q", got, tc.want)
+				}
+			})
+		}
+	})
+
+	t.Run("MC-58_an_IPv6_host_and_characters_that_could_break_out_of_the_path_are_escaped_in_the_icon_URL", func(t *testing.T) {
+		fakeapi.PointAPIAt(t, "http://api.test")
+		cases := []struct {
+			name, host string
+			port       int
+			escaped    string
+		}{
+			{"ipv6_with_a_port", "2001:db8::1", 25566, "%5B2001:db8::1%5D:25566"},
+			{"slash", "a/b", 25565, "a%2Fb"},
+			{"question_mark", "a?b", 25565, "a%3Fb"},
+			{"hash", "a#b", 25565, "a%23b"},
+			{"markup", `evil"><script>`, 25565, "evil%22%3E%3Cscript%3E"},
+		}
+		for _, tc := range cases {
+			t.Run("MC-58_"+tc.name, func(t *testing.T) {
+				got := components.McStatusEmbedData{Host: tc.host, Port: tc.port}.IconURL()
+				if got != base+tc.escaped {
+					t.Errorf("IconURL() = %q, want %q", got, base+tc.escaped)
+				}
+				if strings.Contains(got, "?") {
+					t.Errorf("IconURL() = %q holds a query string", got)
+				}
+			})
+		}
+	})
+}
+
+func TestMcStatusEmbedDataDescription(t *testing.T) {
+	t.Run("MC-59_an_offline_server_has_a_fixed_description_whatever_else_is_set", func(t *testing.T) {
+		cases := []struct {
+			name string
+			data components.McStatusEmbedData
+		}{
+			{"zero_value", components.McStatusEmbedData{}},
+			{"with_details", components.McStatusEmbedData{Motd: []string{"Hi"}, Players: 3, Max: 20, Version: "1.21"}},
+		}
+		for _, tc := range cases {
+			t.Run("MC-59_"+tc.name, func(t *testing.T) {
+				if got := tc.data.Description(); got != "Server offline or unreachable" {
+					t.Errorf("Description() = %q", got)
+				}
+			})
+		}
+	})
+
+	t.Run("MC-60_an_online_server_shows_the_MOTD_lines_the_players_and_the_version_on_separate_lines", func(t *testing.T) {
+		data := components.McStatusEmbedData{Online: true, Motd: []string{"Line one", "Line two"}, Players: 3, Max: 20, Version: "Paper 1.21.4"}
+		if got, want := data.Description(), "Line one\nLine two\nPlayers: 3/20\nVersion: Paper 1.21.4"; got != want {
+			t.Errorf("Description() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("MC-61_an_online_server_with_no_MOTD_text_has_no_MOTD_line", func(t *testing.T) {
+		for name, motd := range map[string][]string{"nil": nil, "one_empty_line": {""}} {
+			t.Run("MC-61_"+name, func(t *testing.T) {
+				data := components.McStatusEmbedData{Online: true, Motd: motd, Players: 0, Max: 20, Version: "1.21"}
+				if got, want := data.Description(), "Players: 0/20\nVersion: 1.21"; got != want {
+					t.Errorf("Description() = %q, want %q", got, want)
+				}
+			})
+		}
+	})
+
+	t.Run("MC-62_an_online_server_with_no_version_has_no_version_line", func(t *testing.T) {
+		data := components.McStatusEmbedData{Online: true, Motd: []string{"Hi"}, Players: 0, Max: 0}
+		if got, want := data.Description(), "Hi\nPlayers: 0/0"; got != want {
+			t.Errorf("Description() = %q, want %q", got, want)
+		}
+	})
+}
+
+func TestMcStatusTruncation(t *testing.T) {
+	describe := func(motd []string, version string) string {
+		return components.McStatusEmbedData{Online: true, Motd: motd, Players: 1, Max: 2, Version: version}.Description()
+	}
+
+	t.Run("MC-63_the_MOTD_is_cut_after_200_runes_with_an_ellipsis_and_200_runes_pass_unchanged", func(t *testing.T) {
+		cases := []struct {
+			name  string
+			count int
+			want  string
+		}{
+			{"200", 200, strings.Repeat("x", 200)},
+			{"201", 201, strings.Repeat("x", 200) + "…"},
+		}
+		for _, tc := range cases {
+			t.Run("MC-63_"+tc.name, func(t *testing.T) {
+				if got, want := describe([]string{strings.Repeat("x", tc.count)}, ""), tc.want+"\nPlayers: 1/2"; got != want {
+					t.Errorf("Description() = %q, want %q", got, want)
+				}
+			})
+		}
+	})
+
+	t.Run("MC-64_the_limit_counts_runes_so_multibyte_text_is_kept_whole_and_never_cut_inside_a_character", func(t *testing.T) {
+		cases := []struct {
+			name, char string
+			count      int
+			want       string
+		}{
+			{"200_two_byte_runes", "é", 200, strings.Repeat("é", 200)},
+			{"200_four_byte_runes", "😀", 200, strings.Repeat("😀", 200)},
+			{"201_four_byte_runes", "😀", 201, strings.Repeat("😀", 200) + "…"},
+		}
+		for _, tc := range cases {
+			t.Run("MC-64_"+tc.name, func(t *testing.T) {
+				got := describe([]string{strings.Repeat(tc.char, tc.count)}, "")
+				if want := tc.want + "\nPlayers: 1/2"; got != want {
+					t.Errorf("Description() = %q, want %q", got, want)
+				}
+				if !utf8.ValidString(got) {
+					t.Errorf("Description() = %q is not valid UTF-8", got)
+				}
+			})
+		}
+	})
+
+	t.Run("MC-65_the_version_is_cut_after_64_runes_with_an_ellipsis_and_64_runes_pass_unchanged", func(t *testing.T) {
+		cases := []struct {
+			name  string
+			count int
+			want  string
+		}{
+			{"64", 64, strings.Repeat("v", 64)},
+			{"65", 65, strings.Repeat("v", 64) + "…"},
+		}
+		for _, tc := range cases {
+			t.Run("MC-65_"+tc.name, func(t *testing.T) {
+				got := describe(nil, strings.Repeat("v", tc.count))
+				if want := "Players: 1/2\nVersion: " + tc.want; got != want {
+					t.Errorf("Description() = %q, want %q", got, want)
+				}
+			})
+		}
+	})
+
+	t.Run("MC-66_the_MOTD_limit_applies_to_the_lines_joined_with_newlines", func(t *testing.T) {
+		got := describe([]string{strings.Repeat("a", 150), strings.Repeat("b", 150)}, "")
+		want := strings.Repeat("a", 150) + "\n" + strings.Repeat("b", 49) + "…\nPlayers: 1/2"
+		if got != want {
+			t.Errorf("Description() = %q, want %q", got, want)
+		}
+	})
+}
+
+func TestMcStatusEmbedHead(t *testing.T) {
+	t.Run("MC-68_the_head_holds_every_preview_tag_with_the_values_from_the_data", func(t *testing.T) {
+		fakeapi.PointSiteAt(t, mcSiteURL)
+		fakeapi.PointAPIAt(t, "http://api.test")
+		data := components.McStatusEmbedData{Host: "play.example.net", Port: 25566, Query: true, QueryPort: 25575, Online: true, Motd: []string{"Hi"}, Players: 1, Max: 2, Version: "1.21"}
+		var out strings.Builder
+		if err := components.McStatusEmbedPage(data).Render(context.Background(), &out); err != nil {
+			t.Fatalf("render: %v", err)
+		}
+		page := out.String()
+
+		const pageURL = "http://site.test/project/mc-status/play.example.net:25566?query_port=25575"
+		for _, want := range []string{`<title>play.example.net:25566</title>`, `id="mc-status-host"`} {
+			if !strings.Contains(page, want) {
+				t.Errorf("the page lacks %q", want)
+			}
+		}
+		tags := []string{
+			`<meta property="og:site_name" content="Powered by NeuralNexus.dev">`,
+			`<meta property="og:type" content="website">`,
+			`<meta name="twitter:card" content="summary">`,
+			`<meta name="robots" content="noindex">`,
+			`<meta name="theme-color" content="#7C0014">`,
+			`<link rel="canonical" href="` + pageURL + `">`,
+			`<meta property="og:url" content="` + pageURL + `">`,
+			`<meta property="og:title" content="play.example.net:25566">`,
+			"<meta property=\"og:description\" content=\"Hi\nPlayers: 1/2\nVersion: 1.21\">",
+			`<meta property="og:image" content="http://api.test/api/v1/mcstatus/icon/play.example.net:25566">`,
+			`<meta property="og:image:alt" content="play.example.net:25566 server icon">`,
+			`<meta property="og:image:width" content="64">`,
+			`<meta property="og:image:height" content="64">`,
+		}
+		for _, tag := range tags {
+			if n := strings.Count(page, tag); n != 1 {
+				t.Errorf("%q appears %d times, want 1", tag, n)
+			}
+		}
+	})
 }

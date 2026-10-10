@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -432,4 +433,16 @@ func TestTheGlueScriptLoadsBeforeHTMX(t *testing.T) {
 			}
 		})
 	}
+}
+
+func reviewBee(form url.Values) *httptest.ResponseRecorder {
+	return action(http.MethodPost, "/project/bee-name-generator/admin/suggestions", form)
+}
+
+func fullPage(n int) string {
+	var users []string
+	for i := 0; i < n; i++ {
+		users = append(users, fmt.Sprintf(`{"user_id":"%d","username":"user%d","roles":[]}`, 354102516314670000+i, i))
+	}
+	return "[" + strings.Join(users, ",") + "]"
 }

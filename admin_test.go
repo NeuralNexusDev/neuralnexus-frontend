@@ -807,3 +807,53 @@ func TestBannerColoursPassContrastInBothThemes(t *testing.T) {
 	assertBody(t, getPage("/admin"), `border-red-700 bg-red-700/10`, `text-red-700 dark:border-red-400 dark:bg-red-400/10 dark:text-red-400`, `empty:m-0 empty:border-0 empty:p-0`)
 	assertNoBody(t, getPage("/admin"), "empty:hidden", "text-destructive")
 }
+
+func seedUserEditor(f *fakeBackend) {
+	f.on("GET /users/"+idBob, 200, bobJSON)
+	f.on("GET /users/"+idBob+"/links", 200, `[{"platform":"discord","platform_username":"bob#1234","platform_id":"9"},{"platform":"steam","platform_id":"76561198000000000"}]`)
+	f.on("GET /users/"+idBob+"/permissions", 200, `["beenamegenerator.admin","ratelimit:100"]`)
+	f.on("GET /roles", 200, rolesJSON)
+}
+
+func userForm(extra url.Values) url.Values {
+	form := url.Values{
+		"loaded_username": {"bob"},
+		"loaded_roles":    {idBee},
+		"roles_editable":  {"1"},
+		"username":        {"bob"},
+		"roles":           {idBee},
+	}
+	for key, values := range extra {
+		form[key] = values
+	}
+	return form
+}
+
+func saveUser(form url.Values) *httptest.ResponseRecorder {
+	return action(http.MethodPost, "/admin/users/"+idBob, form)
+}
+
+func seedRoleEditor(f *fakeBackend) {
+	f.on("GET /roles/"+idBee, 200, `{"id":"`+idBee+`","name":"bee_admin","description":"Bee Name Generator Admin","permissions":[
+		{"id":"`+idPBee+`","node":"beenamegenerator.admin","description":"Bee name generator"},
+		{"id":"`+idPRate+`","node":"ratelimit","description":"Rate limit","value_type":"int","merge":"max","value":100}]}`)
+	f.on("GET /permissions", 200, permissionsJSON)
+}
+
+func putRoleValue(permission string, form url.Values) *httptest.ResponseRecorder {
+	return action(http.MethodPost, "/admin/roles/"+idBee+"/permissions/"+permission, form)
+}
+
+func seedAccount(f *fakeBackend) {
+	f.on("GET /users/me", 200, `{"username":"testuser"}`)
+	f.on("GET /users/me/settings", 200, `{"password_auth":true}`)
+	f.on("GET /users/me/links", 200, accountLinksJSON)
+}
+
+const bobJSON = `{"user_id":"` + idBob + `","username":"bob","roles":["` + idBee + `"]}`
+
+const accountLinksJSON = `[
+	{"platform":"discord","platform_username":"someone#1234","verified":true,"login_enabled":true},
+	{"platform":"twitch","platform_username":"streamer99","verified":false,"login_enabled":false},
+	{"platform":"steam","platform_username":"","verified":true,"login_enabled":false}
+]`
