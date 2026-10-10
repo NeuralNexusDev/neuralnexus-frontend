@@ -3,14 +3,12 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/a-h/templ"
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/components"
-	mw "github.com/p0t4t0sandwich/neuralnexus-frontend/middleware"
 )
 
 func noStoreHandler(next http.Handler) http.Handler {
@@ -22,12 +20,28 @@ func noStoreHandler(next http.Handler) http.Handler {
 
 var pageRequestTimeout = 30 * time.Second
 
-func pageRoute(handler func(http.ResponseWriter, *http.Request, apiSession)) http.Handler {
+type pageHandler interface {
+	func(http.ResponseWriter, *http.Request, apiSession) | func(http.ResponseWriter, *http.Request, apiSession) error
+}
+
+func callHandler[H pageHandler](handler H, w http.ResponseWriter, r *http.Request, a apiSession) error {
+	switch h := any(handler).(type) {
+	case func(http.ResponseWriter, *http.Request, apiSession) error:
+		return h(w, r, a)
+	case func(http.ResponseWriter, *http.Request, apiSession):
+		h(w, r, a)
+	}
+	return nil
+}
+
+func pageRoute[H pageHandler](handler H) http.Handler {
 	return noStoreHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), pageRequestTimeout)
 		defer cancel()
 		r = r.WithContext(ctx)
-		handler(w, r, apiSession{r: r})
+		if err := callHandler(handler, w, r, apiSession{r: r}); err != nil {
+			writeError(w, r, err)
+		}
 	}))
 }
 
@@ -55,26 +69,17 @@ func requireHTMXForWrites(mux *http.ServeMux) http.Handler {
 }
 
 // pageAction requires the HX-Request header, which a cross-site form cannot send.
-func pageAction(handler func(http.ResponseWriter, *http.Request, apiSession)) http.Handler {
-	return pageRoute(func(w http.ResponseWriter, r *http.Request, a apiSession) {
+func pageAction[H pageHandler](handler H) http.Handler {
+	return pageRoute(func(w http.ResponseWriter, r *http.Request, a apiSession) error {
 		if r.Header.Get("HX-Request") != "true" {
 			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
+			return nil
 		}
 		if err := r.ParseForm(); err != nil {
-			failFragment(w, r, invalidInput("The form could not be read"))
-			return
+			return invalidInput("The form could not be read")
 		}
-		handler(w, r, a)
+		return callHandler(handler, w, r, a)
 	})
-}
-
-func errorStatus(err error) (int, string) {
-	var failure *apiError
-	if errors.As(err, &failure) {
-		return failure.Status, failure.Message
-	}
-	return http.StatusInternalServerError, "Something went wrong"
 }
 
 // shell is not cached, so a page left open after sign-out is not restored with what it loaded.
@@ -89,24 +94,11 @@ func shellFor(page func(id string) templ.Component) http.Handler {
 }
 
 func failFragment(w http.ResponseWriter, r *http.Request, err error, restore ...templ.Component) {
-	if errors.Is(err, errUnauthorized) {
-		w.Header().Set("HX-Redirect", "/login")
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-	status, message := errorStatus(err)
-	if status >= http.StatusInternalServerError {
-		logFailure(r, status, err)
-	}
-	w.Header().Set("HX-Retarget", "#page-error")
-	w.Header().Set("HX-Reswap", "innerHTML")
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(status)
-	render(w, r, append([]templ.Component{components.ErrorText(message)}, restore...)...)
+	writeError(w, r, pageFail(err).restore(restore...))
 }
 
 func failEditor(w http.ResponseWriter, r *http.Request, statusID string, err error, restore ...templ.Component) {
-	failFragment(w, r, err, append([]templ.Component{components.StatusLine(statusID, "")}, restore...)...)
+	writeError(w, r, pageFail(err).clearStatus(statusID).restore(restore...))
 }
 
 func nothingToSave(w http.ResponseWriter, r *http.Request, statusID string) {
@@ -123,22 +115,6 @@ func fieldRefusal(err error) string {
 		}
 	}
 	return ""
-}
-
-func logFailure(r *http.Request, status int, err error) {
-	if errors.Is(r.Context().Err(), context.Canceled) {
-		return
-	}
-	var failure *apiError
-	call := ""
-	if errors.As(err, &failure) {
-		call = failure.Method + " " + failure.Path
-	}
-	cause := err
-	for errors.Unwrap(cause) != nil {
-		cause = errors.Unwrap(cause)
-	}
-	log.Printf("request failed: request_id=%v status=%d api=%q cause=%v", r.Context().Value(mw.RequestIDKey), status, call, cause)
 }
 
 func render(w http.ResponseWriter, r *http.Request, parts ...templ.Component) {
@@ -172,10 +148,11 @@ func secondary(err error) (string, error) {
 	if err == nil {
 		return "", nil
 	}
-	if errors.Is(err, errUnauthorized) {
+	failure := pageFail(err)
+	if failure.unauthorized() {
 		return "", err
 	}
-	_, message := errorStatus(err)
+	_, message := failure.statusMessage()
 	return message, nil
 }
 
@@ -195,16 +172,10 @@ func permissionLink(link templ.Component, nodes ...string) func(http.ResponseWri
 }
 
 func afterWrite(err error) error {
-	if err == nil || errors.Is(err, errUnauthorized) {
-		return err
+	if err == nil {
+		return nil
 	}
-	status, message := errorStatus(err)
-	wrapped := &apiError{Status: status, Message: "The change was made, but the page could not be refreshed: " + message, Err: err}
-	var failure *apiError
-	if errors.As(err, &failure) {
-		wrapped.Method, wrapped.Path = failure.Method, failure.Path
-	}
-	return wrapped
+	return pageFail(err).afterWrite()
 }
 
 func rowGone(prefix string, id string) []templ.Component {
