@@ -48,7 +48,9 @@ func serveLinkRow(platformID string) *httptest.ResponseRecorder {
 	}
 	req := testutil.NewRequest()
 	rec := httptest.NewRecorder()
-	accountLinkRow(rec, req, newSession(req), platform)
+	if err := accountLinkRow(rec, req, newSession(req), platform); err != nil {
+		writeError(rec, req, err)
+	}
 	return rec
 }
 
