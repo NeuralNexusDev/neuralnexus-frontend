@@ -27,6 +27,7 @@ tmp
 
 # Generated files
 /components/**/*.go
+!/components/**/*_test.go
 /public/css/styles.css
 
 # Playwright output
