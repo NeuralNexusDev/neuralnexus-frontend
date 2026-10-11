@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"log"
 	"net/url"
 	"os"
@@ -14,15 +15,23 @@ var (
 )
 
 func requireURL(name string) string {
-	raw := strings.TrimSpace(os.Getenv(name))
+	value, err := parseURL(name, os.Getenv(name))
+	if err != nil {
+		log.Fatal(err)
+	}
+	return value
+}
+
+func parseURL(name, value string) (string, error) {
+	raw := strings.TrimSpace(value)
 	if raw == "" {
-		log.Fatalf("%s environment variable must be set", name)
+		return "", fmt.Errorf("%s environment variable must be set", name)
 	}
 	u, err := url.Parse(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || !validPort(u.Port()) {
-		log.Fatalf("%s must be an http(s) URL, got %q", name, raw)
+		return "", fmt.Errorf("%s must be an http(s) URL, got %q", name, raw)
 	}
-	return strings.TrimRight(raw, "/")
+	return strings.TrimRight(raw, "/"), nil
 }
 
 func validPort(port string) bool {

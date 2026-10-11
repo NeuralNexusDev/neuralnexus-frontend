@@ -5,15 +5,18 @@ import (
 	"os"
 )
 
-func main() {
-	address := os.Getenv("ADDRESS")
-	useUDS := os.Getenv("USE_UDS") == "true"
-	if address == "" && useUDS {
-		address = "/tmp/go.socket"
-	} else if address == "" {
-		address = "0.0.0.0:8090"
+func listenAddress(address string, useUDS bool) string {
+	if address != "" {
+		return address
 	}
+	if useUDS {
+		return "/tmp/go.socket"
+	}
+	return "0.0.0.0:8090"
+}
 
-	server := NewWebServer(address, useUDS)
+func main() {
+	useUDS := os.Getenv("USE_UDS") == "true"
+	server := NewWebServer(listenAddress(os.Getenv("ADDRESS"), useUDS), useUDS)
 	log.Fatal(server.Run())
 }
