@@ -26,16 +26,16 @@ func loadBeeSuggestions(a apiSession, focusList bool) (components.BeeSuggestions
 	return components.BeeSuggestionsData{Names: list.Suggestions, FocusList: focusList}, nil
 }
 
-func beeSuggestionsHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
+func beeSuggestionsHandler(w http.ResponseWriter, r *http.Request, a apiSession) error {
 	data, err := loadBeeSuggestions(a, false)
 	if err != nil {
-		failFragment(w, r, err)
-		return
+		return err
 	}
 	renderAll(w, r, components.BeeSuggestions(data))
+	return nil
 }
 
-func beeReviewHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
+func beeReviewHandler(w http.ResponseWriter, r *http.Request, a apiSession) error {
 	name := r.Form.Get("name")
 	var method, fallback string
 	switch r.Form.Get("action") {
@@ -44,21 +44,18 @@ func beeReviewHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
 	case "reject":
 		method, fallback = http.MethodDelete, "Failed to reject the suggestion"
 	default:
-		failFragment(w, r, invalidInput("Choose accept or reject"))
-		return
+		return invalidInput("Choose accept or reject")
 	}
 	if strings.TrimSpace(name) == "" || isDotSegment(name) {
-		failFragment(w, r, invalidInput("That name cannot be reviewed here"))
-		return
+		return invalidInput("That name cannot be reviewed here")
 	}
 	if _, err := apiSend[struct{}](a, method, "/bee-name-generator/suggestion/"+url.PathEscape(name), nil, fallback); err != nil {
-		failFragment(w, r, err)
-		return
+		return err
 	}
 	data, err := loadBeeSuggestions(a, true)
 	if err != nil {
-		failFragment(w, r, afterWrite(err))
-		return
+		return pageFail(err).afterWrite()
 	}
 	renderAll(w, r, components.BeeSuggestions(data))
+	return nil
 }
