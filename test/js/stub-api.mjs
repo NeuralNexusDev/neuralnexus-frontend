@@ -16,8 +16,6 @@ const ONLINE = {
   players: [{ name: 'Alex' }, { name: 'Steve' }],
 };
 
-const INCOMPLETE = /^(online|offline)-no-(host|port)\.example\.net$/;
-
 const ONLINE_HOSTS = ['online.example.net', '2001:db8::1'];
 
 const BAD_HOST_DETAIL = 'The host must be a domain name, an IPv4 address or an IPv6 address, optionally followed by a port.';
@@ -62,17 +60,11 @@ function problem(res, status, body, contentType = 'application/problem+json') {
   res.writeHead(status, { 'Content-Type': contentType }).end(JSON.stringify({ status, ...body }));
 }
 
-const received = [];
-
 http
   .createServer(async (req, res) => {
     const { pathname, searchParams } = new URL(req.url, 'http://stub');
     if (pathname === '/health') {
       res.writeHead(200).end('ok');
-      return;
-    }
-    if (pathname === '/__requests') {
-      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(received));
       return;
     }
     if (pathname.startsWith('/__state/')) {
@@ -85,21 +77,12 @@ http
       await handleState(req, res, pathname, searchParams);
       return;
     }
-    received.push(req.url);
     const isIcon = pathname.startsWith('/api/v1/mcstatus/icon/');
     const target = canonicalTarget(decodeURIComponent(pathname.split('/').pop()), searchParams.get('bedrock') === 'true');
     if (!target) {
       problem(res, 400, { title: 'Bad Request', detail: BAD_HOST_DETAIL });
     } else if (isIcon) {
       res.writeHead(200, { 'Content-Type': 'image/png' }).end(PNG_1X1);
-    } else if (INCOMPLETE.test(target.host)) {
-      const [, state, missing] = INCOMPLETE.exec(target.host);
-      const { [missing]: _omitted, ...partial } = target;
-      if (state === 'online') {
-        res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ ...ONLINE, ...partial }));
-      } else {
-        problem(res, 404, { title: 'Not Found', ...partial });
-      }
     } else if (ONLINE_HOSTS.includes(target.host)) {
       res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ ...ONLINE, ...target }));
     } else {
