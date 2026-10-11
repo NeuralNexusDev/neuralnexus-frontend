@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/a-h/templ"
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/components"
@@ -280,6 +281,38 @@ func TestPageRouteWritesTheReturnedError(t *testing.T) {
 		assertStatusCode(t, rec, http.StatusForbidden)
 		if called {
 			t.Error("the handler ran without HX-Request")
+		}
+	})
+}
+
+func TestPageHandlerServeHTTP(t *testing.T) {
+	t.Run("ER-21 the handler gets a request that ends at the page time limit", func(t *testing.T) {
+		previous := pageRequestTimeout
+		pageRequestTimeout = 50 * time.Millisecond
+		t.Cleanup(func() { pageRequestTimeout = previous })
+		var ended error
+		rec := httptest.NewRecorder()
+		pageHandler(func(w http.ResponseWriter, r *http.Request, _ apiSession) error {
+			if _, ok := r.Context().Deadline(); !ok {
+				t.Error("the request has no deadline")
+			}
+			<-r.Context().Done()
+			ended = r.Context().Err()
+			return nil
+		}).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/x", nil))
+		if !errors.Is(ended, context.DeadlineExceeded) {
+			t.Errorf("context error = %v, want the deadline", ended)
+		}
+	})
+
+	t.Run("ER-22 the session handed to the handler carries the request it was given", func(t *testing.T) {
+		var seen, got *http.Request
+		pageHandler(func(w http.ResponseWriter, r *http.Request, a apiSession) error {
+			seen, got = r, a.r
+			return nil
+		}).ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/x", nil))
+		if seen == nil || seen != got {
+			t.Errorf("session request %p, handler request %p, want the same", got, seen)
 		}
 	})
 }
