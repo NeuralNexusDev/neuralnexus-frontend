@@ -306,5 +306,6 @@ test.describe('fields', () => {
     await expect(roleName(page)).not.toHaveAttribute('aria-invalid', 'true');
     await expect(page.locator('#admin-role-create-name-error')).toHaveCount(0);
     await expect(roleName(page)).not.toHaveAccessibleDescription(/A role with this name already exists/);
+    await expect(roleName(page)).toHaveAccessibleDescription(/Lower-case letters, digits and underscores/);
   });
 });
