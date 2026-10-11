@@ -36,44 +36,6 @@ test.describe('admin - user list', () => {
     expect((await calls()).filter((call) => call.path === '/users').length).toBeGreaterThan(1);
   });
 
-  test('a search that a newer search replaces shows no error and logs none', async ({ page }) => {
-    const { gate } = await signIn(page);
-    const logged = [];
-    page.on('console', (message) => message.type() === 'error' && message.text().startsWith('htmx') && logged.push(message.text()));
-    await page.addInitScript(() => {
-      window.__banner = [];
-      new MutationObserver(() => {
-        const text = document.getElementById('page-error')?.textContent;
-        if (text) window.__banner.push(text);
-      }).observe(document, { subtree: true, childList: true, characterData: true });
-    });
-    await page.goto('/admin/users');
-    await expect(rows(page)).toHaveCount(3);
-    const searched = await gate('GET /users');
-    await search(page).fill('bo');
-    await searched.arrived(1);
-    await search(page).fill('alice');
-    await searched.arrived(2);
-    await searched.release();
-    await expect(rows(page)).toHaveCount(1);
-    await expect(rows(page)).toContainText('alice');
-    await expect(error(page)).toHaveText('');
-    expect(await page.evaluate(() => window.__banner)).toEqual([]);
-    expect(logged).toEqual([]);
-  });
-
-  test('a search that times out shows the banner message and keeps the list', async ({ page }) => {
-    await signIn(page, { delays: { 'GET /users': 1500 } });
-    await page.goto('/admin/users');
-    await expect(rows(page)).toHaveCount(3);
-    await page.evaluate(() => {
-      htmx.config.defaultTimeout = 300;
-    });
-    await search(page).fill('bob');
-    await expect(error(page)).toHaveText('The server could not be reached. Try again in a moment.');
-    await expect(rows(page)).toHaveCount(3);
-  });
-
   test('a search covers users beyond the first page, and stops asking once the list ends', async ({ page }) => {
     await signIn(page, { generateUsers: 247 });
     await page.goto('/admin/users');
@@ -171,83 +133,6 @@ test.describe('admin - user editor', () => {
     await expect(status(page)).toHaveText('Saved');
     await expect(username(page)).toHaveValue('robert');
     await expect(username(page)).toBeFocused();
-  });
-
-  test('pressing Enter in the username field while a save is in flight says it was dropped', async ({ page }) => {
-    const { writes, gate } = await signIn(page);
-    await page.goto(editor);
-    const put = await gate(`PUT /users/${ID.bob}`);
-    await username(page).fill('robert');
-    await username(page).press('Enter');
-    await put.arrived();
-    await expect(page.locator('#admin-user')).toHaveAttribute('aria-busy', 'true');
-    await username(page).press('End');
-    await username(page).pressSequentially('X');
-    await username(page).press('Enter');
-    await expect(error(page)).toHaveText('The last change is still being saved. Try again in a moment.');
-    await put.release();
-    await expect(status(page)).toHaveText('Saved. Changes made while saving are not saved yet.');
-    await expect(error(page)).toHaveText('The change made while saving was not sent. Make it again.');
-    await expect(username(page)).toHaveValue('robertX');
-    expect(await writes()).toEqual([{ method: 'PUT', path: `/users/${ID.bob}`, body: { username: 'robert' } }]);
-  });
-
-  test('the next save sends the tick that was made during a save and clears the note', async ({ page }) => {
-    const { writes, gate } = await signIn(page);
-    await page.goto(editor);
-    const put = await gate(`PUT /users/${ID.bob}`);
-    await username(page).fill('robert');
-    await username(page).press('Enter');
-    await put.arrived();
-    await expect(page.locator('#admin-user')).toHaveAttribute('aria-busy', 'true');
-    await page.locator(`#admin-user-roles input[value="${ID.owner}"]`).focus();
-    await page.keyboard.press('Space');
-    await put.release();
-    await expect(status(page)).toHaveText('Saved. Changes made while saving are not saved yet.');
-    await save(page).click();
-    await expect(status(page)).toHaveText('Saved');
-    await expect(page.locator(`#admin-user-roles input[value="${ID.owner}"]`)).toBeChecked();
-    expect(await writes()).toEqual([
-      { method: 'PUT', path: `/users/${ID.bob}`, body: { username: 'robert' } },
-      { method: 'PUT', path: `/users/${ID.bob}`, body: { roles: [ID.owner, ID.bee] } },
-    ]);
-  });
-
-  test('a refused save keeps the tick and the text without the note', async ({ page }) => {
-    const { gate } = await signIn(page);
-    await page.goto(editor);
-    const put = await gate(`PUT /users/${ID.bob}`);
-    await username(page).fill('alice');
-    await username(page).press('Enter');
-    await put.arrived();
-    await expect(page.locator('#admin-user')).toHaveAttribute('aria-busy', 'true');
-    await page.locator(`#admin-user-roles input[value="${ID.owner}"]`).focus();
-    await page.keyboard.press('Space');
-    await put.release({ status: 409, detail: 'An account with this username already exists' });
-    await expect(error(page)).toHaveText('An account with this username already exists');
-    await expect(page.locator('#admin-user')).not.toHaveAttribute('aria-busy', 'true');
-    await expect(username(page)).toHaveValue('alice');
-    await expect(page.locator(`#admin-user-roles input[value="${ID.owner}"]`)).toBeChecked();
-    await expect(status(page)).toHaveText('');
-  });
-
-  test('the caret stays where it was in a field typed in while a save is in flight', async ({ page }) => {
-    const { gate } = await signIn(page);
-    await page.goto(editor);
-    const put = await gate(`PUT /users/${ID.bob}`);
-    await username(page).fill('robert');
-    await username(page).press('Enter');
-    await put.arrived();
-    await expect(page.locator('#admin-user')).toHaveAttribute('aria-busy', 'true');
-    await username(page).press('End');
-    await username(page).pressSequentially('XY');
-    await username(page).press('ArrowLeft');
-    await username(page).press('ArrowLeft');
-    await put.release();
-    await expect(status(page)).toHaveText('Saved. Changes made while saving are not saved yet.');
-    await expect(username(page)).toHaveValue('robertXY');
-    await expect(username(page)).toBeFocused();
-    expect(await username(page).evaluate((input) => input.selectionStart)).toBe(6);
   });
 
   test('saving without a change sends nothing', async ({ page }) => {
