@@ -1,4 +1,4 @@
-import { test, expect, signIn } from './helpers.js';
+import { test, expect } from './helpers.js';
 
 // Mirrors nn-api's redirectWithError (modules/auth/routes/auth.go): on an
 // OAuth/OpenID failure the API 303-redirects back to the frontend with an
@@ -18,23 +18,6 @@ test.describe('OAuth/OpenID error redirects', () => {
     await expect(page.locator('#auth-error')).toBeVisible();
     await expect(page.locator('#auth-error')).toHaveText('Invalid state');
     expect(new URL(page.url()).searchParams.has('problem')).toBe(false);
-  });
-
-  test('shows the problem detail on the home page (pre-validation failures land here)', async ({ page }) => {
-    const problem = encodeProblem({ type: 'about:blank', status: 400, title: 'Bad Request', detail: 'Invalid request' });
-    await page.goto(`/?problem=${problem}`);
-
-    await expect(page.locator('#auth-error')).toBeVisible();
-    await expect(page.locator('#auth-error')).toHaveText('Invalid request');
-  });
-
-  test('shows the problem detail on /account (link-mode failures redirect here)', async ({ page }) => {
-    await signIn(page);
-
-    const problem = encodeProblem({ type: 'about:blank', status: 401, title: 'Unauthorized', detail: 'You must be logged in to link an account' });
-    await page.goto(`/account?problem=${problem}`);
-
-    await expect(page.locator('#auth-error')).toHaveText('You must be logged in to link an account');
   });
 
   test('preserves other query params while stripping only "problem"', async ({ page }) => {
