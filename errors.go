@@ -5,11 +5,26 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/a-h/templ"
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/components"
 	mw "github.com/p0t4t0sandwich/neuralnexus-frontend/middleware"
 )
+
+type pageHandler func(http.ResponseWriter, *http.Request, apiSession) error
+
+var pageRequestTimeout = 30 * time.Second
+
+// ServeHTTP gives the handler the request time limit and the caller's session, and writes the error it returns.
+func (h pageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), pageRequestTimeout)
+	defer cancel()
+	r = r.WithContext(ctx)
+	if err := h(w, r, apiSession{r: r}); err != nil {
+		writeError(w, r, err)
+	}
+}
 
 type pageError struct {
 	cause    error

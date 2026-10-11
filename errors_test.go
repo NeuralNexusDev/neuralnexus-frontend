@@ -9,11 +9,13 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/a-h/templ"
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/components"
 	mw "github.com/p0t4t0sandwich/neuralnexus-frontend/middleware"
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/test/testutil"
+	"github.com/p0t4t0sandwich/neuralnexus-frontend/test/testutil/fakeapi"
 )
 
 func failureRequest(ctx context.Context) *http.Request {
@@ -280,6 +282,80 @@ func TestPageRouteWritesTheReturnedError(t *testing.T) {
 		assertStatusCode(t, rec, http.StatusForbidden)
 		if called {
 			t.Error("the handler ran without HX-Request")
+		}
+	})
+}
+
+func TestPageHandlerServeHTTP(t *testing.T) {
+	t.Run("ER-21 the handler gets a request that ends at the page time limit", func(t *testing.T) {
+		previous := pageRequestTimeout
+		pageRequestTimeout = 50 * time.Millisecond
+		t.Cleanup(func() { pageRequestTimeout = previous })
+		var ended error
+		rec := httptest.NewRecorder()
+		pageHandler(func(w http.ResponseWriter, r *http.Request, _ apiSession) error {
+			if _, ok := r.Context().Deadline(); !ok {
+				t.Error("the request has no deadline")
+			}
+			<-r.Context().Done()
+			ended = r.Context().Err()
+			return nil
+		}).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/x", nil))
+		if !errors.Is(ended, context.DeadlineExceeded) {
+			t.Errorf("context error = %v, want the deadline", ended)
+		}
+	})
+
+	t.Run("ER-22 the session handed to the handler carries the request it was given", func(t *testing.T) {
+		var seen, got *http.Request
+		pageHandler(func(w http.ResponseWriter, r *http.Request, a apiSession) error {
+			seen, got = r, a.r
+			return nil
+		}).ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/x", nil))
+		if seen == nil || seen != got {
+			t.Errorf("session request %p, handler request %p, want the same", got, seen)
+		}
+	})
+}
+
+func TestWriteErrorLeavesTheRequestOutOfTheLog(t *testing.T) {
+	t.Run("ER-23 the log line holds neither the session cookie nor the submitted form", func(t *testing.T) {
+		logged := captureLog(t)
+		req := httptest.NewRequest(http.MethodPost, "/x", strings.NewReader("password=hunter2"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.AddCookie(testutil.SessionCookie("secret-session-value"))
+		req = req.WithContext(context.WithValue(req.Context(), mw.RequestIDKey, 77))
+		writeError(httptest.NewRecorder(), req, &apiError{Status: 500, Message: "database down", Method: "GET", Path: "/roles", Err: errors.New("connection refused")})
+		if logged.Len() == 0 {
+			t.Fatal("nothing was logged")
+		}
+		for _, unwanted := range []string{"secret-session-value", "hunter2"} {
+			if strings.Contains(logged.String(), unwanted) {
+				t.Errorf("the log holds %q: %s", unwanted, logged.String())
+			}
+		}
+	})
+}
+
+func TestPageHandlerStopsWaitingForASlowAPI(t *testing.T) {
+	t.Run("ER-24 a handler stuck on a slow API is answered with 502 at the time limit", func(t *testing.T) {
+		f := fakeapi.NewFakeAPI(t)
+		f.Handle("GET /roles", testutil.HangHandler(nil, nil))
+		previous := pageRequestTimeout
+		pageRequestTimeout = 50 * time.Millisecond
+		t.Cleanup(func() { pageRequestTimeout = previous })
+		logged := captureLog(t)
+		start := time.Now()
+		rec := serveHandler(pageHandler(func(_ http.ResponseWriter, _ *http.Request, a apiSession) error {
+			_, err := apiGet[[]string](a, "/roles", "Failed to load roles")
+			return err
+		}), testutil.NewRequest())
+		assertStatusCode(t, rec, http.StatusBadGateway)
+		if time.Since(start) > 2*time.Second {
+			t.Errorf("the request waited %s for the API", time.Since(start))
+		}
+		if !strings.Contains(logged.String(), "status=502") {
+			t.Errorf("log = %q, want the 502 failure", logged.String())
 		}
 	})
 }

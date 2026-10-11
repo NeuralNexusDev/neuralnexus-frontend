@@ -1845,3 +1845,50 @@ func TestAdminRoleGrantValueHandler(t *testing.T) {
 		assertLoginRedirect(t, pick("?grant_permission=2"))
 	})
 }
+
+func TestAdminRoleSaveHandlerPaddedText(t *testing.T) {
+	t.Run("RL-111_a_name_and_description_with_outer_whitespace_that_equal_the_loaded_ones_are_not_a_change", func(t *testing.T) {
+		f := fakeapi.NewFakeAPI(t)
+		rec := serveRequest("POST", "/admin/roles/5", url.Values{
+			"loaded_name": {" admins "}, "name": {" admins "},
+			"loaded_description": {" padded "}, "description": {" padded "},
+		})
+		assertStatusCode(t, rec, 200)
+		assertBodyHas(t, rec, ">Nothing to save<")
+		f.AssertLines(t)
+	})
+}
+
+func TestAdminRoleFailuresClearTheStatusLine(t *testing.T) {
+	const clear = `<p id="admin-role-status" hx-swap-oob="innerHTML"></p>`
+	cases := []struct {
+		name, method, target string
+		form                 url.Values
+		answered             string
+		clears               bool
+	}{
+		{"save", "POST", "/admin/roles/5", url.Values{"loaded_description": {"a"}, "description": {"b"}, "loaded_name": {"admins"}, "name": {"admins"}}, "PATCH /roles/5", true},
+		{"delete", "DELETE", "/admin/roles/5", nil, "DELETE /roles/5", true},
+		{"grant", "POST", "/admin/roles/5/permissions", url.Values{"grant_permission": {"1"}}, "PUT /roles/5/permissions/1", true},
+		{"value_save", "POST", "/admin/roles/5/permissions/2", url.Values{"value_2": {"9"}}, "PUT /roles/5/permissions/2", true},
+		{"removal", "DELETE", "/admin/roles/5/permissions/2", nil, "DELETE /roles/5/permissions/2", true},
+		{"editor", "GET", "/admin/roles/5/editor", nil, "GET /roles/5", false},
+		{"list", "GET", "/admin/roles/list", nil, "GET /roles", false},
+	}
+	for _, tc := range cases {
+		t.Run("RL-112_"+tc.name, func(t *testing.T) {
+			f := fakeapi.NewFakeAPI(t)
+			f.On("GET /permissions", 200, catalogueFixture)
+			f.Problem(tc.answered, 409, "refused")
+			rec := serveRequest(tc.method, tc.target, tc.form)
+			assertStatusCode(t, rec, 409)
+			want := "refused"
+			if tc.clears {
+				want += clear
+			}
+			if got := rec.Body.String(); got != want {
+				t.Errorf("body = %q, want %q", got, want)
+			}
+		})
+	}
+}
