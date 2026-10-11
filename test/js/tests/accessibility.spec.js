@@ -1,4 +1,4 @@
-import { test, expect, signIn, ID, error } from './helpers.js';
+import { test, expect, signIn, error } from './helpers.js';
 
 const schemes = ['light', 'dark'];
 
@@ -242,14 +242,6 @@ test.describe('live regions', () => {
     expect(await page.evaluate(() => window.__announced)).toEqual(['Loading…', 'Loaded']);
   });
 
-  test('AX-13 a shell whose content fails to load drops the Loading line and says so in the live region', async ({ page }) => {
-    await signIn(page, { failures: { 'GET /users': { status: 500, detail: 'users are down', times: 1 } } });
-    await page.goto('/admin/users');
-    await expect(error(page)).not.toBeEmpty();
-    await expect(page.getByText('Loading…')).toHaveCount(0);
-    await expect(page.locator('#page-status')).toHaveText('Failed to load');
-  });
-
   test('AX-14 a shell whose content cannot reach the server drops the Loading line and says so in the live region', async ({ page }) => {
     await signIn(page);
     await page.route('**/admin/roles/list', (route) => route.abort('failed'));
@@ -278,16 +270,6 @@ test.describe('live regions', () => {
     await expect(count).toHaveText(/^No matches/);
   });
 
-  test('AX-16 the Saved status goes away when the form is edited again', async ({ page }) => {
-    await signIn(page);
-    await page.goto(`/admin/users/${ID.bob}`);
-    const username = page.locator('#admin-user-username');
-    await username.fill('robert');
-    await page.locator('#admin-user-save').click();
-    await expect(page.locator('#admin-user-status')).toHaveText('Saved');
-    await username.pressSequentially('x');
-    await expect(page.locator('#admin-user-status')).toHaveText('');
-  });
 });
 
 test.describe('fields', () => {

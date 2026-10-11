@@ -2,7 +2,7 @@
 
 This plan is by topic and not by source file. It covers what only a real render shows about accessibility: computed colours and contrast, the focus ring, the size of a target, what is visible and what takes room, the announcements of the live regions and the state a field is left in after a swap. The markup itself (the roles, the landmarks, `aria-describedby`, `aria-invalid` on a field the server renders as invalid, the title of each page) is pinned by the Go plans and is not repeated here. The tests are in test/js/tests/accessibility.spec.js, and each title starts with its row ID.
 
-Every test signs in through `signIn` with the stub seed named in its precondition. A contrast row has two cases, one for each system colour scheme set with `page.emulateMedia`, and they are a loop of 2 tests. Contrast is the WCAG ratio of the computed colours, with a translucent colour blended over what is behind it. A border or a track is held to 3:1 and text to 4.5:1.
+Every test signs in through `signIn` with the stub seed named in its precondition. A contrast row has two cases, one for each system colour scheme set with `page.emulateMedia`, and they are a loop of 2 tests. The answer of a shell load with an error status is HG-40 and the status line that empties when a form is edited is HG-50, both in glue.md. Contrast is the WCAG ratio of the computed colours, with a translucent colour blended over what is behind it. A border or a track is held to 3:1 and text to 4.5:1.
 
 ## Contrast
 
@@ -40,10 +40,8 @@ Every test signs in through `signIn` with the stub seed named in its preconditio
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
 | AX-12 | shell live region | Happy Path | A shell announces Loading… and then Loaded through a region that is already on the page | Default seed; `GET /roles` held; `/admin/roles`; a `MutationObserver` on `#page-status` added at `DOMContentLoaded`; the held request then released | While held `#page-status` reads `Loading…`; after the release the list shows and it reads `Loaded`. The observer saw exactly `Loading…`, then `Loaded` | P0 | The region exists at `DOMContentLoaded`, so the first text is announced |
-| AX-13 | shell live region | Error Handling | A shell whose content fails with an HTTP error drops the Loading line and says so | `GET /users` failing once with 500 "users are down"; `/admin/users` | `#page-error` is not empty, no `Loading…` text is on the page and `#page-status` reads `Failed to load` | P0 | |
 | AX-14 | shell live region | Error Handling | A shell whose content cannot reach the server drops the Loading line and says so | Default seed; the request for `/admin/roles/list` aborted by a route; `/admin/roles` | No `Loading…` text is on the page and `#page-status` reads `Failed to load` | P1 | No response arrives, which is a different path from a response with a status |
 | AX-15 | users count line | Happy Path | Search and Load more announce a count in a line that is on the page from the start | `generateUsers` 247; a listener added at `DOMContentLoaded` that records the text of `#admin-users-count`; `/admin/users`; Load more; a search for `user-3`; a search for `zzzzzz` | The line is present and empty at `DOMContentLoaded`. Then it reads `200 users`, `50 more users` after Load more, something else after `user-3`, and `No matches…` after `zzzzzz` | P0 | |
-| AX-16 | Saved status | Happy Path | The Saved status goes away when the form is edited again | Default seed; `/admin/users/{bob}`; the username changed to `robert` and saved; a character typed into the field | `#admin-user-status` reads `Saved`, then is empty after the next input | P1 | |
 
 ## Fields
 
