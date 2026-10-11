@@ -782,3 +782,14 @@ func TestAccountUnlinkHandler(t *testing.T) {
 		assertBodyLacks(t, rec, "The change was made")
 	})
 }
+
+func TestAccountContentLoadsNothingFurther(t *testing.T) {
+	t.Run("AC-48_the_content_asks_for_no_further_load_after_the_shell_fetched_it", func(t *testing.T) {
+		f := fakeapi.NewFakeAPI(t)
+		stubAccountAPI(f)
+		f.On("GET /users/me/permissions", 200, `["users.admin"]`)
+		rec := serveRequest("GET", "/account/content", nil)
+		assertStatusCode(t, rec, 200)
+		assertBodyLacks(t, rec, "hx-get=")
+	})
+}
