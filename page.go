@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -20,26 +19,12 @@ func noStoreHandler(next http.Handler) http.Handler {
 
 var pageRequestTimeout = 30 * time.Second
 
-type pageHandler interface {
-	func(http.ResponseWriter, *http.Request, apiSession) | func(http.ResponseWriter, *http.Request, apiSession) error
-}
-
-func callHandler[H pageHandler](handler H, w http.ResponseWriter, r *http.Request, a apiSession) error {
-	switch h := any(handler).(type) {
-	case func(http.ResponseWriter, *http.Request, apiSession) error:
-		return h(w, r, a)
-	case func(http.ResponseWriter, *http.Request, apiSession):
-		h(w, r, a)
-	}
-	return nil
-}
-
-func pageRoute[H pageHandler](handler H) http.Handler {
+func pageRoute(handler func(http.ResponseWriter, *http.Request, apiSession) error) http.Handler {
 	return noStoreHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), pageRequestTimeout)
 		defer cancel()
 		r = r.WithContext(ctx)
-		if err := callHandler(handler, w, r, apiSession{r: r}); err != nil {
+		if err := handler(w, r, apiSession{r: r}); err != nil {
 			writeError(w, r, err)
 		}
 	}))
@@ -69,7 +54,7 @@ func requireHTMXForWrites(mux *http.ServeMux) http.Handler {
 }
 
 // pageAction requires the HX-Request header, which a cross-site form cannot send.
-func pageAction[H pageHandler](handler H) http.Handler {
+func pageAction(handler func(http.ResponseWriter, *http.Request, apiSession) error) http.Handler {
 	return pageRoute(func(w http.ResponseWriter, r *http.Request, a apiSession) error {
 		if r.Header.Get("HX-Request") != "true" {
 			http.Error(w, "Forbidden", http.StatusForbidden)
@@ -78,7 +63,7 @@ func pageAction[H pageHandler](handler H) http.Handler {
 		if err := r.ParseForm(); err != nil {
 			return invalidInput("The form could not be read")
 		}
-		return callHandler(handler, w, r, a)
+		return handler(w, r, a)
 	})
 }
 
@@ -93,28 +78,9 @@ func shellFor(page func(id string) templ.Component) http.Handler {
 	}))
 }
 
-func failFragment(w http.ResponseWriter, r *http.Request, err error, restore ...templ.Component) {
-	writeError(w, r, pageFail(err).restore(restore...))
-}
-
-func failEditor(w http.ResponseWriter, r *http.Request, statusID string, err error, restore ...templ.Component) {
-	writeError(w, r, pageFail(err).clearStatus(statusID).restore(restore...))
-}
-
 func nothingToSave(w http.ResponseWriter, r *http.Request, statusID string) {
 	w.Header().Set("HX-Reswap", "none")
 	renderAll(w, r, components.StatusLine(statusID, "Nothing to save"))
-}
-
-func fieldRefusal(err error) string {
-	var failure *apiError
-	if errors.As(err, &failure) {
-		switch failure.Status {
-		case http.StatusBadRequest, http.StatusConflict, http.StatusUnprocessableEntity:
-			return failure.Message
-		}
-	}
-	return ""
 }
 
 func render(w http.ResponseWriter, r *http.Request, parts ...templ.Component) {
@@ -156,26 +122,20 @@ func secondary(err error) (string, error) {
 	return message, nil
 }
 
-func permissionLink(link templ.Component, nodes ...string) func(http.ResponseWriter, *http.Request, apiSession) {
-	return func(w http.ResponseWriter, r *http.Request, a apiSession) {
+func permissionLink(link templ.Component, nodes ...string) func(http.ResponseWriter, *http.Request, apiSession) error {
+	return func(w http.ResponseWriter, r *http.Request, a apiSession) error {
 		permissions, err := apiGet[[]string](a, "/users/me/permissions", loadYourPermsFailed)
 		if err != nil {
-			return
+			return nil
 		}
 		for _, node := range nodes {
 			if hasPermission(permissions, node) {
 				templ.Handler(link).ServeHTTP(w, r)
-				return
+				return nil
 			}
 		}
-	}
-}
-
-func afterWrite(err error) error {
-	if err == nil {
 		return nil
 	}
-	return pageFail(err).afterWrite()
 }
 
 func rowGone(prefix string, id string) []templ.Component {
