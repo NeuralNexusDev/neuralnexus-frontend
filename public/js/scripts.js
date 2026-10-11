@@ -393,7 +393,7 @@ function checkMcStatus(event) {
                     return;
                 }
                 const detail = problem.detail || '';
-                if (res.status === 404 && (res.headers.get('content-type') || '').split(';')[0] === 'application/problem+json') {
+                if (res.status === 404 && (res.headers.get('content-type') || '') === 'application/problem+json') {
                     showMcStatusError("Couldn't reach that server", detail);
                     if (problem.host && problem.port) {
                         setMcStatusUrl(mcDisplayHost(problem, bedrock), search);
