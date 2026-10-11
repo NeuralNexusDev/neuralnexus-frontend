@@ -111,6 +111,7 @@ test.describe('users list', () => {
   test('FA-08 Load more moves focus to the first new user', async ({ page }) => {
     await signIn(page, { generateUsers: 247 });
     await page.goto('/admin/users');
+    await expect(userRows(page)).toHaveCount(200);
     await page.locator('#admin-users-more-button').click();
     await expect(page.locator('#admin-users > li:has(> a)')).toHaveCount(250);
     await expect(page.locator('#admin-users > li:has(> a)').nth(200).locator('a')).toBeFocused();

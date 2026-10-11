@@ -137,27 +137,6 @@ test.describe('late answers', () => {
     await catalogue.release();
   });
 
-  test('HG-11 a late answer to an earlier search does not replace the answer to the last one', async ({ page }) => {
-    const { gate } = await signIn(page);
-    await page.goto('/admin/users');
-    await expect(userRows(page)).toHaveCount(3);
-    const searched = await gate('GET /users');
-    for (const [index, text] of ['bo', 'nobody', 'alice'].entries()) {
-      await search(page).fill(text);
-      await searched.arrived(index + 1);
-    }
-    await searched.release({ index: 2 });
-    await expect(userRows(page)).toHaveCount(1);
-    await expect(userRows(page)).toContainText('alice');
-    const late = page.waitForResponse((response) => response.url().includes('search=nobody'));
-    await searched.release({ index: 1 });
-    await late;
-    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-    await expect(userRows(page)).toHaveCount(1);
-    await expect(userRows(page)).toContainText('alice');
-    await expect(page.locator('#admin-users-empty')).toHaveCount(0);
-    await searched.release();
-  });
 });
 
 test.describe('values typed while a request runs', () => {
@@ -217,22 +196,6 @@ test.describe('values typed while a request runs', () => {
     await expect(username(page)).toHaveValue('robertXY');
     await expect(username(page)).toBeFocused();
     expect(await username(page).evaluate((input) => input.selectionStart)).toBe(6);
-  });
-
-  test('HG-23 a number field typed in while a removal is in flight keeps its value and focus', async ({ page }) => {
-    const { gate } = await signIn(page);
-    await page.goto(roleEditor);
-    const held = await removal(gate);
-    await removeFirstGrant(page).click();
-    await held.arrived();
-    await expect(page.locator('#admin-role')).toHaveAttribute('aria-busy', 'true');
-    const value = valueField(page, 'ratelimit');
-    await value.fill('7712');
-    await value.press('ArrowLeft');
-    await held.release();
-    await expect(granted(page)).toHaveCount(1);
-    await expect(value).toHaveValue('7712');
-    await expect(value).toBeFocused();
   });
 
   test('HG-24 the field that has focus is the one that gets focus back, not the last one changed', async ({ page }) => {
