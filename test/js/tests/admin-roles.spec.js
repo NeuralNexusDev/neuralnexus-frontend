@@ -1,4 +1,11 @@
-import { test, expect, signIn, ID, HOSTILE, error, expectNoInjection } from './helpers.js';
+import { test, expect, signIn, ID, error } from './helpers.js';
+
+const HOSTILE = '"><img src=x onerror="window.__xss=1">';
+
+async function expectNoInjection(page) {
+  await expect(page.locator('img[src="x"]')).toHaveCount(0);
+  expect(await page.evaluate(() => window.__xss)).toBeUndefined();
+}
 
 test.describe('admin - roles', () => {
   const granted = (page) => page.locator('#admin-role-permissions li');
