@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, signIn } from './helpers.js';
 
 const API = `${process.env.NN_API_URL}/api/v1`;
 const SITE = process.env.BASE_URL || 'http://localhost:8099';
@@ -426,5 +426,52 @@ test.describe('startOAuthLogin', () => {
     await page.locator('#discord-oauth').click();
     await page.waitForURL((url) => url.hostname === 'discord.com');
     expect(await nonceCookie(context)).toBeTruthy();
+  });
+});
+
+test.describe('handleLinkAction', () => {
+  for (const platform of ['discord', 'twitch', 'microsoft', 'xboxlive']) {
+    test(`SC-35 the ${platform} Link button goes to the provider address with the link state`, async ({ page, context }) => {
+      await signIn(page);
+      await stubProviders(page);
+      await page.goto('/account');
+      const account = page.url();
+      const base = await page.locator(`#link-${platform}-oauth-base`).evaluate((element) => element.innerText);
+      await page.locator(`#link-${platform}-action`).click();
+      await page.waitForURL((url) => !url.href.startsWith(SITE));
+
+      expect(page.url().startsWith(`${base}&state=`)).toBe(true);
+      const state = decodeState(new URL(page.url()).searchParams.get('state'));
+      expect(state).toMatchObject({ platform, mode: 'link', redirect_uri: account });
+      expect(state.nonce).toBe((await nonceCookie(context)).value);
+    });
+  }
+
+  test('SC-36 the Steam Link button goes to the OpenID request with the link state in the return address', async ({ page }) => {
+    await signIn(page);
+    await stubProviders(page);
+    await page.goto('/account');
+    await page.locator('#link-steam-action').click();
+    await page.waitForURL((url) => url.href.startsWith(STEAM));
+
+    const url = new URL(page.url());
+    expect(url.searchParams.get('openid.mode')).toBe('checkid_setup');
+    const state = decodeState(new URL(url.searchParams.get('openid.return_to')).searchParams.get('state'));
+    expect(state).toMatchObject({ platform: 'steam', mode: 'link' });
+  });
+
+  test('SC-37 a platform whose base element is missing returns without navigating', async ({ page }) => {
+    await signIn(page);
+    const reached = [];
+    await page.route((url) => url.hostname === 'discord.com', (route) => {
+      reached.push(route.request().url());
+      return route.fulfill({ status: 200, contentType: 'text/plain', body: 'stub' });
+    });
+    await page.goto('/account');
+    const account = page.url();
+    await page.locator('#link-discord-oauth-base').evaluate((element) => element.remove());
+    await page.locator('#link-discord-action').click();
+    await expect(page).toHaveURL(account);
+    expect(reached).toEqual([]);
   });
 });
