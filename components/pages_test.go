@@ -176,6 +176,22 @@ func TestWrapContentsWithHead(t *testing.T) {
 		}
 	})
 
+	t.Run("CP-122_the_skip_link_shows_only_on_focus_and_the_main_landmark_takes_focus_without_an_outline", func(t *testing.T) {
+		out := renderString(t, WrapContentsWithHead("T", nil, probe))
+		link := regexp.MustCompile(`<a[^>]*href="#main"[^>]*>`).FindString(out)
+		for _, want := range []string{"sr-only", "focus:not-sr-only", "focus:absolute", "focus:ring-2"} {
+			if !strings.Contains(link, want) {
+				t.Errorf("skip link %q lacks %q", link, want)
+			}
+		}
+		main := regexp.MustCompile(`<main[^>]*>`).FindString(out)
+		for _, want := range []string{"focus:outline-none", "relative isolate px-6 pt-14 lg:px-8"} {
+			if !strings.Contains(main, want) {
+				t.Errorf("main tag %q lacks %q", main, want)
+			}
+		}
+	})
+
 	t.Run("CP-07_the_header_sits_before_main_and_the_contents_sit_inside_main", func(t *testing.T) {
 		out := renderString(t, WrapContentsWithHead("T", nil, probe))
 		assertInOrder(t, out, "<header", "<main", `id="probe"`, "</main>", "</body>")

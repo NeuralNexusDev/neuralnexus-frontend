@@ -1382,3 +1382,28 @@ func TestAdminUserSaveHandler(t *testing.T) {
 		assertBodyLacks(t, rec, "The change was made")
 	})
 }
+
+func TestAdminUserFailuresClearTheStatusLine(t *testing.T) {
+	cases := []struct {
+		name, method, target string
+		form                 url.Values
+		answered             string
+		want                 string
+	}{
+		{"save", "POST", "/admin/users/u1", url.Values{"loaded_username": {"bob"}, "username": {"bob"}, "roles_editable": {"1"}, "loaded_roles": {"r1"}, "roles": {"r1", "r2"}}, "PUT /users/u1", `refused<p id="admin-user-status" hx-swap-oob="innerHTML"></p>`},
+		{"editor", "GET", "/admin/users/u1/editor", nil, "GET /users/u1", "refused"},
+		{"list", "GET", "/admin/users/list", nil, "GET /users", "refused"},
+		{"rows", "GET", "/admin/users/rows", nil, "GET /users", "refused"},
+	}
+	for _, tc := range cases {
+		t.Run("US-85_"+tc.name, func(t *testing.T) {
+			f := fakeapi.NewFakeAPI(t)
+			f.Problem(tc.answered, 409, "refused")
+			rec := serveRequest(tc.method, tc.target, tc.form)
+			assertStatusCode(t, rec, 409)
+			if got := rec.Body.String(); got != tc.want {
+				t.Errorf("body = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

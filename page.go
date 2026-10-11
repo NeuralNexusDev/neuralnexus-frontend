@@ -1,10 +1,8 @@
 package main
 
 import (
-	"context"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/a-h/templ"
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/components"
@@ -17,17 +15,8 @@ func noStoreHandler(next http.Handler) http.Handler {
 	})
 }
 
-var pageRequestTimeout = 30 * time.Second
-
-func pageRoute(handler func(http.ResponseWriter, *http.Request, apiSession) error) http.Handler {
-	return noStoreHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), pageRequestTimeout)
-		defer cancel()
-		r = r.WithContext(ctx)
-		if err := handler(w, r, apiSession{r: r}); err != nil {
-			writeError(w, r, err)
-		}
-	}))
+func pageRoute(handler pageHandler) http.Handler {
+	return noStoreHandler(handler)
 }
 
 func requireHTMXForWrites(mux *http.ServeMux) http.Handler {
@@ -54,7 +43,7 @@ func requireHTMXForWrites(mux *http.ServeMux) http.Handler {
 }
 
 // pageAction requires the HX-Request header, which a cross-site form cannot send.
-func pageAction(handler func(http.ResponseWriter, *http.Request, apiSession) error) http.Handler {
+func pageAction(handler pageHandler) http.Handler {
 	return pageRoute(func(w http.ResponseWriter, r *http.Request, a apiSession) error {
 		if r.Header.Get("HX-Request") != "true" {
 			http.Error(w, "Forbidden", http.StatusForbidden)
@@ -122,7 +111,7 @@ func secondary(err error) (string, error) {
 	return message, nil
 }
 
-func permissionLink(link templ.Component, nodes ...string) func(http.ResponseWriter, *http.Request, apiSession) error {
+func permissionLink(link templ.Component, nodes ...string) pageHandler {
 	return func(w http.ResponseWriter, r *http.Request, a apiSession) error {
 		permissions, err := apiGet[[]string](a, "/users/me/permissions", loadYourPermsFailed)
 		if err != nil {
