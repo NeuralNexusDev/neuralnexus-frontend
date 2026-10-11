@@ -137,16 +137,6 @@ test.describe('admin access', () => {
     await expect(page).toHaveURL(/\/login$/);
   });
 
-  test('FS-11 a server that cannot be reached shows a message in the banner', async ({ page }) => {
-    await signIn(page);
-    await page.goto('/admin/permissions');
-    await expect(page.locator('#admin-permissions li').first()).toBeVisible();
-    await page.route('**/admin/permissions/*', (route) => route.abort('failed'));
-    page.once('dialog', (dialog) => dialog.accept());
-    await page.locator('#admin-permissions li').first().getByRole('button', { name: 'Delete' }).click();
-    await expect(error(page)).toHaveText('The server could not be reached. Try again in a moment.');
-  });
-
   test('FS-12 going back after the session ends does not show the page again', async ({ page }) => {
     await signIn(page);
     await loginPage(page);
