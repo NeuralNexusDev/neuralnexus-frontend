@@ -1022,7 +1022,9 @@ func TestRenderGrantsChanged(t *testing.T) {
 	render := func(drafts map[string]string, grantPermission, grantValue string, focusList bool, restore func() []templ.Component) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
 		r := newRoleRequest("5")
-		renderGrantsChanged(rec, r, newSession(r), drafts, grantPermission, grantValue, focusList, restore)
+		if err := renderGrantsChanged(rec, r, newSession(r), drafts, grantPermission, grantValue, focusList, restore); err != nil {
+			writeError(rec, r, err)
+		}
 		return rec
 	}
 	stubReload := func(f *fakeapi.FakeAPI, role string) {
