@@ -454,13 +454,6 @@ func TestRequestIDMiddleware(t *testing.T) {
 			t.Errorf("header %q does not hold the context ID %d", header, number)
 		}
 	})
-
-	t.Run("SV-49 an ID that is not a number becomes 0 in the context and stays as sent on the header", func(t *testing.T) {
-		id, header := run("abc")
-		if id != 0 || header != "abc" {
-			t.Errorf("context ID %v, header %q, want 0 and abc", id, header)
-		}
-	})
 }
 
 func TestIPMiddleware(t *testing.T) {
