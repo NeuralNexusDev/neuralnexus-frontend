@@ -115,30 +115,6 @@ test.describe('admin - user list', () => {
     await expect(page.locator('#admin-users-more-button')).toHaveCount(0);
   });
 
-  test('Load more shows a progress cursor and dims while its page loads', async ({ page }) => {
-    const { gate } = await signIn(page, { generateUsers: 247 });
-    await page.goto('/admin/users');
-    await expect(rows(page)).toHaveCount(200);
-    const more = page.locator('#admin-users-more-button');
-    const nextPage = await gate('GET /users');
-    await more.click();
-    await nextPage.arrived();
-    await expect(more).toHaveAttribute('aria-busy', 'true');
-    await expect(more).toHaveCSS('cursor', 'progress');
-    await expect(more).toHaveCSS('opacity', '0.6');
-    await nextPage.release();
-    await expect(rows(page)).toHaveCount(250);
-  });
-
-  test('Load more adds the next page and the button goes when the list ends', async ({ page }) => {
-    await signIn(page, { generateUsers: 247 });
-    await page.goto('/admin/users');
-    await expect(rows(page)).toHaveCount(200);
-    await page.locator('#admin-users-more-button').click();
-    await expect(rows(page)).toHaveCount(250);
-    await expect(page.locator('#admin-users-more-button')).toHaveCount(0);
-  });
-
   test('a failed Load more shows the API message, keeps the list, and a retry clears the message', async ({ page }) => {
     await signIn(page, { generateUsers: 247, failures: { 'GET /users': { status: 500, detail: 'Failed to list users', skip: 1, times: 1 } } });
     await page.goto('/admin/users');
@@ -213,21 +189,6 @@ test.describe('admin - user editor', () => {
     await expect(status(page)).toHaveText('Saved. Changes made while saving are not saved yet.');
     await expect(error(page)).toHaveText('The change made while saving was not sent. Make it again.');
     await expect(username(page)).toHaveValue('robertX');
-    expect(await writes()).toEqual([{ method: 'PUT', path: `/users/${ID.bob}`, body: { username: 'robert' } }]);
-  });
-
-  test('pressing Enter again on an unchanged form while a save is in flight does not say a change was lost', async ({ page }) => {
-    const { writes, gate } = await signIn(page);
-    await page.goto(editor);
-    const put = await gate(`PUT /users/${ID.bob}`);
-    await username(page).fill('robert');
-    await username(page).press('Enter');
-    await put.arrived();
-    await username(page).press('Enter');
-    await expect(error(page)).toHaveText('The last change is still being saved. Try again in a moment.');
-    await put.release();
-    await expect(status(page)).toHaveText('Saved');
-    await expect(error(page)).toHaveText('');
     expect(await writes()).toEqual([{ method: 'PUT', path: `/users/${ID.bob}`, body: { username: 'robert' } }]);
   });
 

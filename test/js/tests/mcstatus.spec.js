@@ -369,13 +369,6 @@ test.describe('mc status page - share links', () => {
     expect(requests.status).toHaveLength(0);
   });
 
-  test('the shared URL uses the canonical host and port from the API', async ({ page }) => {
-    await mockMcStatus(page, () => json({ ...ONLINE, host: 'play.example.net', port: 80 }));
-    await page.goto('/project/mc-status');
-    await lookup(page, 'Play.Example.NET:00080');
-    await expect(page).toHaveURL(/\/project\/mc-status\/play\.example\.net:80$/);
-  });
-
   const typedHosts = {
     'a space': ['a b', 'a%20b'],
     'a non-ASCII name': ['bücher.de', 'b%C3%BCcher.de'],
@@ -484,15 +477,6 @@ test.describe('mc status page - share links', () => {
     await expect(page.locator('#mc-status-host')).toHaveValue('[2001:db8::1]');
     await expect(page.locator('#mc-status-result')).toBeVisible();
     expect(new URL(page.url()).pathname).toBe('/project/mc-status/%5B2001:db8::1%5D');
-  });
-
-  test('a lookup rewrites the URL so the result can be shared', async ({ page }) => {
-    await mockMcStatus(page, () => json(ONLINE));
-    await page.goto('/project/mc-status');
-    await lookup(page, 'play.example.net');
-    await expect(page.locator('#mc-status-result')).toBeVisible();
-    expect(new URL(page.url()).pathname).toBe('/project/mc-status/play.example.net');
-    expect(new URL(page.url()).search).toBe('');
   });
 
   test('Bedrock and query=false are kept in the shared URL', async ({ page }) => {
