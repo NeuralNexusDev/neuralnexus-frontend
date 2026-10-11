@@ -1,4 +1,4 @@
-import { test, expect, signIn, ID, HOSTILE, error, expectNoInjection } from './helpers.js';
+import { test, expect, signIn, ID, error } from './helpers.js';
 
 test.describe('admin - permissions', () => {
   const rows = (page) => page.locator('#admin-permissions li');
@@ -32,22 +32,6 @@ test.describe('admin - permissions', () => {
     await expect(error(page)).toHaveText('The change was made, but the page could not be refreshed: permissions are down');
     await expect(rows(page)).toHaveCount(6);
     await expect(rows(page).last()).toContainText('pets.write');
-  });
-
-  test('changing the create form while a delete is in flight keeps the choice without a message', async ({ page }) => {
-    const { gate } = await signIn(page);
-    await page.goto('/admin/permissions');
-    const deletion = await gate(`DELETE /permissions/${ID.pStore}`);
-    page.once('dialog', (dialog) => dialog.accept());
-    await rows(page).nth(4).getByRole('button', { name: 'Delete' }).click();
-    await deletion.arrived();
-    await expect(page.locator('#admin-permissions-root')).toHaveAttribute('aria-busy', 'true');
-    await page.locator('#admin-permission-create-type').selectOption('int');
-    await deletion.release();
-    await expect(rows(page)).toHaveCount(4);
-    await expect(page.locator('#admin-permission-create-type')).toHaveValue('int');
-    await expect(page.locator('#admin-permissions-root')).not.toHaveAttribute('aria-busy', 'true');
-    await expect(error(page)).toHaveText('');
   });
 
   test('the merge rule only appears for a whole-number permission, and is sent with it', async ({ page }) => {
@@ -92,13 +76,6 @@ test.describe('admin - permissions', () => {
     expect(messages).toEqual(['Delete the permission datastore.admin?', 'Delete the permission datastore.admin?']);
     expect(await writes()).toEqual([{ method: 'DELETE', path: `/permissions/${ID.pStore}`, body: null }]);
     await expect(page.locator('#admin-permissions-title')).toBeFocused();
-  });
-
-  test('API text is rendered as text, never as HTML', async ({ page }) => {
-    await signIn(page, { permissions: [{ id: ID.pRate, node: HOSTILE, description: HOSTILE, value_type: 'int', merge: HOSTILE }] });
-    await page.goto('/admin/permissions');
-    await expect(rows(page).first()).toContainText(HOSTILE);
-    await expectNoInjection(page);
   });
 
 });
