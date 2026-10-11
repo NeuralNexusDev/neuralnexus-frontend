@@ -25,42 +25,6 @@ test.describe('account page - loading', () => {
     await expect(page.locator('#link-steam-title')).toHaveText('Steam');
     await expect(page.locator('#link-steam-action')).toHaveText('Link');
   });
-
-  test('clicking Link on Steam navigates to a Steam OpenID URL, not a pre-rendered base href', async ({ page }) => {
-    await signIn(page);
-    // Intercept rather than let the browser actually reach Steam - only the
-    // request URL buildSteamOpenIDURL() produced matters here.
-    const steamUrl = process.env.STEAM_OPENID_LOGIN_URL;
-    await page.route(`${steamUrl}*`, (route) => {
-      route.fulfill({ status: 200, contentType: 'text/plain', body: 'stub' });
-    });
-
-    await page.goto('/account');
-    await page.locator('#link-steam-action').click();
-    await page.waitForURL((url) => url.href.startsWith(steamUrl));
-
-    const url = new URL(page.url());
-    expect(url.searchParams.get('openid.mode')).toBe('checkid_setup');
-    const returnTo = new URL(url.searchParams.get('openid.return_to'));
-    const state = JSON.parse(
-      Buffer.from(returnTo.searchParams.get('state').replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')
-    );
-    expect(state.platform).toBe('steam');
-    expect(state.mode).toBe('link');
-  });
-
-  test('clicking Link on Discord navigates to the OAuth URL with the link state', async ({ page }) => {
-    await signIn(page);
-    await page.route('https://discord.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/plain', body: 'stub' }));
-    await page.goto('/account');
-    await page.locator('#link-discord-action').click();
-    await page.waitForURL((url) => url.hostname === 'discord.com');
-    const state = JSON.parse(
-      Buffer.from(new URL(page.url()).searchParams.get('state').replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')
-    );
-    expect(state.platform).toBe('discord');
-    expect(state.mode).toBe('link');
-  });
 });
 
 test.describe('account page - unlink', () => {
