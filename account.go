@@ -32,81 +32,74 @@ func loadAccountLinks(a apiSession) (map[string]components.LinkedAccount, error)
 	return byPlatform, err
 }
 
-func accountContentHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
+func accountContentHandler(w http.ResponseWriter, r *http.Request, a apiSession) error {
 	account, err := apiGet[struct {
 		Username string `json:"username"`
 	}](a, "/users/me", "Failed to load your account")
 	if err != nil {
-		failFragment(w, r, err)
-		return
+		return err
 	}
 	data := components.AccountData{Username: account.Username}
 	settings, err := loadAccountSettings(a)
 	if data.SettingsError, err = secondary(err); err != nil {
-		failFragment(w, r, err)
-		return
+		return err
 	}
 	data.PasswordAuth = settings.PasswordAuth
 	if data.Links, err = loadAccountLinks(a); err != nil {
 		if data.LinksError, err = secondary(err); err != nil {
-			failFragment(w, r, err)
-			return
+			return err
 		}
 	}
 	permissions, _ := apiGet[[]string](a, "/users/me/permissions", loadYourPermsFailed)
 	data.AdminLink = hasPermission(permissions, "users.admin") || hasPermission(permissions, "roles.admin")
 	renderAll(w, r, components.AccountContent(data))
+	return nil
 }
 
-func accountSettingsHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
+func accountSettingsHandler(w http.ResponseWriter, r *http.Request, a apiSession) error {
 	enabled := r.Form.Get("password_auth") == "true"
 	body := map[string]bool{"password_auth": enabled}
 	if _, err := apiSend[struct{}](a, http.MethodPatch, "/users/me/settings", body, "Failed to update account settings"); err != nil {
-		failFragment(w, r, err, components.AccountPasswordLogin(components.AccountSettingsData{PasswordAuth: !enabled}, true))
-		return
+		return pageFail(err).restore(components.AccountPasswordLogin(components.AccountSettingsData{PasswordAuth: !enabled}, true))
 	}
 	data, err := loadAccountSettings(a)
 	if err != nil {
-		failFragment(w, r, afterWrite(err))
-		return
+		return pageFail(err).afterWrite()
 	}
 	renderAll(w, r, components.AccountPasswordLogin(data, false))
+	return nil
 }
 
-func accountLinkRow(w http.ResponseWriter, r *http.Request, a apiSession, platform components.AccountPlatform) {
+func accountLinkRow(w http.ResponseWriter, r *http.Request, a apiSession, platform components.AccountPlatform) error {
 	links, err := loadAccountLinks(a)
 	if err != nil {
-		failFragment(w, r, afterWrite(err))
-		return
+		return pageFail(err).afterWrite()
 	}
 	link, linked := links[platform.ID]
 	renderAll(w, r, components.AccountLinkRow(platform, link, linked, false))
+	return nil
 }
 
-func accountLinkHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
+func accountLinkHandler(w http.ResponseWriter, r *http.Request, a apiSession) error {
 	platform, ok := accountPlatform(r.PathValue("platform"))
 	if !ok {
-		failFragment(w, r, &apiError{Status: http.StatusNotFound, Message: unknownPlatform})
-		return
+		return &apiError{Status: http.StatusNotFound, Message: unknownPlatform}
 	}
 	enabled := r.Form.Get("login_enabled") == "true"
 	body := map[string]bool{"login_enabled": enabled}
 	if _, err := apiSend[struct{}](a, http.MethodPatch, "/users/me/link/"+url.PathEscape(platform.ID), body, "Failed to update platform"); err != nil {
-		failFragment(w, r, err, components.AccountLoginInput(platform, !enabled, false, true))
-		return
+		return pageFail(err).restore(components.AccountLoginInput(platform, !enabled, false, true))
 	}
-	accountLinkRow(w, r, a, platform)
+	return accountLinkRow(w, r, a, platform)
 }
 
-func accountUnlinkHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
+func accountUnlinkHandler(w http.ResponseWriter, r *http.Request, a apiSession) error {
 	platform, ok := accountPlatform(r.PathValue("platform"))
 	if !ok {
-		failFragment(w, r, &apiError{Status: http.StatusNotFound, Message: unknownPlatform})
-		return
+		return &apiError{Status: http.StatusNotFound, Message: unknownPlatform}
 	}
 	if _, err := apiSend[struct{}](a, http.MethodDelete, "/users/me/link/"+url.PathEscape(platform.ID), nil, "Failed to unlink platform"); err != nil {
-		failFragment(w, r, err)
-		return
+		return err
 	}
-	accountLinkRow(w, r, a, platform)
+	return accountLinkRow(w, r, a, platform)
 }

@@ -78,31 +78,30 @@ func loadUsersPage(a apiSession, offset int, search string) (components.AdminUse
 	}, nil
 }
 
-func adminUsersListHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
+func adminUsersListHandler(w http.ResponseWriter, r *http.Request, a apiSession) error {
 	data, err := loadUsersPage(a, 0, "")
 	if err != nil {
-		failFragment(w, r, err)
-		return
+		return err
 	}
 	renderAll(w, r, components.AdminUsersList(data))
+	return nil
 }
 
-func adminUserRowsHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
+func adminUserRowsHandler(w http.ResponseWriter, r *http.Request, a apiSession) error {
 	offset := 0
 	if raw := r.URL.Query().Get("offset"); raw != "" {
 		var err error
 		if offset, err = strconv.Atoi(raw); err != nil || offset < 0 {
-			failFragment(w, r, invalidInput("The offset must be a whole number from 0"))
-			return
+			return invalidInput("The offset must be a whole number from 0")
 		}
 	}
 	data, err := loadUsersPage(a, offset, r.URL.Query().Get("search"))
 	if err != nil {
-		failFragment(w, r, err)
-		return
+		return err
 	}
 	data.FocusFirst = offset > 0
 	renderAll(w, r, components.AdminUserRows(data), components.AdminUsersCount(data, true))
+	return nil
 }
 
 func loadUserEditor(a apiSession, id string, user *components.UserAccount, withLinks bool) (components.AdminUserData, error) {
@@ -134,13 +133,17 @@ func loadUserEditor(a apiSession, id string, user *components.UserAccount, withL
 	return data, nil
 }
 
-func adminUserEditorHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
+func adminUserEditorHandler(w http.ResponseWriter, r *http.Request, a apiSession) error {
 	data, err := loadUserEditor(a, r.PathValue("id"), nil, true)
 	if err != nil {
-		failFragment(w, r, err)
-		return
+		return err
 	}
 	renderAll(w, r, components.AdminUserContent(data))
+	return nil
+}
+
+func userFail(err error) *pageError {
+	return pageFail(err).clearStatus(components.AdminUserStatusID)
 }
 
 func renderUserSave(w http.ResponseWriter, r *http.Request, data components.AdminUserData, status string) {
@@ -152,14 +155,13 @@ func renderUserSave(w http.ResponseWriter, r *http.Request, data components.Admi
 	)
 }
 
-func adminUserSaveHandler(w http.ResponseWriter, r *http.Request, a apiSession) {
+func adminUserSaveHandler(w http.ResponseWriter, r *http.Request, a apiSession) error {
 	id := r.PathValue("id")
 	body := map[string]any{}
 	if raw := r.Form.Get("username"); raw != r.Form.Get("loaded_username") {
 		username := strings.TrimSpace(raw)
 		if username == "" {
-			failEditor(w, r, components.AdminUserStatusID, invalidInput("Enter a username"), components.AdminUserUsername(raw, "Enter a username", true))
-			return
+			return userFail(invalidInput("Enter a username")).restore(components.AdminUserUsername(raw, "Enter a username", true))
 		}
 		body["username"] = username
 	}
@@ -179,26 +181,27 @@ func adminUserSaveHandler(w http.ResponseWriter, r *http.Request, a apiSession) 
 	}
 	if len(body) == 0 {
 		nothingToSave(w, r, components.AdminUserStatusID)
-		return
+		return nil
 	}
 	saved, err := apiSend[components.UserAccount](a, http.MethodPut, "/users/"+url.PathEscape(id), body, "Failed to save the user")
 	if err != nil {
-		var restore []templ.Component
-		if message := fieldRefusal(err); message != "" && body["username"] != nil {
-			restore = append(restore, components.AdminUserUsername(r.Form.Get("username"), message, true))
+		failure := userFail(err)
+		if body["username"] != nil {
+			failure.flagField(func(message string) templ.Component {
+				return components.AdminUserUsername(r.Form.Get("username"), message, true)
+			})
 		}
-		failEditor(w, r, components.AdminUserStatusID, err, restore...)
-		return
+		return failure
 	}
 	data, err := loadUserEditor(a, id, &saved, false)
 	if err != nil {
 		written := components.AdminUserData{User: saved}
-		failEditor(w, r, components.AdminUserStatusID, afterWrite(err), components.AdminUserHeader(written, true), components.AdminUserLoaded(written, true))
-		return
+		return userFail(err).afterWrite().restore(components.AdminUserHeader(written, true), components.AdminUserLoaded(written, true))
 	}
 	status := "Saved"
 	if data.PermissionsErr != "" {
 		status = "Saved, but the permissions below are out of date"
 	}
 	renderUserSave(w, r, data, status)
+	return nil
 }
