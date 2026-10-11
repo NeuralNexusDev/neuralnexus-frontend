@@ -1,10 +1,9 @@
-import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
 
 const API = `${process.env.NN_API_URL}/api/v1`;
 const SITE = process.env.BASE_URL || 'http://localhost:8099';
 const STEAM = process.env.STEAM_OPENID_LOGIN_URL;
-const SCRIPTS = fileURLToPath(new URL('../../../public/js/scripts.js', import.meta.url));
+const SITE_HOST = new URL(SITE).hostname;
 
 const encodeProblem = (problem) =>
   Buffer.from(JSON.stringify(problem), 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_');
@@ -18,18 +17,19 @@ async function stubProviders(page) {
   await page.route((url) => hosts.includes(url.hostname), (route) => route.fulfill({ status: 200, contentType: 'text/plain', body: 'stub' }));
 }
 
-/** Serves a bare page with the two hidden elements and the real scripts.js on a host the stub does not know, so cookies can be shared across subdomains. */
-async function fakeSite(page, origin, apiUrl) {
+/** Serves a bare page with the hidden elements and the scripts.js the app serves, on a host the stub does not know, so that the page and the API it calls are on one site whatever the hosts of the app and the stub are. */
+async function fakeSite(page, origin, apiUrl, path = '/') {
+  const source = await (await page.request.get(`${SITE}/public/js/scripts.js`)).text();
   await page.route(`${origin}/**`, (route) => {
     if (new URL(route.request().url()).pathname === '/scripts.js') {
-      return route.fulfill({ path: SCRIPTS });
+      return route.fulfill({ contentType: 'application/javascript', body: source });
     }
     return route.fulfill({
       contentType: 'text/html',
-      body: `<!doctype html><html><body><div hidden id="api-base-url">${apiUrl}</div><div hidden id="steam-openid-login-url">${STEAM}</div><script src="/scripts.js"></script></body></html>`,
+      body: `<!doctype html><html><body><div hidden id="api-base-url">${apiUrl}</div><div hidden id="steam-openid-login-url">${STEAM}</div><span hidden id="header-account"><span id="header-account-username"></span></span><span hidden id="header-logout-btn"></span><span hidden id="header-login-btn"></span><script src="/scripts.js"></script></body></html>`,
     });
   });
-  await page.goto(`${origin}/`);
+  await page.goto(`${origin}${path}`);
 }
 
 test.describe('apiBaseUrl', () => {
@@ -133,7 +133,7 @@ test.describe('setNonceCookie', () => {
     await page.goto('/');
     await page.evaluate(() => setNonceCookie('abc123', ''));
     const cookie = await nonceCookie(context);
-    expect(cookie).toMatchObject({ value: 'abc123', domain: 'localhost', path: '/', sameSite: 'Lax', secure: false });
+    expect(cookie).toMatchObject({ value: 'abc123', domain: SITE_HOST, path: '/', sameSite: 'Lax', secure: false });
     const remaining = cookie.expires - Date.now() / 1000;
     expect(remaining).toBeGreaterThan(290);
     expect(remaining).toBeLessThanOrEqual(300);
@@ -143,7 +143,7 @@ test.describe('setNonceCookie', () => {
     await page.goto('/');
     await page.evaluate(() => setNonceCookie('abc123', '.co.uk'));
     const cookie = await nonceCookie(context);
-    expect(cookie).toMatchObject({ value: 'abc123', domain: 'localhost' });
+    expect(cookie).toMatchObject({ value: 'abc123', domain: SITE_HOST });
   });
 
   test('SC-14 an accepted Domain makes the cookie reach the sibling subdomain', async ({ page, context }) => {
@@ -211,13 +211,14 @@ test.describe('checkHeaderAuthState', () => {
   });
 
   test('SC-20 the request carries the session cookie', async ({ page, context }) => {
-    await context.addCookies([{ name: 'session', value: 'abc123', url: SITE }]);
+    await fakeSite(page, 'http://app.example.test', 'http://api.example.test:8098');
+    await context.addCookies([{ name: 'session', value: 'abc123', url: 'http://api.example.test/' }]);
     let cookie = null;
-    await page.route(`${API}/users/me`, async (route) => {
+    await page.route('http://api.example.test:8098/api/v1/users/me', async (route) => {
       cookie = (await route.request().allHeaders()).cookie;
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ username: 'gearhead' }) });
     });
-    await page.goto('/');
+    await page.evaluate(() => checkHeaderAuthState());
     await expect(controls(page).account).toBeVisible();
     expect(cookie).toContain('session=abc123');
   });
@@ -242,15 +243,14 @@ test.describe('logout', () => {
     );
 
   test('SC-22 a 204 sends a POST with the session cookie and goes to the home page', async ({ page, context }) => {
-    await context.addCookies([{ name: 'session', value: 'abc123', url: SITE }]);
-    await signedIn(page);
+    await fakeSite(page, 'http://app.example.test', 'http://api.example.test:8098', '/login');
+    await context.addCookies([{ name: 'session', value: 'abc123', url: 'http://api.example.test/' }]);
     let request = null;
-    await page.route(`${API}/auth/logout`, async (route) => {
+    await page.route('http://api.example.test:8098/api/v1/auth/logout', async (route) => {
       request = { method: route.request().method(), cookie: (await route.request().allHeaders()).cookie };
       await route.fulfill({ status: 204 });
     });
-    await page.goto('/login');
-    await page.locator('#header-logout-btn button').click();
+    await page.evaluate(() => logout());
     await page.waitForURL((url) => url.pathname === '/');
     expect(request.method).toBe('POST');
     expect(request.cookie).toContain('session=abc123');
@@ -338,7 +338,7 @@ test.describe('encodeState', () => {
     await page.goto('/');
     const states = [
       { q: '???>>>' },
-      { platform: 'discord', nonce: 'abc', redirect_uri: `${SITE}/login?next=/some/path?a=1&b=2`, mode: 'login' },
+      { platform: 'discord', nonce: 'abc', redirect_uri: 'http://a.test/login?next=/some/path?a=1&b=2' },
     ];
     for (const state of states) {
       const { encoded, plain } = await page.evaluate((s) => ({ encoded: encodeState(s), plain: btoa(JSON.stringify(s)) }), state);
