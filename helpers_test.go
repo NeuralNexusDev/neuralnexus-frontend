@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 
@@ -88,4 +91,12 @@ func assertOutOfBand(t *testing.T, rec *httptest.ResponseRecorder, id string, wa
 	if got := strings.Contains(tag, " hx-swap-oob"); got != want {
 		t.Errorf("hx-swap-oob on %q present = %t, want %t; tag %s", id, got, want, tag)
 	}
+}
+
+func captureLog(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	return &buf
 }
