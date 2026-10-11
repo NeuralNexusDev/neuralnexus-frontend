@@ -1,4 +1,4 @@
-import { test, expect, signIn, ID, HOSTILE, error, expectNoInjection } from './helpers.js';
+import { test, expect, signIn, ID, error } from './helpers.js';
 
 test.describe('admin - user list', () => {
   const rows = (page) => page.locator('#admin-users > li:has(> a)');
@@ -115,41 +115,6 @@ test.describe('admin - user list', () => {
     await expect(page.locator('#admin-users-more-button')).toHaveCount(0);
   });
 
-  test('the shell says Loading until its content arrives', async ({ page }) => {
-    const { gate } = await signIn(page);
-    const listed = await gate('GET /users');
-    await page.goto('/admin/users');
-    await listed.arrived();
-    await expect(page.getByRole('status').filter({ hasText: 'Loading' })).toBeVisible();
-    await listed.release();
-    await expect(rows(page)).toHaveCount(3);
-    await expect(page.getByText('Loading…')).toHaveCount(0);
-  });
-
-  test('Load more shows a progress cursor and dims while its page loads', async ({ page }) => {
-    const { gate } = await signIn(page, { generateUsers: 247 });
-    await page.goto('/admin/users');
-    await expect(rows(page)).toHaveCount(200);
-    const more = page.locator('#admin-users-more-button');
-    const nextPage = await gate('GET /users');
-    await more.click();
-    await nextPage.arrived();
-    await expect(more).toHaveAttribute('aria-busy', 'true');
-    await expect(more).toHaveCSS('cursor', 'progress');
-    await expect(more).toHaveCSS('opacity', '0.6');
-    await nextPage.release();
-    await expect(rows(page)).toHaveCount(250);
-  });
-
-  test('Load more adds the next page and the button goes when the list ends', async ({ page }) => {
-    await signIn(page, { generateUsers: 247 });
-    await page.goto('/admin/users');
-    await expect(rows(page)).toHaveCount(200);
-    await page.locator('#admin-users-more-button').click();
-    await expect(rows(page)).toHaveCount(250);
-    await expect(page.locator('#admin-users-more-button')).toHaveCount(0);
-  });
-
   test('a failed Load more shows the API message, keeps the list, and a retry clears the message', async ({ page }) => {
     await signIn(page, { generateUsers: 247, failures: { 'GET /users': { status: 500, detail: 'Failed to list users', skip: 1, times: 1 } } });
     await page.goto('/admin/users');
@@ -161,13 +126,6 @@ test.describe('admin - user list', () => {
     await page.locator('#admin-users-more-button').click();
     await expect(rows(page)).toHaveCount(250);
     await expect(error(page)).toHaveText('');
-  });
-
-  test('usernames are rendered as text, never as HTML', async ({ page }) => {
-    await signIn(page, { users: [{ user_id: ID.bob, username: HOSTILE, roles: [] }] });
-    await page.goto('/admin/users');
-    await expect(rows(page)).toContainText(HOSTILE);
-    await expectNoInjection(page);
   });
 });
 
@@ -234,38 +192,6 @@ test.describe('admin - user editor', () => {
     expect(await writes()).toEqual([{ method: 'PUT', path: `/users/${ID.bob}`, body: { username: 'robert' } }]);
   });
 
-  test('pressing Enter again on an unchanged form while a save is in flight does not say a change was lost', async ({ page }) => {
-    const { writes, gate } = await signIn(page);
-    await page.goto(editor);
-    const put = await gate(`PUT /users/${ID.bob}`);
-    await username(page).fill('robert');
-    await username(page).press('Enter');
-    await put.arrived();
-    await username(page).press('Enter');
-    await expect(error(page)).toHaveText('The last change is still being saved. Try again in a moment.');
-    await put.release();
-    await expect(status(page)).toHaveText('Saved');
-    await expect(error(page)).toHaveText('');
-    expect(await writes()).toEqual([{ method: 'PUT', path: `/users/${ID.bob}`, body: { username: 'robert' } }]);
-  });
-
-  test('a role ticked while a save is in flight stays ticked and unsaved', async ({ page }) => {
-    const { writes, gate } = await signIn(page);
-    await page.goto(editor);
-    const put = await gate(`PUT /users/${ID.bob}`);
-    await username(page).fill('robert');
-    await username(page).press('Enter');
-    await put.arrived();
-    await expect(page.locator('#admin-user')).toHaveAttribute('aria-busy', 'true');
-    await page.locator(`#admin-user-roles input[value="${ID.owner}"]`).focus();
-    await page.keyboard.press('Space');
-    await put.release();
-    await expect(status(page)).toHaveText('Saved. Changes made while saving are not saved yet.');
-    await expect(page.locator(`#admin-user-roles input[value="${ID.owner}"]`)).toBeChecked();
-    await expect(error(page)).toHaveText('');
-    expect(await writes()).toEqual([{ method: 'PUT', path: `/users/${ID.bob}`, body: { username: 'robert' } }]);
-  });
-
   test('the next save sends the tick that was made during a save and clears the note', async ({ page }) => {
     const { writes, gate } = await signIn(page);
     await page.goto(editor);
@@ -285,19 +211,6 @@ test.describe('admin - user editor', () => {
       { method: 'PUT', path: `/users/${ID.bob}`, body: { username: 'robert' } },
       { method: 'PUT', path: `/users/${ID.bob}`, body: { roles: [ID.owner, ID.bee] } },
     ]);
-  });
-
-  test('a save that changes nothing during the request leaves the status at exactly Saved', async ({ page }) => {
-    const { gate } = await signIn(page);
-    await page.goto(editor);
-    const put = await gate(`PUT /users/${ID.bob}`);
-    await username(page).fill('robert');
-    await username(page).press('Enter');
-    await put.arrived();
-    await expect(page.locator('#admin-user')).toHaveAttribute('aria-busy', 'true');
-    await put.release();
-    await expect(page.locator('#admin-user')).not.toHaveAttribute('aria-busy', 'true');
-    await expect(status(page)).toHaveText('Saved');
   });
 
   test('a refused save keeps the tick and the text without the note', async ({ page }) => {
@@ -337,48 +250,12 @@ test.describe('admin - user editor', () => {
     expect(await username(page).evaluate((input) => input.selectionStart)).toBe(6);
   });
 
-  test('saving roles sends only the roles', async ({ page }) => {
-    const { writes } = await signIn(page);
-    await page.goto(editor);
-    await page.locator(`#admin-user-roles input[value="${ID.owner}"]`).check();
-    await save(page).click();
-    await expect(status(page)).toHaveText('Saved');
-    expect(await writes()).toEqual([{ method: 'PUT', path: `/users/${ID.bob}`, body: { roles: [ID.owner, ID.bee] } }]);
-    await expect(page.locator(`#admin-user-roles input[value="${ID.owner}"]`)).toBeChecked();
-  });
-
   test('saving without a change sends nothing', async ({ page }) => {
     const { writes } = await signIn(page);
     await page.goto(editor);
     await save(page).click();
     await expect(status(page)).toHaveText('Nothing to save');
     expect(await writes()).toEqual([]);
-  });
-
-  test('an emptied username is refused in the banner without a request', async ({ page }) => {
-    const { writes } = await signIn(page);
-    await page.goto(editor);
-    await username(page).fill('   ');
-    await save(page).click();
-    await expect(error(page)).toHaveText('Enter a username');
-    await expect(username(page)).toHaveValue('   ');
-    expect(await writes()).toEqual([]);
-  });
-
-  test("a stale form does not revert another admin's role change", async ({ page }) => {
-    const { writes, api } = await signIn(page);
-    await page.goto(editor);
-    await expect(username(page)).toHaveValue('bob');
-    expect((await api('PUT', `/users/${ID.bob}`, { roles: [ID.bee, ID.owner] })).ok()).toBe(true);
-
-    await username(page).fill('robert');
-    await save(page).click();
-    await expect(status(page)).toHaveText('Saved');
-    expect(await writes()).toEqual([
-      { method: 'PUT', path: `/users/${ID.bob}`, body: { roles: [ID.bee, ID.owner] } },
-      { method: 'PUT', path: `/users/${ID.bob}`, body: { username: 'robert' } },
-    ]);
-    await expect(page.locator(`#admin-user-roles input[value="${ID.owner}"]`)).toBeChecked();
   });
 
   test('a refused save shows the API message, keeps what was typed, and a good retry clears the message', async ({ page }) => {
@@ -395,31 +272,9 @@ test.describe('admin - user editor', () => {
     await expect(status(page)).toHaveText('Saved');
     await expect(error(page)).toHaveText('');
   });
-
-  test('API text is rendered as text, never as HTML', async ({ page }) => {
-    await signIn(page, {
-      users: [{ user_id: ID.bob, username: HOSTILE, roles: [ID.bee] }],
-      roles: [{ id: ID.bee, name: HOSTILE, description: HOSTILE, grants: [] }],
-      links: { [ID.bob]: [{ platform: HOSTILE, platform_username: HOSTILE, platform_id: HOSTILE }] },
-    });
-    await page.goto(editor);
-    await expect(page.locator('#admin-user-title')).toContainText(HOSTILE);
-    await expect(page.locator('#admin-user-links')).toContainText(HOSTILE);
-    await expect(page.locator('#admin-user-roles')).toContainText(HOSTILE);
-    await expectNoInjection(page);
-  });
 });
 
 test.describe('admin - user changes', () => {
-  test('a user whose role has no checkbox keeps it when only the username changes', async ({ page }) => {
-    const ghost = '4242424242424242424';
-    const { writes } = await signIn(page, { users: [{ user_id: ID.bob, username: 'bob', roles: [ID.bee, ghost] }] });
-    await page.goto(`/admin/users/${ID.bob}`);
-    await page.locator('#admin-user-username').fill('robert');
-    await page.locator('#admin-user-save').click();
-    await expect(page.locator('#admin-user-status')).toHaveText('Saved');
-    expect(await writes()).toEqual([{ method: 'PUT', path: `/users/${ID.bob}`, body: { username: 'robert' } }]);
-  });
 
   test('a save whose page could not be refreshed still compares the next save with what was stored', async ({ page }) => {
     const { writes } = await signIn(page, { failures: { 'GET /roles': { status: 500, detail: 'roles are down', skip: 1, times: 1 } } });

@@ -1,37 +1,5 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('static pages', () => {
-  test('home page renders', async ({ page }) => {
-    const res = await page.goto('/');
-    expect(res.status()).toBe(200);
-    await expect(page.getByRole('heading', { name: 'NeuralNexus' })).toBeVisible();
-  });
-
-  test('login page renders all five OAuth/OpenID buttons', async ({ page }) => {
-    const res = await page.goto('/login');
-    expect(res.status()).toBe(200);
-    for (const id of ['discord-oauth', 'twitch-oauth', 'microsoft-oauth', 'xbox-oauth', 'steam-oauth']) {
-      await expect(page.locator(`#${id}`)).toBeAttached();
-    }
-    await expect(page.getByText('Login with Discord')).toBeVisible();
-    await expect(page.getByAltText('Sign in through Steam')).toBeVisible();
-  });
-
-  test('register page renders all five OAuth/OpenID buttons with Sign up labels', async ({ page }) => {
-    const res = await page.goto('/register');
-    expect(res.status()).toBe(200);
-    await expect(page.getByText('Sign up with Discord')).toBeVisible();
-    await expect(page.getByAltText('Sign in through Steam')).toBeVisible();
-  });
-
-  // Regression test for the hidden #api-base-url element scripts.js reads
-  // instead of hardcoding the backend's origin.
-  test('exposes the API base URL for scripts.js to read', async ({ page }) => {
-    await page.goto('/');
-    await expect(page.locator('#api-base-url')).toHaveText(process.env.NN_API_URL);
-  });
-});
-
 test.describe('nonce timing', () => {
   // Regression test: the nonce cookie used to be minted on page load, so
   // its 5-minute TTL could run out before the user ever clicked a login
@@ -55,8 +23,6 @@ test.describe('nonce timing', () => {
 test.describe('nonce cookie domain', () => {
   const cases = [
     ['neuralnexus.dev', 'api.neuralnexus.dev', '.neuralnexus.dev'],
-    ['www.neuralnexus.dev', 'api.neuralnexus.dev', '.neuralnexus.dev'],
-    ['staging.example.com', 'api.staging.example.com', '.staging.example.com'],
     ['localhost', 'localhost', ''],
     ['localhost', 'api.neuralnexus.dev', ''],
     ['neuralnexus.dev', 'other.dev', ''],

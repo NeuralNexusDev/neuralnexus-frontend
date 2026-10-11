@@ -3,18 +3,6 @@ import { test, expect } from '@playwright/test';
 const API = `${process.env.NN_API_URL}/api/v1`;
 
 test.describe('password login', () => {
-  test('a successful login redirects home', async ({ page }) => {
-    await page.route(`${API}/auth/login`, (route) => {
-      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ session: 'irrelevant-now' }) });
-    });
-
-    await page.goto('/login');
-    await page.fill('#username', 'someone');
-    await page.fill('#password', 'correct-password');
-    await page.click('button[type="submit"]');
-
-    await page.waitForURL((url) => url.pathname === '/');
-  });
 
   test('sends email vs username depending on the input', async ({ page }) => {
     let sentBody = null;

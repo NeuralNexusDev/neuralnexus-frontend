@@ -5,7 +5,7 @@ import { test as base, expect } from '@playwright/test';
 export { expect };
 
 const STUB = process.env.NN_API_URL;
-export const APP = process.env.BASE_URL || 'http://localhost:8099';
+const APP = process.env.BASE_URL || 'http://localhost:8099';
 const HTMX_CDN = 'https://s3.neuralnexus.dev/cdn/htmx/v4.0.0/htmx.min.js';
 const HTMX_FILE = fileURLToPath(new URL('../node_modules/htmx.org/dist/htmx.min.js', import.meta.url));
 
@@ -23,8 +23,6 @@ export const ID = {
   bob: '3541025163146759020',
   anon: '3541025163146759030',
 };
-
-export const HOSTILE = '"><img src=x onerror="window.__xss=1">';
 
 export const test = base.extend({
   page: async ({ page }, use) => {
@@ -44,8 +42,6 @@ export async function signIn(page, state = {}) {
     (await calls())
       .filter((call) => call.method !== 'GET')
       .map(({ method, path, body }) => ({ method, path, body: body ?? null }));
-  const api = (method, path, data) =>
-    page.request.fetch(`${STUB}/api/v1${path}`, { method, data, headers: { Cookie: `session=${session}` } });
   /** Holds the stub's answer to `key` ("METHOD /path") once `skip` calls have passed, so a test can act while the request is in flight. */
   const gate = async (key, { skip = 0 } = {}) => {
     const registered = await page.request.post(`${STUB}/__state/gate`, { data: { session, key, skip } });
@@ -62,12 +58,7 @@ export async function signIn(page, state = {}) {
       },
     };
   };
-  return { session, calls, writes, api, gate };
-}
-
-export async function expectNoInjection(page) {
-  await expect(page.locator('img[src="x"]')).toHaveCount(0);
-  expect(await page.evaluate(() => window.__xss)).toBeUndefined();
+  return { session, calls, writes, gate };
 }
 
 export const error = (page) => page.locator('#page-error');

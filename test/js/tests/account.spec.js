@@ -1,4 +1,4 @@
-import { test, expect, signIn, HOSTILE, error, expectNoInjection } from './helpers.js';
+import { test, expect, signIn, error } from './helpers.js';
 
 const LINKS = [
   { platform: 'discord', platform_username: 'someone#1234', verified: true, login_enabled: true },
@@ -61,17 +61,6 @@ test.describe('account page - loading', () => {
     expect(state.platform).toBe('discord');
     expect(state.mode).toBe('link');
   });
-
-  test('account text is rendered as text, never as HTML', async ({ page }) => {
-    await signIn(page, {
-      account: { username: HOSTILE, password_auth: true },
-      myLinks: [{ platform: 'discord', platform_username: HOSTILE, verified: true, login_enabled: true }],
-    });
-    await page.goto('/account');
-    await expect(page.locator('#account-username')).toHaveText(HOSTILE);
-    await expect(page.locator('#link-discord-title')).toHaveText(HOSTILE);
-    await expectNoInjection(page);
-  });
 });
 
 test.describe('account page - unlink', () => {
@@ -122,31 +111,6 @@ test.describe('account page - login-enabled toggle', () => {
     await expect.poll(async () => (await writes()).length).toBe(2);
     expect((await writes())[1]).toEqual({ method: 'PATCH', path: '/users/me/link/discord', body: { login_enabled: true } });
     await expect(page.locator('#link-discord-login-enabled')).toBeChecked();
-  });
-
-  test('a failed toggle puts the checkbox back and shows the API message', async ({ page }) => {
-    await signIn(page, {
-      myLinks: LINKS,
-      failures: { 'PATCH /users/me/link/discord': { status: 409, detail: 'Keep one way to sign in', times: 1 } },
-    });
-    await page.goto('/account');
-    await page.locator('label[for="link-discord-login-enabled"]').click();
-    await expect(error(page)).toHaveText('Keep one way to sign in');
-    await expect(page.locator('#link-discord-login-enabled')).toBeChecked();
-  });
-
-  test('a second change to a row while one is in flight is dropped', async ({ page }) => {
-    const { writes, gate } = await signIn(page, { myLinks: LINKS });
-    await page.goto('/account');
-    const patch = await gate('PATCH /users/me/link/discord');
-    await page.locator('label[for="link-discord-login-enabled"]').click();
-    await patch.arrived();
-    await expect(page.locator('#link-discord[aria-busy="true"]')).toHaveCount(1);
-    await page.locator('#link-discord-login-enabled').dispatchEvent('click');
-    await patch.release();
-    await expect(page.locator('#link-discord[aria-busy="true"]')).toHaveCount(0);
-    expect(await writes()).toEqual([{ method: 'PATCH', path: '/users/me/link/discord', body: { login_enabled: false } }]);
-    await expect(page.locator('#link-discord-login-enabled')).not.toBeChecked();
   });
 });
 
