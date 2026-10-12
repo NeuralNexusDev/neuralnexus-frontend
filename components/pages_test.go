@@ -297,17 +297,6 @@ func TestHeader(t *testing.T) {
 	})
 }
 
-func TestProjectCardBody(t *testing.T) {
-	t.Run("CP-18_the_card_body_shows_the_icon_hidden_from_assistive_tech_then_the_title_and_description_with_the_children_beside_the_icon", func(t *testing.T) {
-		out := renderWithChild(t, projectCardBody("🐝", "T", "D"), `<span id="kid">k</span>`)
-		icon := regexp.MustCompile(`<span[^>]*aria-hidden[^>]*>`).FindString(out)
-		if got, _ := tagAttr(icon, "aria-hidden"); got != "true" {
-			t.Errorf("icon span = %q, want aria-hidden true", icon)
-		}
-		assertInOrder(t, out, icon+"🐝</span>", `id="kid"`, "<h2", ">T</h2>", ">D</p>")
-	})
-}
-
 func TestProjectCard(t *testing.T) {
 	t.Run("CP-19_the_card_is_one_link_to_the_given_address_that_holds_the_body_and_a_Live_badge", func(t *testing.T) {
 		out := renderString(t, projectCard("/project/x", "I", "T", "D"))
@@ -317,7 +306,11 @@ func TestProjectCard(t *testing.T) {
 		if href, _ := tagAttr(regexp.MustCompile(`<a[^>]*>`).FindString(out), "href"); href != "/project/x" {
 			t.Errorf("href = %q, want /project/x", href)
 		}
-		assertContains(t, out, ">I</span>", ">T</h2>", ">D</p>", ">Live</span>")
+		icon := regexp.MustCompile(`<span[^>]*aria-hidden[^>]*>`).FindString(out)
+		if got, _ := tagAttr(icon, "aria-hidden"); got != "true" {
+			t.Errorf("icon span = %q, want aria-hidden true", icon)
+		}
+		assertInOrder(t, out, icon+"I</span>", ">Live</span>", "<h2", ">T</h2>", ">D</p>")
 	})
 }
 

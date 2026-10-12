@@ -96,6 +96,9 @@ func TestPageShell(t *testing.T) {
 		if !strings.HasPrefix(tag, "<p ") || !strings.Contains(tag, `role="status"`) {
 			t.Errorf("admin-user-status tag = %q, want a p with role=status", tag)
 		}
+		if !strings.Contains(out, tag+"</p>") {
+			t.Errorf("admin-user-status = %q, want an empty p", out)
+		}
 		assertInOrder(t, out, `id="page-status"`, `id="admin-user-status"`, `data-page-load`)
 		if n := strings.Count(out, `role="status"`); n != 2 {
 			t.Errorf(`role="status" appears %d times, want 2`, n)
@@ -128,16 +131,6 @@ func TestPageError(t *testing.T) {
 		tag := testutil.TagByID(out, "page-error")
 		if !strings.HasPrefix(tag, "<div ") || !strings.Contains(tag, `role="alert"`) || out != tag+"</div>" {
 			t.Errorf("output = %q, want one empty div with id page-error and role=alert", out)
-		}
-	})
-}
-
-func TestPageStatus(t *testing.T) {
-	t.Run("CU-09_the_status_line_takes_the_id_it_is_given_and_is_an_empty_status_region", func(t *testing.T) {
-		out := renderString(t, pageStatus("admin-role-status"))
-		tag := testutil.TagByID(out, "admin-role-status")
-		if !strings.HasPrefix(tag, "<p ") || !strings.Contains(tag, `role="status"`) || out != tag+"</p>" {
-			t.Errorf("output = %q, want one empty p with id admin-role-status and role=status", out)
 		}
 	})
 }

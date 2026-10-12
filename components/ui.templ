@@ -57,7 +57,7 @@ templ pageShell(width string, statusID string, loadPath string) {
 		@pageError()
 		<p id="page-status" role="status" class="sr-only"></p>
 		if statusID != "" {
-			@pageStatus(statusID)
+			<p id={ statusID } role="status" class={ emptyClass }></p>
 		}
 		@pageLoad(loadPath)
 	</div>
@@ -72,10 +72,6 @@ templ pageHeading(title string, description string) {
 
 templ pageError() {
 	<div id="page-error" role="alert" class={ bannerClass + " text-center empty:m-0 empty:border-0 empty:p-0" }></div>
-}
-
-templ pageStatus(id string) {
-	<p id={ id } role="status" class={ emptyClass }></p>
 }
 
 templ pageLoad(path string) {
