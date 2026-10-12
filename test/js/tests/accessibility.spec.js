@@ -106,9 +106,14 @@ test.describe('contrast', () => {
       const track = page.locator('label:has(#password-auth-enabled)');
       await expect(track).toBeVisible();
       await expect(page.locator('#password-auth-enabled')).toBeChecked();
+      const onColour = await computed(track, 'backgroundColor');
       const background = await pageBackground(page);
-      const fill = blend(await rgba(page, await computed(track, 'backgroundColor')), background);
+      const fill = blend(await rgba(page, onColour), background);
       expect(contrastRatio(fill, background)).toBeGreaterThanOrEqual(3);
+      await page.locator('#password-auth-enabled').evaluate((input) => {
+        input.checked = false;
+      });
+      await expect.poll(() => computed(track, 'backgroundColor')).not.toBe(onColour);
     });
   }
 
