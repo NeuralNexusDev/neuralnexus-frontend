@@ -271,7 +271,7 @@ test.describe('result card', () => {
     ]);
   });
 
-  test('MP-12 the icon stays hidden when the icon request fails', async ({ page }) => {
+  test('MP-54 the icon stays hidden when the icon request fails', async ({ page }) => {
     await page.route(`${API}/mcstatus/icon/**`, (route) => route.fulfill({ status: 404 }));
     await page.goto(PAGE);
     const iconResponse = page.waitForResponse((res) => res.url().includes('/mcstatus/icon/'));
@@ -282,7 +282,7 @@ test.describe('result card', () => {
     await expect(page.locator('#mc-status-icon')).toBeHidden();
   });
 
-  test('MP-12 a failed icon on a later render hides the icon of the server before it', async ({ page }) => {
+  test('MP-55 a failed icon on a later render hides the icon of the server before it', async ({ page }) => {
     await page.route(`${API}/mcstatus/icon/with-icon.example.net*`, (route) =>
       route.fulfill({ status: 200, contentType: 'image/png', body: PNG_1X1 })
     );
@@ -674,7 +674,7 @@ test.describe('lookup answers', () => {
     await expect(page.locator('#mc-status-submit')).toHaveText('Check');
   });
 
-  test('MP-38 a lookup whose error body never finishes times out with the same message', async ({ page }) => {
+  test('MP-56 a lookup whose error body never finishes times out with the same message', async ({ page }) => {
     await page.clock.install();
     await page.addInitScript(() => {
       const realFetch = window.fetch.bind(window);
