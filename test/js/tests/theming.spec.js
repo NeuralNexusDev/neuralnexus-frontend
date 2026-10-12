@@ -13,6 +13,9 @@ const toggle = (page) => page.locator('button[onclick="toggleTheme()"]');
 const lightIcon = (page) => page.locator('#light-mode');
 const darkIcon = (page) => page.locator('#dark-mode');
 
+const RED_600 = 'oklch(0.577 0.245 27.325)';
+const RED_700 = 'oklch(0.505 0.213 27.518)';
+
 async function expectDark(page) {
   expect(await isDark(page)).toBe(true);
   await expect(lightIcon(page)).toBeVisible();
@@ -166,4 +169,45 @@ test.describe('load-time setup', () => {
     await page.goto('/');
     expect(await page.evaluate(() => window.__darkAtContentLoaded)).toBe(true);
   });
+});
+
+test.describe('header control hover', () => {
+  const signedIn = (page) =>
+    page.route(`${API}/users/me`, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ username: 'alice' }) }));
+
+  const controls = [
+    { name: 'light/dark toggle', signedIn: false, locator: (page) => toggle(page) },
+    { name: 'Login', signedIn: false, locator: (page) => page.locator('#header-login-btn a') },
+    { name: 'Logout', signedIn: true, locator: (page) => page.locator('#header-logout-btn button') },
+    { name: 'gear', signedIn: true, locator: (page) => page.locator('#header-account a[href="/account"]') },
+  ];
+
+  const background = (locator) => locator.evaluate((el) => getComputedStyle(el).backgroundColor);
+  const cursor = (locator) => locator.evaluate((el) => getComputedStyle(el).cursor);
+
+  for (const scheme of ['light', 'dark']) {
+    for (const control of controls) {
+      test(`TH-14 the ${control.name} goes from red-600 to red-700 on hover in ${scheme}`, async ({ page }) => {
+        await page.emulateMedia({ colorScheme: scheme });
+        await store(page, scheme);
+        if (control.signedIn) await signedIn(page);
+        await page.goto('/');
+        const target = control.locator(page);
+        await expect(target).toBeVisible();
+        await expect.poll(() => background(target)).toBe(RED_600);
+        await target.hover();
+        await expect.poll(() => background(target)).toBe(RED_700);
+      });
+
+      test(`TH-15 the ${control.name} shows the pointer cursor in ${scheme}`, async ({ page }) => {
+        await page.emulateMedia({ colorScheme: scheme });
+        await store(page, scheme);
+        if (control.signedIn) await signedIn(page);
+        await page.goto('/');
+        const target = control.locator(page);
+        await expect(target).toBeVisible();
+        expect(await cursor(target)).toBe('pointer');
+      });
+    }
+  }
 });
