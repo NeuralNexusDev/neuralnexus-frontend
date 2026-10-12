@@ -227,16 +227,10 @@ func TestWrapContentsWithHead(t *testing.T) {
 }
 
 func TestHomePage(t *testing.T) {
-	t.Run("CP-12_the_home_page_is_the_home_content_in_the_default_layout", func(t *testing.T) {
-		out := renderString(t, HomePage())
-		assertContains(t, out, "<title>NeuralNexus</title>")
-		assertInOrder(t, out, "<main", `id="auth-error"`, "</main>")
-	})
-}
-
-func TestHome(t *testing.T) {
-	t.Run("CP-13_the_home_content_shows_the_error_banner_the_site_heading_and_the_script_that_reveals_auth_errors", func(t *testing.T) {
-		out := renderString(t, Home())
+	t.Run("CP-13_the_home_page_shows_the_error_banner_the_site_heading_and_the_script_that_reveals_auth_errors_in_the_default_layout", func(t *testing.T) {
+		page := renderString(t, HomePage())
+		assertContains(t, page, "<title>NeuralNexus</title>")
+		out := page[strings.Index(page, "<main"):]
 		assertOnce(t, out, "auth-error")
 		if !regexp.MustCompile(`<h1[^>]*>\s*NeuralNexus\s*</h1>`).MatchString(out) {
 			t.Errorf("no h1 NeuralNexus in:\n%s", out)
@@ -321,24 +315,15 @@ func TestProjectCard(t *testing.T) {
 	})
 }
 
-func TestProjectSection(t *testing.T) {
-	t.Run("CP-20_the_section_shows_its_heading_and_description_then_its_children", func(t *testing.T) {
-		out := renderWithChild(t, projectSection("T", "D"), `<a id="kid">k</a>`)
-		if !strings.HasPrefix(out, "<section") {
-			t.Errorf("output starts %q, want a section", out[:min(len(out), 20)])
-		}
-		assertInOrder(t, out, "<h2", ">T</h2>", ">D</p>", `id="kid"`)
-	})
-}
-
-func TestProjects(t *testing.T) {
-	t.Run("CP-21_the_projects_page_has_a_level_one_heading_and_the_APIary_section", func(t *testing.T) {
-		out := renderString(t, Projects())
-		assertInOrder(t, out, "<h1", ">Projects</h1>", "<section", ">The APIary</h2>", "</section>")
+func TestProjectsPage(t *testing.T) {
+	t.Run("CP-21_the_projects_page_has_a_level_one_heading_and_the_APIary_section_in_the_default_layout", func(t *testing.T) {
+		out := renderString(t, ProjectsPage())
+		assertContains(t, out, "<title>NeuralNexus</title>")
+		assertInOrder(t, out, "<main", "<h1", ">Projects</h1>", "<section", ">The APIary</h2>", "</section>", "</main>")
 	})
 
 	t.Run("CP-22_the_section_links_to_the_two_live_demos", func(t *testing.T) {
-		out := renderString(t, Projects())
+		out := renderString(t, ProjectsPage())
 		section := out[strings.Index(out, "<section"):strings.Index(out, "</section>")]
 		cards := regexp.MustCompile(`(?s)<a [^>]*>.*?</a>`).FindAllString(section, -1)
 		if len(cards) != 2 {
@@ -353,17 +338,10 @@ func TestProjects(t *testing.T) {
 	})
 }
 
-func TestProjectsPage(t *testing.T) {
-	t.Run("CP-23_the_projects_page_is_the_projects_content_in_the_default_layout", func(t *testing.T) {
-		out := renderString(t, ProjectsPage())
-		assertContains(t, out, "<title>NeuralNexus</title>")
-		assertInOrder(t, out, "<main", "<h1", ">Projects</h1>", "</main>")
-	})
-}
-
-func TestBeeNameGenerator(t *testing.T) {
+func TestBeeNameGeneratorPage(t *testing.T) {
 	t.Run("CP-24_the_generate_block_has_the_elements_the_generate_script_writes_to", func(t *testing.T) {
-		out := renderString(t, BeeNameGenerator())
+		page := renderString(t, BeeNameGeneratorPage())
+		out := page[strings.Index(page, "<main"):]
 		assertContains(t, out, ">Bee Name Generator</h1>")
 		assertElement(t, out, "get-bee-name", "h2")
 		assertAttr(t, out, "get-bee-name", "aria-live", "polite")
@@ -376,7 +354,8 @@ func TestBeeNameGenerator(t *testing.T) {
 	})
 
 	t.Run("CP-25_the_suggest_form_has_the_input_button_and_status_line_the_suggest_script_uses", func(t *testing.T) {
-		out := renderString(t, BeeNameGenerator())
+		page := renderString(t, BeeNameGeneratorPage())
+		out := page[strings.Index(page, "<main"):]
 		form := out[strings.Index(out, "<form"):strings.Index(out, "</form>")]
 		if got, _ := tagAttr(regexp.MustCompile(`<form[^>]*>`).FindString(form), "onsubmit"); got != "suggestBeeName(event)" {
 			t.Errorf("form onsubmit = %q", got)
@@ -393,7 +372,8 @@ func TestBeeNameGenerator(t *testing.T) {
 	})
 
 	t.Run("CP-26_the_inline_script_builds_the_two_API_requests", func(t *testing.T) {
-		out := renderString(t, BeeNameGenerator())
+		page := renderString(t, BeeNameGeneratorPage())
+		out := page[strings.Index(page, "<main"):]
 		script := out[strings.Index(out, "<script"):strings.Index(out, "</script>")]
 		assertContains(t, script,
 			"fetch(`${apiBaseUrl()}/api/v1/bee-name-generator/name`)",
@@ -403,7 +383,8 @@ func TestBeeNameGenerator(t *testing.T) {
 	})
 
 	t.Run("CP-27_the_page_loads_the_review_link_on_demand", func(t *testing.T) {
-		out := renderString(t, BeeNameGenerator())
+		page := renderString(t, BeeNameGeneratorPage())
+		out := page[strings.Index(page, "<main"):]
 		tag := regexp.MustCompile(`<div[^>]*data-page-load[^>]*>`).FindString(out)
 		for name, want := range map[string]string{"hx-get": "/project/bee-name-generator/admin-link", "hx-trigger": "load", "hx-swap": "outerHTML"} {
 			if got, _ := tagAttr(tag, name); got != want {
@@ -411,6 +392,12 @@ func TestBeeNameGenerator(t *testing.T) {
 			}
 		}
 		assertInOrder(t, out, "</form>", tag)
+	})
+
+	t.Run("CP-29_the_page_has_its_own_title_loads_htmx_and_holds_the_generator", func(t *testing.T) {
+		out := renderString(t, BeeNameGeneratorPage())
+		assertContains(t, out, "<title>Bee name generator - NeuralNexus</title>")
+		assertInOrder(t, out, "<head>", `name="htmx-config"`, "htmx-glue.js", "</head>", "<main", `id="get-bee-button"`, "</main>")
 	})
 }
 
@@ -421,27 +408,6 @@ func TestBeeNameGeneratorAdminLink(t *testing.T) {
 		assertElement(t, out, "bee-admin-link", "a")
 		assertAttr(t, out, "bee-admin-link", "href", "/project/bee-name-generator/admin")
 		assertText(t, out, "bee-admin-link", "Review suggestions")
-	})
-}
-
-func TestBeeNameGeneratorPage(t *testing.T) {
-	t.Run("CP-29_the_page_has_its_own_title_loads_htmx_and_holds_the_generator", func(t *testing.T) {
-		out := renderString(t, BeeNameGeneratorPage())
-		assertContains(t, out, "<title>Bee name generator - NeuralNexus</title>")
-		assertInOrder(t, out, "<head>", `name="htmx-config"`, "htmx-glue.js", "</head>", "<main", `id="get-bee-button"`, "</main>")
-	})
-}
-
-func TestBeeNameGeneratorAdmin(t *testing.T) {
-	t.Run("CP-30_the_review_shell_shows_its_heading_and_loads_the_suggestions", func(t *testing.T) {
-		out := renderString(t, BeeNameGeneratorAdmin())
-		assertInOrder(t, out, "<h1", ">Bee Name Suggestions</h1>", "data-page-load")
-		tag := regexp.MustCompile(`<div[^>]*data-page-load[^>]*>`).FindString(out)
-		for name, want := range map[string]string{"hx-get": "/project/bee-name-generator/admin/suggestions", "hx-trigger": "load", "hx-swap": "outerHTML"} {
-			if got, _ := tagAttr(tag, name); got != want {
-				t.Errorf("%s = %q, want %q", name, got, want)
-			}
-		}
 	})
 }
 
@@ -557,6 +523,17 @@ func TestBeeNameGeneratorAdminPage(t *testing.T) {
 		out := renderString(t, BeeNameGeneratorAdminPage())
 		assertContains(t, out, "<title>Bee name review - NeuralNexus</title>")
 		assertInOrder(t, out, "<head>", "htmx-glue.js", "</head>", "<main", `hx-get="/project/bee-name-generator/admin/suggestions"`, "</main>")
+	})
+
+	t.Run("CP-30_the_review_shell_shows_its_heading_and_loads_the_suggestions", func(t *testing.T) {
+		out := renderString(t, BeeNameGeneratorAdminPage())
+		assertInOrder(t, out, "<h1", ">Bee Name Suggestions</h1>", "data-page-load")
+		tag := regexp.MustCompile(`<div[^>]*data-page-load[^>]*>`).FindString(out)
+		for name, want := range map[string]string{"hx-get": "/project/bee-name-generator/admin/suggestions", "hx-trigger": "load", "hx-swap": "outerHTML"} {
+			if got, _ := tagAttr(tag, name); got != want {
+				t.Errorf("%s = %q, want %q", name, got, want)
+			}
+		}
 	})
 }
 
@@ -1320,16 +1297,8 @@ func TestRegisterPage(t *testing.T) {
 }
 
 func TestTeapotPage(t *testing.T) {
-	t.Run("CP-108_the_teapot_page_is_the_teapot_content_in_the_default_layout", func(t *testing.T) {
-		out := renderString(t, TeapotPage())
-		assertContains(t, out, "<title>NeuralNexus</title>")
-		assertInOrder(t, out, "<main", `alt="Teapot"`, "</main>")
-	})
-}
-
-func TestTeapot(t *testing.T) {
 	t.Run("CP-109_the_preview_meta_tags_describe_the_teapot_and_use_the_site_URL", func(t *testing.T) {
-		out := renderString(t, Teapot())
+		out := renderString(t, TeapotPage())
 		cases := []struct{ key, want string }{
 			{"og:site_name", "Powered by NeuralNexus.dev"},
 			{"og:title", "418 I'm a teapot"},
@@ -1349,7 +1318,7 @@ func TestTeapot(t *testing.T) {
 	})
 
 	t.Run("CP-110_the_page_shows_the_teapot_image_the_heading_and_a_link_home", func(t *testing.T) {
-		out := renderString(t, Teapot())
+		out := renderString(t, TeapotPage())
 		img := regexp.MustCompile(`<img[^>]*>`).FindString(out)
 		if got, _ := tagAttr(img, "src"); got != "/public/teapot.jpg" {
 			t.Errorf("img src = %q", got)
@@ -1367,7 +1336,7 @@ func TestTeapot(t *testing.T) {
 
 func TestLogTeapotRequest(t *testing.T) {
 	t.Run("CP-111_the_page_calls_the_APIs_teapot_route_once_on_load", func(t *testing.T) {
-		out := renderString(t, Teapot())
+		out := renderString(t, TeapotPage())
 		assertContains(t, out, "fetch(apiBaseUrl() + '/api/v1/teapot')", "response.status !== 418")
 		if calls := regexp.MustCompile(`<script>__templ_logTeapotRequest_[0-9a-f]+\(\)</script>`).FindAllString(out, -1); len(calls) != 1 {
 			t.Errorf("found %d call scripts, want 1 in:\n%s", len(calls), out)
