@@ -226,6 +226,23 @@ func TestErrorBanner(t *testing.T) {
 	})
 }
 
+// assertDecorativeIcons checks that out has n svg icons, each aria-hidden, and no title element.
+func assertDecorativeIcons(t *testing.T, out string, n int) {
+	t.Helper()
+	svgs := regexp.MustCompile(`<svg[^>]*>`).FindAllString(out, -1)
+	if len(svgs) != n {
+		t.Fatalf("got %d svg icons, want %d", len(svgs), n)
+	}
+	for _, svg := range svgs {
+		if got, _ := tagAttr(svg, "aria-hidden"); got != "true" {
+			t.Errorf("svg = %q, want aria-hidden true", svg)
+		}
+	}
+	if strings.Contains(out, "<title>") {
+		t.Errorf("the icons still carry a title element: %q", out)
+	}
+}
+
 func TestThemeToggle(t *testing.T) {
 	t.Run("CP-15_the_toggle_button_calls_the_theme_function_and_has_both_mode_icons_that_theming_js_switches", func(t *testing.T) {
 		out := renderString(t, ThemeToggle())
@@ -233,6 +250,10 @@ func TestThemeToggle(t *testing.T) {
 		if got, _ := tagAttr(button, "onclick"); got != "toggleTheme()" {
 			t.Errorf("button = %q, want onclick toggleTheme()", button)
 		}
+		if got, _ := tagAttr(button, "aria-label"); got != "Toggle dark mode" {
+			t.Errorf("button = %q, want aria-label Toggle dark mode", button)
+		}
+		assertDecorativeIcons(t, out, 2)
 		for _, id := range []string{"light-mode", "dark-mode"} {
 			assertOnce(t, out, id)
 			assertElement(t, out, id, "span")
@@ -979,6 +1000,7 @@ func TestLoginButton(t *testing.T) {
 		if got, _ := tagAttr(link, "aria-label"); got != "Account settings" {
 			t.Errorf("link = %q, want aria-label Account settings", link)
 		}
+		assertDecorativeIcons(t, inner, 1)
 		assertInOrder(t, inner, `id="header-account-username"`, link)
 	})
 

@@ -36,6 +36,7 @@ Every test signs in through `signIn` with the stub seed named in its preconditio
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
 | AX-10 | skip link | Happy Path | It is hidden until it has focus and moves focus to the main landmark | Default seed; `/admin`; Tab, then Enter | Before: the link is at most 1 px wide. After Tab: it is focused and more than 50 px wide. After Enter: the URL ends in `#main`, the main landmark is focused and has no outline | P0 | |
 | AX-11 | error banner | Edge Case | The empty banner takes no room | Default seed; `/admin/roles` | The box of `#page-error` is 0 px tall and its computed `marginBottom` is `0px` | P0 | |
+| AX-21 | header names | Happy Path | The toggle and the gear are named by their own labels, and no icon id is announced for either | A light system, then a dark system, with `theme` stored to match; `GET /users/me` answers 200 with a username; `/` | The `header` has one button named `Toggle dark mode` and a link named `Account settings` to `/account`, has no `img` role, and its accessibility snapshot does not contain `material-symbols` | P0 | A loop of 2 tests. The icons are `aria-hidden` and have no `<title>`, so only the control's own name is announced |
 
 ## Live regions
 
