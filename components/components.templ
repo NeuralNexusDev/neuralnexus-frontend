@@ -105,25 +105,19 @@ templ Header() {
 	</header>
 }
 
-templ projectCardBody(icon string, title string, description string) {
-	<div class="flex items-center justify-between">
-		<span class="text-3xl" aria-hidden="true">{ icon }</span>
-		{ children... }
-	</div>
-	<div class="space-y-1">
-		<h2 class="text-lg font-semibold">{ title }</h2>
-		<p class={ mutedSmallClass }>{ description }</p>
-	</div>
-}
-
 templ projectCard(href string, icon string, title string, description string) {
 	<a
 		href={ templ.URL(href) }
 		class="flex flex-col gap-4 rounded-lg border border-input p-5 transition-colors hover:bg-accent hover:text-accent-foreground"
 	>
-		@projectCardBody(icon, title, description) {
+		<div class="flex items-center justify-between">
+			<span class="text-3xl" aria-hidden="true">{ icon }</span>
 			<span class="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/40 dark:text-green-300">Live</span>
-		}
+		</div>
+		<div class="space-y-1">
+			<h2 class="text-lg font-semibold">{ title }</h2>
+			<p class={ mutedSmallClass }>{ description }</p>
+		</div>
 	</a>
 }
 
