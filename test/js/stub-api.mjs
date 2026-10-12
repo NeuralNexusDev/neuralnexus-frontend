@@ -78,7 +78,14 @@ http
       return;
     }
     const isIcon = pathname.startsWith('/api/v1/mcstatus/icon/');
-    const target = canonicalTarget(decodeURIComponent(pathname.split('/').pop()), searchParams.get('bedrock') === 'true');
+    let segment;
+    try {
+      segment = decodeURIComponent(pathname.split('/').pop());
+    } catch {
+      problem(res, 400, { title: 'Bad Request', detail: BAD_HOST_DETAIL });
+      return;
+    }
+    const target = canonicalTarget(segment, searchParams.get('bedrock') === 'true');
     if (!target) {
       problem(res, 400, { title: 'Bad Request', detail: BAD_HOST_DETAIL });
     } else if (isIcon) {
