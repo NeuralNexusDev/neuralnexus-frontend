@@ -31,18 +31,6 @@ type AccountSettingsData struct {
 	Error        string
 }
 
-// Account renders the account settings page, which loads its content.
-templ Account() {
-	@ErrorBanner()
-	@pageShell("max-w-sm", "", "/account/content") {
-		@pageHeading("Account Settings", "Manage your profile and connected sign-in methods")
-	}
-	@LinkAccountSetup()
-	<script>
-		showAuthErrorFromQuery();
-	</script>
-}
-
 // AccountContent renders the profile, the sign-in setting and the connected accounts, which the account page loads.
 templ AccountContent(d AccountData) {
 	<div class="mx-auto max-w-sm space-y-6">
@@ -125,13 +113,6 @@ templ AccountPasswordLogin(d AccountSettingsData, oob bool) {
 	</div>
 }
 
-func accountActionLabel(linked bool) string {
-	if linked {
-		return "Unlink"
-	}
-	return "Link"
-}
-
 // AccountLinkRow renders one platform, linked or not, which htmx swaps in after a change to it, or the out-of-band copy a failed change sends.
 templ AccountLinkRow(platform AccountPlatform, link LinkedAccount, linked bool, oob bool) {
 	{{ base := "link-" + platform.ID }}
@@ -176,7 +157,11 @@ templ AccountLinkRow(platform AccountPlatform, link LinkedAccount, linked bool, 
 			<button
 				id={ base + "-action" }
 				type="button"
-				aria-label={ accountActionLabel(linked) + " " + platform.Name }
+				if linked {
+					aria-label={ "Unlink " + platform.Name }
+				} else {
+					aria-label={ "Link " + platform.Name }
+				}
 				if linked {
 					hx-delete={ "/account/links/" + platform.ID }
 					hx-confirm={ "Unlink " + platform.Name + " from your account?" }
@@ -186,7 +171,11 @@ templ AccountLinkRow(platform AccountPlatform, link LinkedAccount, linked bool, 
 				}
 				class="-m-1 shrink-0 p-1 text-xs underline"
 			>
-				{ accountActionLabel(linked) }
+				if linked {
+					Unlink
+				} else {
+					Link
+				}
 			</button>
 		</div>
 		<div class="flex items-center justify-between pl-9">
@@ -241,6 +230,13 @@ templ accountPlatformIcon(platform string) {
 // AccountPage serves the account settings shell, which loads the profile, the sign-in setting and the connected accounts.
 templ AccountPage() {
 	@htmxPage("Account - NeuralNexus") {
-		@Account()
+		@ErrorBanner()
+		@pageShell("max-w-sm", "", "/account/content") {
+			@pageHeading("Account Settings", "Manage your profile and connected sign-in methods")
+		}
+		@LinkAccountSetup()
+		<script>
+			showAuthErrorFromQuery();
+		</script>
 	}
 }
