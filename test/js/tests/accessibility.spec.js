@@ -271,6 +271,25 @@ test.describe('page structure', () => {
   });
 });
 
+test.describe('header names', () => {
+  for (const colorScheme of schemes) {
+    test(`AX-21 the header names the toggle and the gear by their own labels and announces no icon id in the ${colorScheme} theme`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme });
+      await page.addInitScript((theme) => localStorage.setItem('theme', theme), colorScheme);
+      await page.route(`${process.env.NN_API_URL}/api/v1/users/me`, (route) =>
+        route.fulfill({ contentType: 'application/json', body: JSON.stringify({ username: 'alice' }) }),
+      );
+      await page.goto('/');
+      const header = page.locator('header');
+      const gear = header.getByRole('link', { name: 'Account settings' });
+      await expect(gear).toHaveAttribute('href', '/account');
+      await expect(header.getByRole('button', { name: 'Toggle dark mode' })).toHaveCount(1);
+      await expect(header.getByRole('img')).toHaveCount(0);
+      expect(await header.ariaSnapshot()).not.toContain('material-symbols');
+    });
+  }
+});
+
 test.describe('live regions', () => {
   test('AX-12 a shell announces that its content is loading and then loaded through a live region that is already on the page', async ({ page }) => {
     const { gate } = await signIn(page);
