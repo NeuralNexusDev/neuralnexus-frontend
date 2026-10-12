@@ -651,37 +651,6 @@ var accountPlatformNames = []struct{ id, name string }{
 	{"steam", "Steam"},
 }
 
-func TestAccount(t *testing.T) {
-	t.Run("CP-48_the_shell_has_its_heading_and_loads_the_account_content", func(t *testing.T) {
-		out := renderString(t, Account())
-		assertContains(t, out, ">Account Settings</h1>")
-		tag := regexp.MustCompile(`<div[^>]*data-page-load[^>]*>`).FindString(out)
-		for name, want := range map[string]string{"hx-get": "/account/content", "hx-trigger": "load", "hx-swap": "outerHTML"} {
-			if got, _ := tagAttr(tag, name); got != want {
-				t.Errorf("%s = %q, want %q", name, got, want)
-			}
-		}
-	})
-
-	t.Run("CP-49_the_shell_holds_the_auth_error_banner_the_error_and_status_regions_and_the_error_script", func(t *testing.T) {
-		out := renderString(t, Account())
-		assertFlag(t, out, "auth-error", "hidden", true)
-		assertAttr(t, out, "page-error", "role", "alert")
-		assertAttr(t, out, "page-status", "role", "status")
-		if script := lastScript(t, out); !strings.Contains(script, "showAuthErrorFromQuery();") {
-			t.Errorf("last script = %q", script)
-		}
-	})
-
-	t.Run("CP-50_the_shell_includes_the_link_setup", func(t *testing.T) {
-		out := renderString(t, Account())
-		assertContains(t, out, "const linkRedirect = window.location.href;")
-		for _, id := range []string{"link-discord-oauth-base", "link-twitch-oauth-base", "link-microsoft-oauth-base", "link-xboxlive-oauth-base"} {
-			assertOnce(t, out, id)
-		}
-	})
-}
-
 func TestAccountContent(t *testing.T) {
 	t.Run("CP-51_the_username_is_shown_and_escaped", func(t *testing.T) {
 		out := renderString(t, AccountContent(AccountData{Username: "<b>a&b</b>"}))
@@ -1008,6 +977,35 @@ func TestAccountPlatformIcon(t *testing.T) {
 }
 
 func TestAccountPage(t *testing.T) {
+	t.Run("CP-48_the_shell_has_its_heading_and_loads_the_account_content", func(t *testing.T) {
+		out := renderString(t, AccountPage())
+		assertContains(t, out, ">Account Settings</h1>")
+		tag := regexp.MustCompile(`<div[^>]*data-page-load[^>]*>`).FindString(out)
+		for name, want := range map[string]string{"hx-get": "/account/content", "hx-trigger": "load", "hx-swap": "outerHTML"} {
+			if got, _ := tagAttr(tag, name); got != want {
+				t.Errorf("%s = %q, want %q", name, got, want)
+			}
+		}
+	})
+
+	t.Run("CP-49_the_shell_holds_the_auth_error_banner_the_error_and_status_regions_and_the_error_script", func(t *testing.T) {
+		out := renderString(t, AccountPage())
+		assertFlag(t, out, "auth-error", "hidden", true)
+		assertAttr(t, out, "page-error", "role", "alert")
+		assertAttr(t, out, "page-status", "role", "status")
+		if script := lastScript(t, out); !strings.Contains(script, "showAuthErrorFromQuery();") {
+			t.Errorf("last script = %q", script)
+		}
+	})
+
+	t.Run("CP-50_the_shell_includes_the_link_setup", func(t *testing.T) {
+		out := renderString(t, AccountPage())
+		assertContains(t, out, "const linkRedirect = window.location.href;")
+		for _, id := range []string{"link-discord-oauth-base", "link-twitch-oauth-base", "link-microsoft-oauth-base", "link-xboxlive-oauth-base"} {
+			assertOnce(t, out, id)
+		}
+	})
+
 	t.Run("CP-84_the_page_has_its_own_title_loads_htmx_and_holds_the_account_shell", func(t *testing.T) {
 		out := renderString(t, AccountPage())
 		assertContains(t, out, "<title>Account - NeuralNexus</title>")
@@ -1269,9 +1267,9 @@ func TestLoginPage(t *testing.T) {
 	})
 }
 
-func TestRegister(t *testing.T) {
+func TestRegisterPage(t *testing.T) {
 	t.Run("CP-103_the_sign_up_page_has_its_heading_the_error_banner_and_the_error_script", func(t *testing.T) {
-		out := renderString(t, Register())
+		out := renderString(t, RegisterPage())
 		assertContains(t, out, ">Sign Up</h1>")
 		assertFlag(t, out, "auth-error", "hidden", true)
 		if script := lastScript(t, out); !strings.Contains(script, "showAuthErrorFromQuery();") {
@@ -1280,15 +1278,13 @@ func TestRegister(t *testing.T) {
 	})
 
 	t.Run("CP-106_the_page_offers_the_OAuth_buttons_labelled_for_sign_up_and_a_link_to_login", func(t *testing.T) {
-		out := renderString(t, Register())
+		out := renderString(t, RegisterPage())
 		assertOnce(t, out, "discord-oauth")
 		assertOnce(t, out, "steam-oauth")
 		assertContains(t, out, `>Sign up with Discord</span>`, `href="/login"`)
 		assertLacks(t, out, "Login with")
 	})
-}
 
-func TestRegisterPage(t *testing.T) {
 	t.Run("CP-107_the_sign_up_page_is_the_sign_up_form_in_the_default_layout", func(t *testing.T) {
 		out := renderString(t, RegisterPage())
 		assertContains(t, out, "<title>NeuralNexus</title>")
@@ -1317,8 +1313,9 @@ func TestTeapotPage(t *testing.T) {
 		}
 	})
 
-	t.Run("CP-110_the_page_shows_the_teapot_image_the_heading_and_a_link_home", func(t *testing.T) {
+	t.Run("CP-110_the_page_shows_the_teapot_image_the_heading_and_a_link_home_in_the_default_layout", func(t *testing.T) {
 		out := renderString(t, TeapotPage())
+		assertContains(t, out, "<title>NeuralNexus</title>")
 		img := regexp.MustCompile(`<img[^>]*>`).FindString(out)
 		if got, _ := tagAttr(img, "src"); got != "/public/teapot.jpg" {
 			t.Errorf("img src = %q", got)
