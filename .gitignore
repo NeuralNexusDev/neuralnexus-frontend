@@ -29,6 +29,11 @@ tmp
 /components/**/*.go
 !/components/**/*_test.go
 !/components/admin_data.go
+!/components/account_data.go
+!/components/auth_data.go
+!/components/components_data.go
+!/components/mcstatus_embed_data.go
+!/components/ui_data.go
 /public/css/styles.css
 
 # Playwright output
