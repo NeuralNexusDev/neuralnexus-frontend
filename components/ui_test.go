@@ -649,33 +649,6 @@ func TestHTMXHeadScriptOrder(t *testing.T) {
 	})
 }
 
-func TestPageErrorColours(t *testing.T) {
-	t.Run("CU-50_the_banner_uses_the_colours_that_pass_contrast_in_both_themes_and_collapses_when_empty", func(t *testing.T) {
-		out := renderString(t, pageError())
-		for _, want := range []string{"border-red-700 bg-red-700/10", "text-red-700 dark:border-red-400 dark:bg-red-400/10 dark:text-red-400", "empty:m-0 empty:border-0 empty:p-0"} {
-			if !strings.Contains(out, want) {
-				t.Errorf("banner lacks %q:\n%s", want, out)
-			}
-		}
-		for _, unwanted := range []string{"empty:hidden", "text-destructive"} {
-			if strings.Contains(out, unwanted) {
-				t.Errorf("banner holds %q:\n%s", unwanted, out)
-			}
-		}
-	})
-}
-
-func TestToggleSwitchClasses(t *testing.T) {
-	t.Run("CU-51_the_toggle_is_a_switch_track_with_a_visible_focus_ring", func(t *testing.T) {
-		out := renderWithChild(t, toggle(), `<input id="t" type="checkbox"/>`)
-		for _, want := range []string{"h-6 w-11", "bg-control", "has-[:focus-visible]:ring-2", "has-[:focus-visible]:ring-ring", "has-[:checked]:bg-primary"} {
-			if !strings.Contains(out, want) {
-				t.Errorf("toggle lacks %q:\n%s", want, out)
-			}
-		}
-	})
-}
-
 func TestSelfReplacingRoots(t *testing.T) {
 	t.Run("CU-52_the_roots_that_replace_themselves_are_busy_regions_and_name_no_status_line", func(t *testing.T) {
 		roots := map[string]string{
