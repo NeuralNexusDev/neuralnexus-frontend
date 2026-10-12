@@ -241,12 +241,6 @@ templ adminCard(id string, href string, title string, description string) {
 	</a>
 }
 
-templ adminDashboard() {
-	@pageShell("max-w-md", "", "/admin/cards") {
-		@pageHeading("Admin Dashboard", "Manage accounts, roles and permissions")
-	}
-}
-
 // AdminCards renders the cards for the admin pages the account may use.
 templ AdminCards(d AdminDashboardData) {
 	<div class="space-y-3">
@@ -266,15 +260,9 @@ templ AdminCards(d AdminDashboardData) {
 // AdminDashboardPage serves the admin dashboard shell, which loads its cards.
 templ AdminDashboardPage() {
 	@htmxPage("Admin - NeuralNexus") {
-		@adminDashboard()
-	}
-}
-
-templ adminUsers() {
-	@pageShell("max-w-xl", "", "/admin/users/list") {
-		@pageHeading("Users", "Select an account to edit it")
-		@backLink("/admin", "Back to the admin dashboard")
-		@usersCountLine("", false)
+		@pageShell("max-w-md", "", "/admin/cards") {
+			@pageHeading("Admin Dashboard", "Manage accounts, roles and permissions")
+		}
 	}
 }
 
@@ -408,13 +396,11 @@ templ AdminUserRows(d AdminUsersData) {
 // AdminUsersPage serves the user list shell, which loads the list.
 templ AdminUsersPage() {
 	@htmxPage("Users - NeuralNexus") {
-		@adminUsers()
-	}
-}
-
-templ adminUser(id string) {
-	@pageShell("max-w-md", AdminUserStatusID, adminUserPath(id)+"/editor") {
-		@backLink("/admin/users", "Back to users")
+		@pageShell("max-w-xl", "", "/admin/users/list") {
+			@pageHeading("Users", "Select an account to edit it")
+			@backLink("/admin", "Back to the admin dashboard")
+			@usersCountLine("", false)
+		}
 	}
 }
 
@@ -554,14 +540,9 @@ templ AdminUserPermissions(d AdminUserData, oob bool) {
 // AdminUserPage serves the shell for the editor of one user account, which loads the editor.
 templ AdminUserPage(id string) {
 	@htmxPage("Edit user - NeuralNexus") {
-		@adminUser(id)
-	}
-}
-
-templ adminRoles() {
-	@pageShell("max-w-xl", "", "/admin/roles/list") {
-		@pageHeading("Roles", "Select a role to edit the permissions it grants")
-		@linkPair("/admin", "Back to the admin dashboard", "/admin/permissions", "Permissions")
+		@pageShell("max-w-md", AdminUserStatusID, adminUserPath(id)+"/editor") {
+			@backLink("/admin/users", "Back to users")
+		}
 	}
 }
 
@@ -601,7 +582,10 @@ templ AdminRolesContent(d AdminRolesData) {
 // AdminRolesPage serves the role list shell, which loads the list.
 templ AdminRolesPage() {
 	@htmxPage("Roles - NeuralNexus") {
-		@adminRoles()
+		@pageShell("max-w-xl", "", "/admin/roles/list") {
+			@pageHeading("Roles", "Select a role to edit the permissions it grants")
+			@linkPair("/admin", "Back to the admin dashboard", "/admin/permissions", "Permissions")
+		}
 	}
 }
 
@@ -635,12 +619,6 @@ templ adminValueField(permission Permission, value string, name string) {
 // AdminGrantValue renders the value input the grant form needs for a permission, and nothing for a permission granted as is.
 templ AdminGrantValue(permission Permission, value string) {
 	@adminValueField(permission, value, "grant_value")
-}
-
-templ adminRole(id string) {
-	@pageShell("max-w-md", AdminRoleStatusID, adminRolePath(id)+"/editor") {
-		@backLink("/admin/roles", "Back to roles")
-	}
 }
 
 // AdminRoleContent renders the role editor, which the role page loads.
@@ -819,14 +797,9 @@ templ AdminRoleGrantUnavailable() {
 // AdminRolePage serves the shell for the editor of one role, which loads the editor.
 templ AdminRolePage(id string) {
 	@htmxPage("Edit role - NeuralNexus") {
-		@adminRole(id)
-	}
-}
-
-templ adminPermissions() {
-	@pageShell("max-w-xl", "", "/admin/permissions/list") {
-		@pageHeading("Permissions", "The permissions roles can grant")
-		@linkPair("/admin", "Back to the admin dashboard", "/admin/roles", "Roles")
+		@pageShell("max-w-md", AdminRoleStatusID, adminRolePath(id)+"/editor") {
+			@backLink("/admin/roles", "Back to roles")
+		}
 	}
 }
 
@@ -925,6 +898,9 @@ templ AdminPermissionForm(oob bool) {
 // AdminPermissionsPage serves the permission list shell, which loads the list and the create form.
 templ AdminPermissionsPage() {
 	@htmxPage("Permissions - NeuralNexus") {
-		@adminPermissions()
+		@pageShell("max-w-xl", "", "/admin/permissions/list") {
+			@pageHeading("Permissions", "The permissions roles can grant")
+			@linkPair("/admin", "Back to the admin dashboard", "/admin/roles", "Roles")
+		}
 	}
 }

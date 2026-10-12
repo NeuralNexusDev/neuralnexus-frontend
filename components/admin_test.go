@@ -459,14 +459,6 @@ func TestAdminCard(t *testing.T) {
 	})
 }
 
-func TestAdminDashboard(t *testing.T) {
-	t.Run("CA-043_the_dashboard_shell_loads_its_cards_from_the_cards_route", func(t *testing.T) {
-		out := renderString(t, adminDashboard())
-		assertContains(t, out, `hx-get="/admin/cards"`, ">Admin Dashboard</h1>")
-		assertLacks(t, out, "data-status")
-	})
-}
-
 func TestAdminCards(t *testing.T) {
 	t.Run("CA-044_an_account_with_only_the_users_permission_sees_only_the_users_card", func(t *testing.T) {
 		out := renderString(t, AdminCards(AdminDashboardData{Users: true}))
@@ -495,22 +487,10 @@ func TestAdminCards(t *testing.T) {
 }
 
 func TestAdminDashboardPage(t *testing.T) {
-	t.Run("CA-048_the_page_wraps_the_dashboard_shell_in_a_full_document_titled_for_the_admin_pages", func(t *testing.T) {
+	t.Run("CA-048_the_page_is_a_full_document_titled_for_the_admin_pages_and_loads_the_cards_from_the_cards_route", func(t *testing.T) {
 		out := renderString(t, AdminDashboardPage())
-		assertContains(t, out, "<title>Admin - NeuralNexus</title>", `hx-get="/admin/cards"`)
-	})
-}
-
-func TestAdminUsers(t *testing.T) {
-	t.Run("CA-049_the_users_shell_loads_the_list_links_back_to_the_dashboard_and_holds_an_empty_count_line", func(t *testing.T) {
-		out := renderString(t, adminUsers())
-		assertContains(t, out, `hx-get="/admin/users/list"`, ">Users</h1>")
-		if !regexp.MustCompile(`<a href="/admin"[^>]*>Back to the admin dashboard</a>`).MatchString(out) {
-			t.Errorf("no link to /admin reading Back to the admin dashboard in:\n%s", out)
-		}
-		assertAttr(t, out, "admin-users-count", "role", "status")
-		assertText(t, out, "admin-users-count", "")
-		assertFlag(t, out, "admin-users-count", "hx-swap-oob", false)
+		assertContains(t, out, "<title>Admin - NeuralNexus</title>", `hx-get="/admin/cards"`, ">Admin Dashboard</h1>")
+		assertLacks(t, out, "data-status")
 	})
 }
 
@@ -824,9 +804,15 @@ func TestAdminUserRows(t *testing.T) {
 }
 
 func TestAdminUsersPage(t *testing.T) {
-	t.Run("CA-078_the_page_wraps_the_users_shell_in_a_full_document_with_its_title", func(t *testing.T) {
+	t.Run("CA-078_the_page_is_a_full_document_with_its_title_that_loads_the_list_links_back_to_the_dashboard_and_holds_an_empty_count_line", func(t *testing.T) {
 		out := renderString(t, AdminUsersPage())
-		assertContains(t, out, "<title>Users - NeuralNexus</title>", `hx-get="/admin/users/list"`)
+		assertContains(t, out, "<title>Users - NeuralNexus</title>", `hx-get="/admin/users/list"`, ">Users</h1>")
+		if !regexp.MustCompile(`<a href="/admin"[^>]*>Back to the admin dashboard</a>`).MatchString(out) {
+			t.Errorf("no link to /admin reading Back to the admin dashboard in:\n%s", out)
+		}
+		assertAttr(t, out, "admin-users-count", "role", "status")
+		assertText(t, out, "admin-users-count", "")
+		assertFlag(t, out, "admin-users-count", "hx-swap-oob", false)
 	})
 }
 
@@ -838,22 +824,16 @@ var adminUserFixture = AdminUserData{
 	Permissions:   []string{"pets.read"},
 }
 
-func TestAdminUser(t *testing.T) {
-	t.Run("CA-079_the_editor_shell_loads_the_editor_for_the_ID_and_holds_the_status_line_the_editor_names", func(t *testing.T) {
-		out := renderString(t, adminUser("u1"))
+func TestAdminUserPage(t *testing.T) {
+	t.Run("CA-081_the_page_is_a_full_document_with_its_title_that_loads_the_editor_for_the_ID_and_holds_the_status_line_the_editor_names", func(t *testing.T) {
+		out := renderString(t, AdminUserPage("u1"))
+		assertContains(t, out, "<title>Edit user - NeuralNexus</title>")
 		tag := regexp.MustCompile(`<div[^>]*hx-get="/admin/users/u1/editor"[^>]*>`).FindString(out)
 		attrOfTag(t, tag, "hx-trigger", "load")
 		assertAttr(t, out, "admin-user-status", "role", "status")
 		if !regexp.MustCompile(`<a href="/admin/users"[^>]*>Back to users</a>`).MatchString(out) {
 			t.Errorf("no link to /admin/users reading Back to users in:\n%s", out)
 		}
-	})
-}
-
-func TestAdminUserPage(t *testing.T) {
-	t.Run("CA-081_the_page_wraps_the_editor_shell_for_the_ID_in_a_full_document_with_its_title", func(t *testing.T) {
-		out := renderString(t, AdminUserPage("u1"))
-		assertContains(t, out, "<title>Edit user - NeuralNexus</title>", `hx-get="/admin/users/u1/editor"`)
 	})
 }
 
@@ -1131,20 +1111,6 @@ func TestAdminUserPermissions(t *testing.T) {
 	})
 }
 
-func TestAdminRoles(t *testing.T) {
-	t.Run("CA-113_the_roles_shell_loads_the_list_and_links_to_the_dashboard_and_the_permissions_page", func(t *testing.T) {
-		out := renderString(t, adminRoles())
-		tag := regexp.MustCompile(`<div[^>]*hx-get="/admin/roles/list"[^>]*>`).FindString(out)
-		attrOfTag(t, tag, "hx-trigger", "load")
-		assertContains(t, out, ">Roles</h1>")
-		for href, text := range map[string]string{"/admin": "Back to the admin dashboard", "/admin/permissions": "Permissions"} {
-			if !regexp.MustCompile(`<a href="` + href + `"[^>]*>` + text + `</a>`).MatchString(out) {
-				t.Errorf("no link to %s reading %s in:\n%s", href, text, out)
-			}
-		}
-	})
-}
-
 func TestAdminRolesContent(t *testing.T) {
 	t.Run("CA-115_the_role_ID_is_path_escaped_in_the_link", func(t *testing.T) {
 		out := renderString(t, AdminRolesContent(AdminRolesData{Roles: []Role{{ID: "a/b", Name: "x"}}}))
@@ -1193,9 +1159,16 @@ func TestAdminRolesContent(t *testing.T) {
 }
 
 func TestAdminRolesPage(t *testing.T) {
-	t.Run("CA-120_the_page_wraps_the_roles_shell_in_a_full_document_with_its_title", func(t *testing.T) {
+	t.Run("CA-120_the_page_is_a_full_document_with_its_title_that_loads_the_list_and_links_to_the_dashboard_and_the_permissions_page", func(t *testing.T) {
 		out := renderString(t, AdminRolesPage())
-		assertContains(t, out, "<title>Roles - NeuralNexus</title>", `hx-get="/admin/roles/list"`)
+		assertContains(t, out, "<title>Roles - NeuralNexus</title>", ">Roles</h1>")
+		tag := regexp.MustCompile(`<div[^>]*hx-get="/admin/roles/list"[^>]*>`).FindString(out)
+		attrOfTag(t, tag, "hx-trigger", "load")
+		for href, text := range map[string]string{"/admin": "Back to the admin dashboard", "/admin/permissions": "Permissions"} {
+			if !regexp.MustCompile(`<a href="` + href + `"[^>]*>` + text + `</a>`).MatchString(out) {
+				t.Errorf("no link to %s reading %s in:\n%s", href, text, out)
+			}
+		}
 	})
 }
 
@@ -1276,22 +1249,16 @@ var adminRoleFixture = AdminRoleData{
 	Catalogue: catalogueC,
 }
 
-func TestAdminRole(t *testing.T) {
-	t.Run("CA-130_the_role_shell_loads_the_editor_for_the_ID_and_holds_the_status_line_the_editor_names", func(t *testing.T) {
-		out := renderString(t, adminRole("5"))
+func TestAdminRolePage(t *testing.T) {
+	t.Run("CA-132_the_page_is_a_full_document_with_its_title_that_loads_the_editor_for_the_ID_and_holds_the_status_line_the_editor_names", func(t *testing.T) {
+		out := renderString(t, AdminRolePage("5"))
+		assertContains(t, out, "<title>Edit role - NeuralNexus</title>")
 		tag := regexp.MustCompile(`<div[^>]*hx-get="/admin/roles/5/editor"[^>]*>`).FindString(out)
 		attrOfTag(t, tag, "hx-trigger", "load")
 		assertAttr(t, out, "admin-role-status", "role", "status")
 		if !regexp.MustCompile(`<a href="/admin/roles"[^>]*>Back to roles</a>`).MatchString(out) {
 			t.Errorf("no link to /admin/roles reading Back to roles in:\n%s", out)
 		}
-	})
-}
-
-func TestAdminRolePage(t *testing.T) {
-	t.Run("CA-132_the_page_wraps_the_editor_shell_for_the_ID_in_a_full_document_with_its_title", func(t *testing.T) {
-		out := renderString(t, AdminRolePage("5"))
-		assertContains(t, out, "<title>Edit role - NeuralNexus</title>", `hx-get="/admin/roles/5/editor"`)
 	})
 }
 
@@ -1718,20 +1685,6 @@ func TestAdminRoleGrantUnavailable(t *testing.T) {
 	})
 }
 
-func TestAdminPermissions(t *testing.T) {
-	t.Run("CA-178_the_permissions_shell_loads_the_list_and_links_to_the_dashboard_and_the_roles_page", func(t *testing.T) {
-		out := renderString(t, adminPermissions())
-		tag := regexp.MustCompile(`<div[^>]*hx-get="/admin/permissions/list"[^>]*>`).FindString(out)
-		attrOfTag(t, tag, "hx-trigger", "load")
-		assertContains(t, out, ">Permissions</h1>")
-		for href, text := range map[string]string{"/admin": "Back to the admin dashboard", "/admin/roles": "Roles"} {
-			if !regexp.MustCompile(`<a href="` + href + `"[^>]*>` + text + `</a>`).MatchString(out) {
-				t.Errorf("no link to %s reading %s in:\n%s", href, text, out)
-			}
-		}
-	})
-}
-
 func TestAdminPermissionsContent(t *testing.T) {
 	t.Run("CA-179_the_content_root_drops_a_second_request_and_sends_changes_to_the_list_swapping_it_whole", func(t *testing.T) {
 		out := renderString(t, AdminPermissionsContent(AdminPermissionsData{}))
@@ -1924,8 +1877,15 @@ func TestAdminPermissionForm(t *testing.T) {
 }
 
 func TestAdminPermissionsPage(t *testing.T) {
-	t.Run("CA-199_the_page_wraps_the_permissions_shell_in_a_full_document_with_its_title", func(t *testing.T) {
+	t.Run("CA-199_the_page_is_a_full_document_with_its_title_that_loads_the_list_and_links_to_the_dashboard_and_the_roles_page", func(t *testing.T) {
 		out := renderString(t, AdminPermissionsPage())
-		assertContains(t, out, "<title>Permissions - NeuralNexus</title>", `hx-get="/admin/permissions/list"`)
+		assertContains(t, out, "<title>Permissions - NeuralNexus</title>", ">Permissions</h1>")
+		tag := regexp.MustCompile(`<div[^>]*hx-get="/admin/permissions/list"[^>]*>`).FindString(out)
+		attrOfTag(t, tag, "hx-trigger", "load")
+		for href, text := range map[string]string{"/admin": "Back to the admin dashboard", "/admin/roles": "Roles"} {
+			if !regexp.MustCompile(`<a href="` + href + `"[^>]*>` + text + `</a>`).MatchString(out) {
+				t.Errorf("no link to %s reading %s in:\n%s", href, text, out)
+			}
+		}
 	})
 }
