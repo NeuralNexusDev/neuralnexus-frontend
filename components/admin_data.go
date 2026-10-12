@@ -183,6 +183,20 @@ func (d AdminRoleData) Draft(p RolePermission) string {
 	return p.ValueText()
 }
 
+const (
+	// AdminUserStatusID is the id of the user editor's status line.
+	AdminUserStatusID = "admin-user-status"
+	// AdminRoleStatusID is the id of the role editor's status line.
+	AdminRoleStatusID = "admin-role-status"
+	// AdminPermissionRowPrefix starts the id of each row in the permission list.
+	AdminPermissionRowPrefix = "permission-"
+	// AdminGrantRowPrefix starts the id of each row in a role's granted permissions.
+	AdminGrantRowPrefix = "granted-"
+
+	roleNameHelp       = "Lower-case letters, digits and underscores, starting with a letter"
+	permissionNodeHelp = "Lower-case words of letters, digits and underscores joined by dots"
+)
+
 func adminUserPath(id string) string {
 	return "/admin/users/" + url.PathEscape(id)
 }
