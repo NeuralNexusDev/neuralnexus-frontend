@@ -1,7 +1,5 @@
 package components
 
-import "strings"
-
 const (
 	htmxURL       = "https://s3.neuralnexus.dev/cdn/htmx/v4.0.0/htmx.min.js"
 	htmxIntegrity = "sha384-BvJpBiO8Kh31EqtJe5DRIeWrHWnCGkwytKs9NKFi86Hhw96dEqdEMzZDeK9iEGTc"
@@ -126,17 +124,6 @@ templ fieldWithError(id string, label string, help string, errText string, oob b
 			<p id={ id + "-error" } class={ errorTextClass }>{ errText }</p>
 		}
 	</div>
-}
-
-func fieldDescription(id string, help string, errText string) string {
-	var ids []string
-	if errText != "" {
-		ids = append(ids, id+"-error")
-	}
-	if help != "" {
-		ids = append(ids, id+"-help")
-	}
-	return strings.Join(ids, " ")
 }
 
 templ textInput(id string, name string, value string, placeholder string, required bool, describedBy string, invalid bool) {
