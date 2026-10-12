@@ -552,3 +552,43 @@ test.describe('permissions', () => {
     await expect(page.locator('#admin-permissions-title')).toBeFocused();
   });
 });
+
+test.describe('dashboard', () => {
+  const cards = (page) => page.locator('a[id$="-link"]');
+  const denied = (page) => page.locator('#admin-denied');
+
+  test('FA-56 an account with both admin permissions sees the Users, Roles and Permissions cards, each linking to its page', async ({ page }) => {
+    await signIn(page, { me: ['users.admin', 'roles.admin'] });
+    await page.goto('/admin');
+    await expect(cards(page)).toHaveCount(3);
+    await expect(page.locator('#admin-users-link')).toContainText('Users');
+    await expect(page.locator('#admin-users-link')).toHaveAttribute('href', '/admin/users');
+    await expect(page.locator('#admin-roles-link')).toContainText('Roles');
+    await expect(page.locator('#admin-roles-link')).toHaveAttribute('href', '/admin/roles');
+    await expect(page.locator('#admin-permissions-link')).toContainText('Permissions');
+    await expect(page.locator('#admin-permissions-link')).toHaveAttribute('href', '/admin/permissions');
+    await expect(denied(page)).toHaveCount(0);
+  });
+
+  for (const [card, path, title] of [
+    ['users', '/admin/users', 'Users'],
+    ['roles', '/admin/roles', 'Roles'],
+    ['permissions', '/admin/permissions', 'Permissions'],
+  ]) {
+    test(`FA-57 a click on the ${card} card opens its page`, async ({ page }) => {
+      await signIn(page, { me: ['users.admin', 'roles.admin'] });
+      await page.goto('/admin');
+      await page.locator(`#admin-${card}-link`).click();
+      await expect(page).toHaveURL(new RegExp(`${path}$`));
+      await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+    });
+  }
+
+  test('FA-61 a failed cards request shows the page error banner and no card', async ({ page }) => {
+    await signIn(page, { failures: { 'GET /users/me/permissions': { status: 500, detail: 'permissions are down', times: 1 } } });
+    await page.goto('/admin');
+    await expect(error(page)).toHaveText('permissions are down');
+    await expect(cards(page)).toHaveCount(0);
+    await expect(denied(page)).toHaveCount(0);
+  });
+});

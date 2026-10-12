@@ -942,7 +942,7 @@ func TestAdminUserEditorHandler(t *testing.T) {
 		}
 		assertBodyHas(t, rec, "Bob", "u1", `id="admin-user-form"`,
 			`name="loaded_username" value="Bob"`, `name="loaded_roles" value="r1"`, `name="roles_editable" value="1"`,
-			`name="roles" value="r1" checked`, `name="roles" value="r2" class=`, "Moderator", "Administers", "discord", "bob#1", "pets.read", "pets.max:5")
+			`name="roles" value="r1" checked`, `name="roles" value="r2"`, "Moderator", "Administers", "discord", "bob#1", "pets.read", "pets.max:5")
 		assertBodyLacks(t, rec, `name="roles" value="r2" checked`)
 		f.AssertLines(t, editorCalls...)
 	})

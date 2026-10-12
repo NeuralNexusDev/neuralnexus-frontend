@@ -199,11 +199,9 @@
     document.addEventListener('input', (event) => {
         const field = event.target;
         const statusID = field.closest?.('[data-status]')?.dataset.status;
-        if (statusID) {
-            const status = document.getElementById(statusID);
-            if (status) {
-                status.textContent = '';
-            }
+        const status = document.getElementById(statusID);
+        if (status) {
+            status.textContent = '';
         }
         if (field.getAttribute?.('aria-invalid') !== 'true') {
             return;

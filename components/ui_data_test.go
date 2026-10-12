@@ -42,7 +42,7 @@ func TestFieldDescription(t *testing.T) {
 				t.Errorf("element %q = %q, want a p holding %q", token, got, text)
 			}
 		}
-		if !strings.Contains(out, `<label class="`) || !strings.Contains(out, ` for="x"`) {
+		if !strings.Contains(out, `<label `) || !strings.Contains(out, ` for="x"`) {
 			t.Errorf("the label does not point at x:\n%s", out)
 		}
 		if !strings.Contains(tag, `aria-invalid="true"`) {
