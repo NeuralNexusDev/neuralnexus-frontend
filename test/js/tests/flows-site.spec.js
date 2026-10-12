@@ -220,3 +220,114 @@ test.describe('bee review', () => {
     await expect(error(page)).toHaveText('');
   });
 });
+
+test.describe('bee page', () => {
+  const NAME_API = '**/api/v1/bee-name-generator/name';
+  const SUGGEST_API = '**/api/v1/bee-name-generator/suggestion/**';
+  const cors = { 'access-control-allow-origin': '*' };
+  const nameStatus = (page) => page.locator('#get-bee-status');
+  const suggestStatus = (page) => page.locator('#suggest-bee-status');
+  const submit = (page, text) => page.locator('#suggest-bee-name').fill(text).then(() => page.locator('#suggest-bee-button').click());
+
+  /** The browser sends no cookie and the stub sends no CORS headers, so the suggestion call is forwarded with the session. */
+  const forwardSuggestions = (page, session) =>
+    page.route(SUGGEST_API, async (route) => {
+      const response = await route.fetch({ headers: { cookie: `session=${session}` } });
+      await route.fulfill({ response, headers: { ...response.headers(), ...cors } });
+    });
+
+  test('FS-24 generating disables the button while the request is held, shows the returned name and enables the button again', async ({ page }) => {
+    await signIn(page);
+    let release;
+    const held = new Promise((resolve) => (release = resolve));
+    await page.route(NAME_API, async (route) => {
+      await held;
+      await route.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: JSON.stringify({ name: 'Queen Buzzabelle' }) });
+    });
+    await page.goto('/project/bee-name-generator');
+    await expect(page.locator('#get-bee-button')).toBeEnabled();
+
+    await page.locator('#get-bee-button').click();
+    await expect(page.locator('#get-bee-button')).toBeDisabled();
+    await expect(page.locator('#get-bee-name')).toHaveText('\u2014');
+
+    release();
+    await expect(page.locator('#get-bee-name')).toHaveText('Queen Buzzabelle');
+    await expect(page.locator('#get-bee-button')).toBeEnabled();
+    await expect(nameStatus(page)).toBeHidden();
+  });
+
+  test('FS-25 a failing answer shows the retry message, keeps the name and enables the button again', async ({ page }) => {
+    await signIn(page);
+    const answers = [{ status: 200, body: { name: 'Queen Buzzabelle' } }, { status: 500, body: { detail: 'down' } }];
+    await page.route(NAME_API, (route) => {
+      const { status, body } = answers.shift();
+      return route.fulfill({ status, contentType: 'application/json', headers: cors, body: JSON.stringify(body) });
+    });
+    await page.goto('/project/bee-name-generator');
+    await page.locator('#get-bee-button').click();
+    await expect(page.locator('#get-bee-name')).toHaveText('Queen Buzzabelle');
+
+    await page.locator('#get-bee-button').click();
+    await expect(nameStatus(page)).toHaveText("Couldn't get a name, please try again.");
+    await expect(page.locator('#get-bee-name')).toHaveText('Queen Buzzabelle');
+    await expect(page.locator('#get-bee-button')).toBeEnabled();
+  });
+
+  test('FS-26 a name that needs escaping is sent as a POST to the escaped path, thanks the visitor and clears the input', async ({ page }) => {
+    const { session, writes } = await signIn(page, { me: ['beenamegenerator.admin'], suggestions: [] });
+    await forwardSuggestions(page, session);
+    await page.goto('/project/bee-name-generator');
+
+    await submit(page, 'royal jelly/queen?');
+    await expect(suggestStatus(page)).toHaveText('Thanks for the suggestion!');
+    await expect(page.locator('#suggest-bee-name')).toHaveValue('');
+    await expect(page.locator('#suggest-bee-button')).toBeEnabled();
+    expect(await writes()).toEqual([{ method: 'POST', path: '/bee-name-generator/suggestion/royal%20jelly%2Fqueen%3F', body: null }]);
+  });
+
+  test('FS-27 a refused suggestion shows the retry message and keeps the typed name', async ({ page }) => {
+    const { session } = await signIn(page, {
+      me: ['beenamegenerator.admin'],
+      failures: { 'POST /bee-name-generator/suggestion/wax': { status: 500, detail: 'Failed to save' } },
+    });
+    await forwardSuggestions(page, session);
+    await page.goto('/project/bee-name-generator');
+
+    await submit(page, 'wax');
+    await expect(suggestStatus(page)).toHaveText("Couldn't submit that, please try again.");
+    await expect(page.locator('#suggest-bee-name')).toHaveValue('wax');
+    await expect(page.locator('#suggest-bee-button')).toBeEnabled();
+  });
+
+  test('FS-27 an unreachable API shows the retry message and keeps the typed name', async ({ page }) => {
+    await signIn(page);
+    await page.route(SUGGEST_API, (route) => route.abort('connectionrefused'));
+    await page.goto('/project/bee-name-generator');
+
+    await submit(page, 'wax');
+    await expect(suggestStatus(page)).toHaveText("Couldn't submit that, please try again.");
+    await expect(page.locator('#suggest-bee-name')).toHaveValue('wax');
+    await expect(page.locator('#suggest-bee-button')).toBeEnabled();
+  });
+
+  for (const [label, text] of [['an empty name', ''], ['a whitespace name', '   '], ['a single dot', '.'], ['a double dot', '..']]) {
+    test(`FS-28 ${label} shows the invalid message and sends no request`, async ({ page }) => {
+      const { writes } = await signIn(page, { me: ['beenamegenerator.admin'] });
+      const sent = [];
+      await page.route(SUGGEST_API, (route) => {
+        sent.push(route.request().url());
+        return route.abort();
+      });
+      await page.goto('/project/bee-name-generator');
+      // The input is required, so an empty value is stopped by the browser before the script runs.
+      await page.locator('form[onsubmit]').evaluate((form) => (form.noValidate = true));
+
+      await submit(page, text);
+      await expect(suggestStatus(page)).toHaveText('Please enter a valid name.');
+      await expect(page.locator('#suggest-bee-button')).toBeEnabled();
+      expect(sent).toEqual([]);
+      expect(await writes()).toEqual([]);
+    });
+  }
+});
