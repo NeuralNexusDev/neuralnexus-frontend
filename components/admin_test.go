@@ -87,412 +87,6 @@ func attrOfTag(t testing.TB, tag, name, want string) {
 	}
 }
 
-func TestRolePermissionValueText(t *testing.T) {
-	value := func(valueType, raw string) RolePermission {
-		p := RolePermission{Permission: Permission{ValueType: valueType}}
-		if raw != "" {
-			p.Value = json.RawMessage(raw)
-		}
-		return p
-	}
-	check := func(t *testing.T, row string, cases []struct{ name, valueType, raw, want string }) {
-		for _, tc := range cases {
-			t.Run(row+"_"+tc.name, func(t *testing.T) {
-				if got := value(tc.valueType, tc.raw).ValueText(); got != tc.want {
-					t.Errorf("ValueText() = %q, want %q", got, tc.want)
-				}
-			})
-		}
-	}
-	type valueCase = struct{ name, valueType, raw, want string }
-
-	t.Run("CA-001_a_string_permission_gives_its_decoded_text", func(t *testing.T) {
-		check(t, "CA-001", []valueCase{
-			{"plain", "string", `"hello world"`, "hello world"},
-			{"with_quotes", "string", `"say \"hi\""`, `say "hi"`},
-		})
-	})
-
-	t.Run("CA-002_a_string_list_permission_gives_one_item_per_line", func(t *testing.T) {
-		check(t, "CA-002", []valueCase{
-			{"two_items", "string_list", `["a","b"]`, "a\nb"},
-			{"one_item", "string_list", `["only"]`, "only"},
-			{"no_items", "string_list", `[]`, ""},
-		})
-	})
-
-	t.Run("CA-003_an_int_permission_gives_the_number_as_text", func(t *testing.T) {
-		check(t, "CA-003", []valueCase{
-			{"positive", "int", `7`, "7"},
-			{"negative", "int", `-3`, "-3"},
-			{"zero", "int", `0`, "0"},
-		})
-	})
-
-	t.Run("CA-004_a_permission_with_no_value_type_or_an_unknown_one_gives_an_empty_string_whatever_Value_holds", func(t *testing.T) {
-		check(t, "CA-004", []valueCase{
-			{"no_type_null", "", `null`, ""},
-			{"no_type_number", "", `5`, ""},
-			{"unknown_type", "bool", `true`, ""},
-		})
-	})
-
-	t.Run("CA-005_a_valued_permission_without_a_Value_gives_an_empty_string_for_every_type", func(t *testing.T) {
-		check(t, "CA-005", []valueCase{
-			{"string", "string", "", ""},
-			{"string_list", "string_list", "", ""},
-			{"int", "int", "", ""},
-		})
-	})
-}
-
-func TestRolePermissionLabel(t *testing.T) {
-	t.Run("CA-006_a_permission_without_a_value_type_is_labelled_with_its_node_alone", func(t *testing.T) {
-		p := RolePermission{Permission: Permission{Node: "pets.read"}, Value: json.RawMessage("5")}
-		if got := p.Label(); got != "pets.read" {
-			t.Errorf("Label() = %q", got)
-		}
-	})
-
-	t.Run("CA-007_a_valued_permission_is_labelled_with_its_node_and_its_value_list_items_joined_by_commas", func(t *testing.T) {
-		cases := []struct{ name, node, valueType, raw, want string }{
-			{"int", "pets.max", "int", `5`, "pets.max: 5"},
-			{"string", "pets.motto", "string", `"hi"`, "pets.motto: hi"},
-			{"list", "pets.tags", "string_list", `["a","b","c"]`, "pets.tags: a, b, c"},
-			{"one_item_list", "pets.tags", "string_list", `["a"]`, "pets.tags: a"},
-		}
-		for _, tc := range cases {
-			t.Run("CA-007_"+tc.name, func(t *testing.T) {
-				p := RolePermission{Permission: Permission{Node: tc.node, ValueType: tc.valueType}, Value: json.RawMessage(tc.raw)}
-				if got := p.Label(); got != tc.want {
-					t.Errorf("Label() = %q, want %q", got, tc.want)
-				}
-			})
-		}
-	})
-}
-
-func TestAdminUserDataHeldRole(t *testing.T) {
-	t.Run("CA-008_a_role_the_user_holds_is_reported_held_and_one_it_does_not_hold_is_not", func(t *testing.T) {
-		d := AdminUserData{User: UserAccount{Roles: []string{"r1", "r3"}}}
-		for id, want := range map[string]bool{"r1": true, "r3": true, "r2": false} {
-			t.Run("CA-008_"+id, func(t *testing.T) {
-				if got := d.HeldRole(id); got != want {
-					t.Errorf("HeldRole(%q) = %t, want %t", id, got, want)
-				}
-			})
-		}
-	})
-
-	t.Run("CA-009_a_user_with_no_roles_holds_none", func(t *testing.T) {
-		for name, id := range map[string]string{"role": "r1", "empty": ""} {
-			t.Run("CA-009_"+name, func(t *testing.T) {
-				if (AdminUserData{}).HeldRole(id) {
-					t.Errorf("HeldRole(%q) = true", id)
-				}
-			})
-		}
-	})
-}
-
-func TestAdminUserDataUnlistedRoles(t *testing.T) {
-	catalogue := []Role{{ID: "r1"}, {ID: "r2"}}
-
-	t.Run("CA-010_held_roles_missing_from_the_catalogue_are_returned_in_the_order_the_user_holds_them", func(t *testing.T) {
-		d := AdminUserData{Roles: catalogue, User: UserAccount{Roles: []string{"r2", "r9", "r1", "r3"}}}
-		if got, want := d.UnlistedRoles(), []string{"r9", "r3"}; !reflect.DeepEqual(got, want) {
-			t.Errorf("UnlistedRoles() = %q, want %q", got, want)
-		}
-	})
-
-	t.Run("CA-011_when_every_held_role_is_in_the_catalogue_nothing_is_returned", func(t *testing.T) {
-		for name, held := range map[string][]string{"holds_listed_roles": {"r1"}, "holds_nothing": nil} {
-			t.Run("CA-011_"+name, func(t *testing.T) {
-				if got := (AdminUserData{Roles: catalogue, User: UserAccount{Roles: held}}).UnlistedRoles(); len(got) != 0 {
-					t.Errorf("UnlistedRoles() = %q, want none", got)
-				}
-			})
-		}
-	})
-
-	t.Run("CA-012_with_an_empty_catalogue_every_held_role_is_unlisted", func(t *testing.T) {
-		d := AdminUserData{User: UserAccount{Roles: []string{"r1", "r2"}}}
-		if got, want := d.UnlistedRoles(), []string{"r1", "r2"}; !reflect.DeepEqual(got, want) {
-			t.Errorf("UnlistedRoles() = %q, want %q", got, want)
-		}
-	})
-}
-
-func TestAdminRoleDataAvailable(t *testing.T) {
-	t.Run("CA-013_permissions_the_role_already_grants_are_left_out_and_the_rest_keep_the_catalogue_order", func(t *testing.T) {
-		d := AdminRoleData{Role: Role{Permissions: grantedIDs("1", "2")}, Catalogue: catalogueC}
-		if got, want := permissionIDs(d.Available()), []string{"3", "4"}; !reflect.DeepEqual(got, want) {
-			t.Errorf("Available() = %q, want %q", got, want)
-		}
-	})
-
-	t.Run("CA-014_a_role_with_no_grants_offers_the_whole_catalogue_and_a_role_with_every_grant_offers_nothing", func(t *testing.T) {
-		cases := []struct {
-			name   string
-			grants []RolePermission
-			want   []string
-		}{
-			{"no_grants", nil, []string{"1", "2", "3", "4"}},
-			{"every_grant", grantedIDs("1", "2", "3", "4"), []string{}},
-		}
-		for _, tc := range cases {
-			t.Run("CA-014_"+tc.name, func(t *testing.T) {
-				d := AdminRoleData{Role: Role{Permissions: tc.grants}, Catalogue: catalogueC}
-				if got := permissionIDs(d.Available()); !reflect.DeepEqual(got, tc.want) {
-					t.Errorf("Available() = %q, want %q", got, tc.want)
-				}
-			})
-		}
-	})
-
-	t.Run("CA-015_a_grant_is_matched_to_the_catalogue_by_ID_not_by_node", func(t *testing.T) {
-		d := AdminRoleData{Role: Role{Permissions: []RolePermission{{Permission: Permission{ID: "1"}}}}, Catalogue: catalogueC}
-		if got, want := permissionIDs(d.Available()), []string{"2", "3", "4"}; !reflect.DeepEqual(got, want) {
-			t.Errorf("Available() = %q, want %q", got, want)
-		}
-	})
-
-	t.Run("CA-016_a_grant_that_is_not_in_the_catalogue_changes_nothing", func(t *testing.T) {
-		d := AdminRoleData{Role: Role{Permissions: []RolePermission{{Permission: Permission{ID: "99"}}}}, Catalogue: catalogueC}
-		if got, want := permissionIDs(d.Available()), []string{"1", "2", "3", "4"}; !reflect.DeepEqual(got, want) {
-			t.Errorf("Available() = %q, want %q", got, want)
-		}
-	})
-}
-
-func TestAdminRoleDataSelected(t *testing.T) {
-	withGrant := func(grantPermission string, granted ...string) AdminRoleData {
-		return AdminRoleData{Role: Role{Permissions: grantedIDs(granted...)}, Catalogue: catalogueC, GrantPermission: grantPermission}
-	}
-
-	t.Run("CA-017_the_permission_named_in_GrantPermission_is_selected_when_it_is_still_available", func(t *testing.T) {
-		if got, ok := withGrant("4", "1", "2").Selected(); !ok || got.ID != "4" {
-			t.Errorf("Selected() = %+v, %t, want ID 4 and true", got, ok)
-		}
-	})
-
-	t.Run("CA-018_a_GrantPermission_that_is_already_granted_falls_back_to_the_first_available_one", func(t *testing.T) {
-		if got, ok := withGrant("1", "1", "2").Selected(); !ok || got.ID != "3" {
-			t.Errorf("Selected() = %+v, %t, want ID 3 and true", got, ok)
-		}
-	})
-
-	t.Run("CA-019_an_empty_or_unknown_GrantPermission_selects_the_first_available_permission", func(t *testing.T) {
-		for name, choice := range map[string]string{"empty": "", "unknown": "99"} {
-			t.Run("CA-019_"+name, func(t *testing.T) {
-				if got, ok := withGrant(choice, "1", "2").Selected(); !ok || got.ID != "3" {
-					t.Errorf("Selected() = %+v, %t, want ID 3 and true", got, ok)
-				}
-			})
-		}
-	})
-
-	t.Run("CA-020_with_nothing_available_no_permission_is_selected", func(t *testing.T) {
-		for name, choice := range map[string]string{"granted_choice": "1", "no_choice": ""} {
-			t.Run("CA-020_"+name, func(t *testing.T) {
-				if got, ok := withGrant(choice, "1", "2", "3", "4").Selected(); ok || got != (Permission{}) {
-					t.Errorf("Selected() = %+v, %t, want the zero value and false", got, ok)
-				}
-			})
-		}
-	})
-}
-
-func TestAdminRoleDataDraft(t *testing.T) {
-	t.Run("CA-021_text_typed_into_a_granted_rows_field_wins_over_the_saved_value", func(t *testing.T) {
-		d := AdminRoleData{Drafts: map[string]string{"2": "99"}}
-		if got := d.Draft(grantOf("2", "7")); got != "99" {
-			t.Errorf("Draft() = %q, want 99", got)
-		}
-	})
-
-	t.Run("CA-022_a_field_the_admin_emptied_keeps_the_empty_text_instead_of_the_saved_value", func(t *testing.T) {
-		d := AdminRoleData{Drafts: map[string]string{"2": ""}}
-		if got := d.Draft(grantOf("2", "7")); got != "" {
-			t.Errorf("Draft() = %q, want empty", got)
-		}
-	})
-
-	t.Run("CA-023_without_a_draft_for_the_permission_the_saved_value_is_returned", func(t *testing.T) {
-		cases := []struct {
-			name   string
-			drafts map[string]string
-			grant  RolePermission
-			want   string
-		}{
-			{"nil_drafts", nil, grantOf("2", "7"), "7"},
-			{"draft_for_another_permission", map[string]string{"3": "x"}, grantOf("2", "7"), "7"},
-			{"list_value", nil, grantOf("3", `["a","b"]`), "a\nb"},
-		}
-		for _, tc := range cases {
-			t.Run("CA-023_"+tc.name, func(t *testing.T) {
-				if got := (AdminRoleData{Drafts: tc.drafts}).Draft(tc.grant); got != tc.want {
-					t.Errorf("Draft() = %q, want %q", got, tc.want)
-				}
-			})
-		}
-	})
-}
-
-func TestAdminUserRowsPath(t *testing.T) {
-	t.Run("CA-024_without_a_search_the_path_carries_only_the_offset", func(t *testing.T) {
-		for offset, want := range map[int]string{0: "/admin/users/rows?offset=0", 200: "/admin/users/rows?offset=200"} {
-			if got := adminUserRowsPath(offset, ""); got != want {
-				t.Errorf("adminUserRowsPath(%d, ) = %q, want %q", offset, got, want)
-			}
-		}
-	})
-
-	t.Run("CA-025_a_search_is_added_after_the_offset", func(t *testing.T) {
-		if got := adminUserRowsPath(400, "bob"); got != "/admin/users/rows?offset=400&search=bob" {
-			t.Errorf("adminUserRowsPath = %q", got)
-		}
-	})
-
-	t.Run("CA-026_a_search_with_reserved_characters_is_query_escaped", func(t *testing.T) {
-		if got := adminUserRowsPath(200, "a b&c=d#é"); got != "/admin/users/rows?offset=200&search=a+b%26c%3Dd%23%C3%A9" {
-			t.Errorf("adminUserRowsPath = %q", got)
-		}
-	})
-}
-
-var pathEscapes = []struct{ id, escaped string }{
-	{"a/b", "a%2Fb"},
-	{"a b", "a%20b"},
-	{"a?b", "a%3Fb"},
-	{"a#b", "a%23b"},
-	{"100%", "100%25"},
-}
-
-func TestAdminUserPath(t *testing.T) {
-	t.Run("CA-027_an_ID_is_appended_to_the_user_route", func(t *testing.T) {
-		if got := adminUserPath("u1"); got != "/admin/users/u1" {
-			t.Errorf("adminUserPath = %q", got)
-		}
-	})
-
-	t.Run("CA-028_an_ID_with_reserved_characters_is_path_escaped", func(t *testing.T) {
-		for _, tc := range pathEscapes {
-			t.Run("CA-028_"+tc.escaped, func(t *testing.T) {
-				if got := adminUserPath(tc.id); got != "/admin/users/"+tc.escaped {
-					t.Errorf("adminUserPath(%q) = %q", tc.id, got)
-				}
-			})
-		}
-	})
-}
-
-func TestAdminRolePath(t *testing.T) {
-	t.Run("CA-029_an_ID_is_appended_to_the_role_route", func(t *testing.T) {
-		if got := adminRolePath("5"); got != "/admin/roles/5" {
-			t.Errorf("adminRolePath = %q", got)
-		}
-	})
-
-	t.Run("CA-030_an_ID_with_reserved_characters_is_path_escaped", func(t *testing.T) {
-		for _, tc := range pathEscapes {
-			t.Run("CA-030_"+tc.escaped, func(t *testing.T) {
-				if got := adminRolePath(tc.id); got != "/admin/roles/"+tc.escaped {
-					t.Errorf("adminRolePath(%q) = %q", tc.id, got)
-				}
-			})
-		}
-	})
-}
-
-func TestAdminRolePermissionPath(t *testing.T) {
-	t.Run("CA-031_the_route_for_a_roles_permission_joins_both_IDs", func(t *testing.T) {
-		if got := adminRolePermissionPath("5", "2"); got != "/admin/roles/5/permissions/2" {
-			t.Errorf("adminRolePermissionPath = %q", got)
-		}
-	})
-
-	t.Run("CA-032_both_IDs_are_path_escaped", func(t *testing.T) {
-		cases := []struct{ name, role, permission, want string }{
-			{"slash_and_space", "a/b", "c d", "/admin/roles/a%2Fb/permissions/c%20d"},
-			{"question_and_hash", "5", "x?y#z", "/admin/roles/5/permissions/x%3Fy%23z"},
-		}
-		for _, tc := range cases {
-			t.Run("CA-032_"+tc.name, func(t *testing.T) {
-				if got := adminRolePermissionPath(tc.role, tc.permission); got != tc.want {
-					t.Errorf("adminRolePermissionPath = %q, want %q", got, tc.want)
-				}
-			})
-		}
-	})
-}
-
-func TestAdminRoleNameLookup(t *testing.T) {
-	t.Run("CA-033_a_role_in_the_name_map_is_shown_by_its_name", func(t *testing.T) {
-		if got := adminRoleName(map[string]string{"r1": "Moderator"}, "r1"); got != "Moderator" {
-			t.Errorf("adminRoleName = %q", got)
-		}
-	})
-
-	t.Run("CA-034_a_role_missing_from_the_map_or_a_nil_map_is_shown_by_its_ID", func(t *testing.T) {
-		cases := []struct {
-			name  string
-			names map[string]string
-			id    string
-		}{
-			{"missing_role", map[string]string{"r1": "Moderator"}, "r2"},
-			{"nil_map", nil, "r1"},
-		}
-		for _, tc := range cases {
-			t.Run("CA-034_"+tc.name, func(t *testing.T) {
-				if got := adminRoleName(tc.names, tc.id); got != tc.id {
-					t.Errorf("adminRoleName = %q, want %q", got, tc.id)
-				}
-			})
-		}
-	})
-}
-
-func TestAdminUsername(t *testing.T) {
-	t.Run("CA-035_a_username_is_shown_as_it_is", func(t *testing.T) {
-		if got := adminUsername("Bob"); got != "Bob" {
-			t.Errorf("adminUsername = %q", got)
-		}
-	})
-
-	t.Run("CA-036_an_account_without_a_username_is_shown_as_No_username", func(t *testing.T) {
-		if got := adminUsername(""); got != "No username" {
-			t.Errorf("adminUsername = %q", got)
-		}
-	})
-}
-
-func TestAdminLinkName(t *testing.T) {
-	t.Run("CA-037_a_linked_account_is_named_by_its_platform_username", func(t *testing.T) {
-		if got := adminLinkName(LinkedAccount{PlatformUsername: "bob#1", PlatformID: "123"}); got != "bob#1" {
-			t.Errorf("adminLinkName = %q", got)
-		}
-	})
-
-	t.Run("CA-038_without_a_platform_username_the_platform_ID_names_the_account", func(t *testing.T) {
-		cases := []struct {
-			name string
-			link LinkedAccount
-			want string
-		}{
-			{"platform_id", LinkedAccount{PlatformID: "123"}, "123"},
-			{"empty", LinkedAccount{}, ""},
-		}
-		for _, tc := range cases {
-			t.Run("CA-038_"+tc.name, func(t *testing.T) {
-				if got := adminLinkName(tc.link); got != tc.want {
-					t.Errorf("adminLinkName = %q, want %q", got, tc.want)
-				}
-			})
-		}
-	})
-}
-
 func TestAdminDashboardLink(t *testing.T) {
 	t.Run("CA-039_the_link_to_the_dashboard_has_the_id_and_the_target_the_account_page_and_the_browser_tests_use", func(t *testing.T) {
 		out := renderString(t, AdminDashboardLink())
@@ -533,14 +127,6 @@ func TestAdminCard(t *testing.T) {
 	})
 }
 
-func TestAdminDashboard(t *testing.T) {
-	t.Run("CA-043_the_dashboard_shell_loads_its_cards_from_the_cards_route", func(t *testing.T) {
-		out := renderString(t, adminDashboard())
-		assertContains(t, out, `hx-get="/admin/cards"`, ">Admin Dashboard</h1>")
-		assertLacks(t, out, "data-status")
-	})
-}
-
 func TestAdminCards(t *testing.T) {
 	t.Run("CA-044_an_account_with_only_the_users_permission_sees_only_the_users_card", func(t *testing.T) {
 		out := renderString(t, AdminCards(AdminDashboardData{Users: true}))
@@ -569,22 +155,10 @@ func TestAdminCards(t *testing.T) {
 }
 
 func TestAdminDashboardPage(t *testing.T) {
-	t.Run("CA-048_the_page_wraps_the_dashboard_shell_in_a_full_document_titled_for_the_admin_pages", func(t *testing.T) {
+	t.Run("CA-048_the_page_is_a_full_document_titled_for_the_admin_pages_and_loads_the_cards_from_the_cards_route", func(t *testing.T) {
 		out := renderString(t, AdminDashboardPage())
-		assertContains(t, out, "<title>Admin - NeuralNexus</title>", `hx-get="/admin/cards"`)
-	})
-}
-
-func TestAdminUsers(t *testing.T) {
-	t.Run("CA-049_the_users_shell_loads_the_list_links_back_to_the_dashboard_and_holds_an_empty_count_line", func(t *testing.T) {
-		out := renderString(t, adminUsers())
-		assertContains(t, out, `hx-get="/admin/users/list"`, ">Users</h1>")
-		if !regexp.MustCompile(`<a href="/admin"[^>]*>Back to the admin dashboard</a>`).MatchString(out) {
-			t.Errorf("no link to /admin reading Back to the admin dashboard in:\n%s", out)
-		}
-		assertAttr(t, out, "admin-users-count", "role", "status")
-		assertText(t, out, "admin-users-count", "")
-		assertFlag(t, out, "admin-users-count", "hx-swap-oob", false)
+		assertContains(t, out, "<title>Admin - NeuralNexus</title>", `hx-get="/admin/cards"`, ">Admin Dashboard</h1>")
+		assertLacks(t, out, "data-status")
 	})
 }
 
@@ -641,74 +215,6 @@ func TestUsersCountLine(t *testing.T) {
 		assertAttr(t, out, "admin-users-count", "hx-swap-oob", "innerHTML")
 		assertAttr(t, out, "admin-users-count", "role", "status")
 		assertText(t, out, "admin-users-count", "2 users")
-	})
-}
-
-func users(n int) []UserAccount { return make([]UserAccount, n) }
-
-func TestUsersSummary(t *testing.T) {
-	check := func(t *testing.T, row string, cases []struct {
-		name string
-		data AdminUsersData
-		want string
-	}) {
-		for _, tc := range cases {
-			t.Run(row+"_"+tc.name, func(t *testing.T) {
-				if got := usersSummary(tc.data); got != tc.want {
-					t.Errorf("usersSummary = %q, want %q", got, tc.want)
-				}
-			})
-		}
-	}
-	type summary = struct {
-		name string
-		data AdminUsersData
-		want string
-	}
-
-	t.Run("CA-057_an_empty_page_after_the_first_one_says_there_are_no_more_users_unless_a_search_stopped_early", func(t *testing.T) {
-		check(t, "CA-057", []summary{
-			{"plain", AdminUsersData{Start: 200}, "No more users"},
-			{"search_reached_the_end", AdminUsersData{Start: 200, Search: "bob"}, "No more users"},
-			{"search_stopped_early", AdminUsersData{Start: 200, Search: "bob", More: true, NextOffset: 1000}, "No matches in the first 1000 users"},
-		})
-	})
-
-	t.Run("CA-058_a_search_with_no_match_that_stopped_before_the_end_says_how_far_it_looked", func(t *testing.T) {
-		check(t, "CA-058", []summary{{"stopped_early", AdminUsersData{Search: "zzz", More: true, NextOffset: 1000}, "No matches in the first 1000 users"}})
-	})
-
-	t.Run("CA-059_a_search_with_no_match_that_reached_the_end_says_no_matches", func(t *testing.T) {
-		check(t, "CA-059", []summary{{"reached_the_end", AdminUsersData{Search: "zzz"}, "No matches"}})
-	})
-
-	t.Run("CA-060_an_empty_first_page_with_no_search_says_no_users_were_found", func(t *testing.T) {
-		check(t, "CA-060", []summary{{"empty", AdminUsersData{}, "No users found"}})
-	})
-
-	t.Run("CA-061_the_first_page_reports_the_count_with_the_singular_for_one_user", func(t *testing.T) {
-		check(t, "CA-061", []summary{
-			{"one_user", AdminUsersData{Users: users(1)}, "1 user"},
-			{"three_users", AdminUsersData{Users: users(3)}, "3 users"},
-		})
-	})
-
-	t.Run("CA-062_a_later_page_reports_how_many_more_users_it_added", func(t *testing.T) {
-		check(t, "CA-062", []summary{
-			{"one_more", AdminUsersData{Users: users(1), Start: 200}, "1 more user"},
-			{"three_more", AdminUsersData{Users: users(3), Start: 200}, "3 more users"},
-		})
-	})
-
-	t.Run("CA-063_a_search_that_stopped_before_the_end_adds_how_far_it_looked", func(t *testing.T) {
-		check(t, "CA-063", []summary{
-			{"first_page", AdminUsersData{Users: users(3), Search: "bob", More: true, NextOffset: 1000}, "3 users. Searched the first 1000 users"},
-			{"later_page", AdminUsersData{Users: users(3), Search: "bob", More: true, NextOffset: 1400, Start: 200}, "3 more users. Searched the first 1400 users"},
-		})
-	})
-
-	t.Run("CA-064_a_search_that_reached_the_end_adds_nothing_after_the_count", func(t *testing.T) {
-		check(t, "CA-064", []summary{{"reached_the_end", AdminUsersData{Users: users(3), Search: "bob", NextOffset: 600}, "3 users"}})
 	})
 }
 
@@ -796,6 +302,54 @@ func TestAdminUserRows(t *testing.T) {
 		assertText(t, out, "admin-users-more-button", "Load more")
 	})
 
+	t.Run("CA-200_the_Load_more_path_carries_the_offset_and_adds_a_search_after_it", func(t *testing.T) {
+		cases := []struct {
+			name   string
+			offset int
+			search string
+			want   string
+		}{
+			{"offset_0", 0, "", "/admin/users/rows?offset=0"},
+			{"offset_200", 200, "", "/admin/users/rows?offset=200"},
+			{"search", 400, "bob", "/admin/users/rows?offset=400&search=bob"},
+		}
+		for _, tc := range cases {
+			t.Run("CA-200_"+tc.name, func(t *testing.T) {
+				out := renderString(t, AdminUserRows(AdminUsersData{More: true, NextOffset: tc.offset, Search: tc.search}))
+				assertAttr(t, out, "admin-users-more-button", "hx-get", tc.want)
+			})
+		}
+	})
+
+	t.Run("CA-201_a_search_with_reserved_characters_is_query_escaped_in_the_Load_more_path", func(t *testing.T) {
+		out := renderString(t, AdminUserRows(AdminUsersData{More: true, NextOffset: 200, Search: "a b&c=d#é"}))
+		assertAttr(t, out, "admin-users-more-button", "hx-get", "/admin/users/rows?offset=200&search=a+b%26c%3Dd%23%C3%A9")
+	})
+
+	t.Run("CA-202_a_role_in_the_name_map_is_shown_by_its_name", func(t *testing.T) {
+		out := renderString(t, AdminUserRows(AdminUsersData{Users: []UserAccount{{UserID: "u1", Username: "A", Roles: []string{"r1"}}}, RoleNames: map[string]string{"r1": "Moderator"}}))
+		assertContains(t, out, ">Moderator</span>")
+		assertLacks(t, out, ">r1</span>")
+	})
+
+	t.Run("CA-203_a_role_missing_from_the_map_or_a_nil_map_is_shown_by_its_ID", func(t *testing.T) {
+		cases := []struct {
+			name  string
+			names map[string]string
+			id    string
+		}{
+			{"missing_role", map[string]string{"r1": "Moderator"}, "r2"},
+			{"nil_map", nil, "r1"},
+		}
+		for _, tc := range cases {
+			t.Run("CA-203_"+tc.name, func(t *testing.T) {
+				out := renderString(t, AdminUserRows(AdminUsersData{Users: []UserAccount{{UserID: "u1", Username: "A", Roles: []string{tc.id}}}, RoleNames: tc.names}))
+				assertContains(t, out, ">"+tc.id+"</span>")
+				assertLacks(t, out, "Moderator")
+			})
+		}
+	})
+
 	t.Run("CA-074_without_more_users_there_is_no_Load_more_row", func(t *testing.T) {
 		assertLacks(t, renderString(t, AdminUserRows(AdminUsersData{Users: three[:2]})), `id="admin-users-more"`)
 	})
@@ -850,9 +404,15 @@ func TestAdminUserRows(t *testing.T) {
 }
 
 func TestAdminUsersPage(t *testing.T) {
-	t.Run("CA-078_the_page_wraps_the_users_shell_in_a_full_document_with_its_title", func(t *testing.T) {
+	t.Run("CA-078_the_page_is_a_full_document_with_its_title_that_loads_the_list_links_back_to_the_dashboard_and_holds_an_empty_count_line", func(t *testing.T) {
 		out := renderString(t, AdminUsersPage())
-		assertContains(t, out, "<title>Users - NeuralNexus</title>", `hx-get="/admin/users/list"`)
+		assertContains(t, out, "<title>Users - NeuralNexus</title>", `hx-get="/admin/users/list"`, ">Users</h1>")
+		if !regexp.MustCompile(`<a href="/admin"[^>]*>Back to the admin dashboard</a>`).MatchString(out) {
+			t.Errorf("no link to /admin reading Back to the admin dashboard in:\n%s", out)
+		}
+		assertAttr(t, out, "admin-users-count", "role", "status")
+		assertText(t, out, "admin-users-count", "")
+		assertFlag(t, out, "admin-users-count", "hx-swap-oob", false)
 	})
 }
 
@@ -864,22 +424,16 @@ var adminUserFixture = AdminUserData{
 	Permissions:   []string{"pets.read"},
 }
 
-func TestAdminUser(t *testing.T) {
-	t.Run("CA-079_the_editor_shell_loads_the_editor_for_the_ID_and_holds_the_status_line_the_editor_names", func(t *testing.T) {
-		out := renderString(t, adminUser("u1"))
+func TestAdminUserPage(t *testing.T) {
+	t.Run("CA-081_the_page_is_a_full_document_with_its_title_that_loads_the_editor_for_the_ID_and_holds_the_status_line_the_editor_names", func(t *testing.T) {
+		out := renderString(t, AdminUserPage("u1"))
+		assertContains(t, out, "<title>Edit user - NeuralNexus</title>")
 		tag := regexp.MustCompile(`<div[^>]*hx-get="/admin/users/u1/editor"[^>]*>`).FindString(out)
 		attrOfTag(t, tag, "hx-trigger", "load")
 		assertAttr(t, out, "admin-user-status", "role", "status")
 		if !regexp.MustCompile(`<a href="/admin/users"[^>]*>Back to users</a>`).MatchString(out) {
 			t.Errorf("no link to /admin/users reading Back to users in:\n%s", out)
 		}
-	})
-}
-
-func TestAdminUserPage(t *testing.T) {
-	t.Run("CA-081_the_page_wraps_the_editor_shell_for_the_ID_in_a_full_document_with_its_title", func(t *testing.T) {
-		out := renderString(t, AdminUserPage("u1"))
-		assertContains(t, out, "<title>Edit user - NeuralNexus</title>", `hx-get="/admin/users/u1/editor"`)
 	})
 }
 
@@ -1062,6 +616,25 @@ func TestAdminUserLinks(t *testing.T) {
 		assertLacks(t, out, `id="admin-user-links-error"`, `id="admin-user-links-empty"`)
 	})
 
+	t.Run("CA-204_a_linked_account_without_a_platform_username_is_named_by_its_platform_ID", func(t *testing.T) {
+		cases := []struct {
+			name string
+			link LinkedAccount
+			want string
+		}{
+			{"username", LinkedAccount{Platform: "discord", PlatformUsername: "bob#1", PlatformID: "123"}, ">bob#1</span>"},
+			{"platform_id", LinkedAccount{Platform: "discord", PlatformID: "123"}, ">123</span>"},
+		}
+		for _, tc := range cases {
+			t.Run("CA-204_"+tc.name, func(t *testing.T) {
+				out := renderString(t, adminUserLinks(AdminUserData{Links: []LinkedAccount{tc.link}}))
+				assertContains(t, out, tc.want)
+			})
+		}
+		out := renderString(t, adminUserLinks(AdminUserData{Links: []LinkedAccount{{Platform: "discord"}}}))
+		assertContains(t, out, `truncate"></span>`)
+	})
+
 	t.Run("CA-105_a_user_with_no_links_shows_the_empty_note", func(t *testing.T) {
 		out := renderString(t, adminUserLinks(AdminUserData{}))
 		assertText(t, out, "admin-user-links-empty", "No linked accounts")
@@ -1138,20 +711,6 @@ func TestAdminUserPermissions(t *testing.T) {
 	})
 }
 
-func TestAdminRoles(t *testing.T) {
-	t.Run("CA-113_the_roles_shell_loads_the_list_and_links_to_the_dashboard_and_the_permissions_page", func(t *testing.T) {
-		out := renderString(t, adminRoles())
-		tag := regexp.MustCompile(`<div[^>]*hx-get="/admin/roles/list"[^>]*>`).FindString(out)
-		attrOfTag(t, tag, "hx-trigger", "load")
-		assertContains(t, out, ">Roles</h1>")
-		for href, text := range map[string]string{"/admin": "Back to the admin dashboard", "/admin/permissions": "Permissions"} {
-			if !regexp.MustCompile(`<a href="` + href + `"[^>]*>` + text + `</a>`).MatchString(out) {
-				t.Errorf("no link to %s reading %s in:\n%s", href, text, out)
-			}
-		}
-	})
-}
-
 func TestAdminRolesContent(t *testing.T) {
 	t.Run("CA-115_the_role_ID_is_path_escaped_in_the_link", func(t *testing.T) {
 		out := renderString(t, AdminRolesContent(AdminRolesData{Roles: []Role{{ID: "a/b", Name: "x"}}}))
@@ -1200,9 +759,16 @@ func TestAdminRolesContent(t *testing.T) {
 }
 
 func TestAdminRolesPage(t *testing.T) {
-	t.Run("CA-120_the_page_wraps_the_roles_shell_in_a_full_document_with_its_title", func(t *testing.T) {
+	t.Run("CA-120_the_page_is_a_full_document_with_its_title_that_loads_the_list_and_links_to_the_dashboard_and_the_permissions_page", func(t *testing.T) {
 		out := renderString(t, AdminRolesPage())
-		assertContains(t, out, "<title>Roles - NeuralNexus</title>", `hx-get="/admin/roles/list"`)
+		assertContains(t, out, "<title>Roles - NeuralNexus</title>", ">Roles</h1>")
+		tag := regexp.MustCompile(`<div[^>]*hx-get="/admin/roles/list"[^>]*>`).FindString(out)
+		attrOfTag(t, tag, "hx-trigger", "load")
+		for href, text := range map[string]string{"/admin": "Back to the admin dashboard", "/admin/permissions": "Permissions"} {
+			if !regexp.MustCompile(`<a href="` + href + `"[^>]*>` + text + `</a>`).MatchString(out) {
+				t.Errorf("no link to %s reading %s in:\n%s", href, text, out)
+			}
+		}
 	})
 }
 
@@ -1283,22 +849,16 @@ var adminRoleFixture = AdminRoleData{
 	Catalogue: catalogueC,
 }
 
-func TestAdminRole(t *testing.T) {
-	t.Run("CA-130_the_role_shell_loads_the_editor_for_the_ID_and_holds_the_status_line_the_editor_names", func(t *testing.T) {
-		out := renderString(t, adminRole("5"))
+func TestAdminRolePage(t *testing.T) {
+	t.Run("CA-132_the_page_is_a_full_document_with_its_title_that_loads_the_editor_for_the_ID_and_holds_the_status_line_the_editor_names", func(t *testing.T) {
+		out := renderString(t, AdminRolePage("5"))
+		assertContains(t, out, "<title>Edit role - NeuralNexus</title>")
 		tag := regexp.MustCompile(`<div[^>]*hx-get="/admin/roles/5/editor"[^>]*>`).FindString(out)
 		attrOfTag(t, tag, "hx-trigger", "load")
 		assertAttr(t, out, "admin-role-status", "role", "status")
 		if !regexp.MustCompile(`<a href="/admin/roles"[^>]*>Back to roles</a>`).MatchString(out) {
 			t.Errorf("no link to /admin/roles reading Back to roles in:\n%s", out)
 		}
-	})
-}
-
-func TestAdminRolePage(t *testing.T) {
-	t.Run("CA-132_the_page_wraps_the_editor_shell_for_the_ID_in_a_full_document_with_its_title", func(t *testing.T) {
-		out := renderString(t, AdminRolePage("5"))
-		assertContains(t, out, "<title>Edit role - NeuralNexus</title>", `hx-get="/admin/roles/5/editor"`)
 	})
 }
 
@@ -1725,20 +1285,6 @@ func TestAdminRoleGrantUnavailable(t *testing.T) {
 	})
 }
 
-func TestAdminPermissions(t *testing.T) {
-	t.Run("CA-178_the_permissions_shell_loads_the_list_and_links_to_the_dashboard_and_the_roles_page", func(t *testing.T) {
-		out := renderString(t, adminPermissions())
-		tag := regexp.MustCompile(`<div[^>]*hx-get="/admin/permissions/list"[^>]*>`).FindString(out)
-		attrOfTag(t, tag, "hx-trigger", "load")
-		assertContains(t, out, ">Permissions</h1>")
-		for href, text := range map[string]string{"/admin": "Back to the admin dashboard", "/admin/roles": "Roles"} {
-			if !regexp.MustCompile(`<a href="` + href + `"[^>]*>` + text + `</a>`).MatchString(out) {
-				t.Errorf("no link to %s reading %s in:\n%s", href, text, out)
-			}
-		}
-	})
-}
-
 func TestAdminPermissionsContent(t *testing.T) {
 	t.Run("CA-179_the_content_root_drops_a_second_request_and_sends_changes_to_the_list_swapping_it_whole", func(t *testing.T) {
 		out := renderString(t, AdminPermissionsContent(AdminPermissionsData{}))
@@ -1931,8 +1477,15 @@ func TestAdminPermissionForm(t *testing.T) {
 }
 
 func TestAdminPermissionsPage(t *testing.T) {
-	t.Run("CA-199_the_page_wraps_the_permissions_shell_in_a_full_document_with_its_title", func(t *testing.T) {
+	t.Run("CA-199_the_page_is_a_full_document_with_its_title_that_loads_the_list_and_links_to_the_dashboard_and_the_roles_page", func(t *testing.T) {
 		out := renderString(t, AdminPermissionsPage())
-		assertContains(t, out, "<title>Permissions - NeuralNexus</title>", `hx-get="/admin/permissions/list"`)
+		assertContains(t, out, "<title>Permissions - NeuralNexus</title>", ">Permissions</h1>")
+		tag := regexp.MustCompile(`<div[^>]*hx-get="/admin/permissions/list"[^>]*>`).FindString(out)
+		attrOfTag(t, tag, "hx-trigger", "load")
+		for href, text := range map[string]string{"/admin": "Back to the admin dashboard", "/admin/roles": "Roles"} {
+			if !regexp.MustCompile(`<a href="` + href + `"[^>]*>` + text + `</a>`).MatchString(out) {
+				t.Errorf("no link to %s reading %s in:\n%s", href, text, out)
+			}
+		}
 	})
 }

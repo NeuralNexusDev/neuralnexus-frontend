@@ -17,11 +17,13 @@ func steamOpenIDLoginURL() string {
 var STEAM_OPENID_LOGIN_URL = steamOpenIDLoginURL()
 
 templ WrapContents(contents templ.Component) {
-	@WrapContentsWithHead("NeuralNexus", nil, contents)
+	@WrapContentsWithHead("NeuralNexus", nil) {
+		@contents
+	}
 }
 
-// WrapContentsWithHead renders the page layout around contents, with a title and extra head content, which can be nil.
-templ WrapContentsWithHead(title string, head templ.Component, contents templ.Component) {
+// WrapContentsWithHead renders the page layout around its children, with a title and extra head content, which can be nil.
+templ WrapContentsWithHead(title string, head templ.Component) {
 	<!DOCTYPE html>
 	<html lang="en">
 		<head>
@@ -46,7 +48,7 @@ templ WrapContentsWithHead(title string, head templ.Component, contents templ.Co
 			<div hidden id="steam-openid-login-url">{ STEAM_OPENID_LOGIN_URL }</div>
 			@Header()
 			<main id="main" tabindex="-1" class="focus:outline-none relative isolate px-6 pt-14 lg:px-8">
-				@contents
+				{ children... }
 			</main>
 		</body>
 	</html>
@@ -269,7 +271,9 @@ templ BeeNameGeneratorAdminLink() {
 
 // BeeNameGeneratorPage serves the bee name generator in the site layout, with htmx for the review link.
 templ BeeNameGeneratorPage() {
-	@htmxPage("Bee name generator - NeuralNexus", BeeNameGenerator())
+	@htmxPage("Bee name generator - NeuralNexus") {
+		@BeeNameGenerator()
+	}
 }
 
 // BeeNameGeneratorAdmin renders the shell of the suggestion review page, which loads the pending suggestions.
@@ -324,7 +328,9 @@ templ BeeSuggestions(d BeeSuggestionsData) {
 
 // BeeNameGeneratorAdminPage serves the suggestion review shell, which loads the suggestions.
 templ BeeNameGeneratorAdminPage() {
-	@htmxPage("Bee name review - NeuralNexus", BeeNameGeneratorAdmin())
+	@htmxPage("Bee name review - NeuralNexus") {
+		@BeeNameGeneratorAdmin()
+	}
 }
 
 templ McStatus() {

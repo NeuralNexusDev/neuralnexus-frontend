@@ -45,8 +45,10 @@ templ htmxHead() {
 	<script src={ htmxURL } integrity={ htmxIntegrity } crossorigin="anonymous" defer></script>
 }
 
-templ htmxPage(title string, contents templ.Component) {
-	@WrapContentsWithHead(title, htmxHead(), contents)
+templ htmxPage(title string) {
+	@WrapContentsWithHead(title, htmxHead()) {
+		{ children... }
+	}
 }
 
 templ pageShell(width string, statusID string, loadPath string) {

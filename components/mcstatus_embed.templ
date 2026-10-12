@@ -113,7 +113,9 @@ func (d McStatusEmbedData) Description() string {
 
 // McStatusEmbedPage renders the status checker with link-preview tags for data.
 templ McStatusEmbedPage(data McStatusEmbedData) {
-	@WrapContentsWithHead(data.DisplayHost(), mcStatusEmbedHead(data), McStatus())
+	@WrapContentsWithHead(data.DisplayHost(), mcStatusEmbedHead(data)) {
+		@McStatus()
+	}
 }
 
 templ mcStatusEmbedHead(data McStatusEmbedData) {

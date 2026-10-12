@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/a-h/templ"
 	"github.com/p0t4t0sandwich/neuralnexus-frontend/test/testutil"
 )
 
@@ -48,8 +47,8 @@ func TestHTMXHead(t *testing.T) {
 }
 
 func TestHTMXPage(t *testing.T) {
-	t.Run("CU-02_the_page_wraps_the_contents_in_the_layout_and_adds_the_htmx_head", func(t *testing.T) {
-		out := renderString(t, htmxPage("Users - NeuralNexus", templ.Raw(`<p id="marker">hello</p>`)))
+	t.Run("CU-02_the_page_wraps_its_children_in_the_layout_and_adds_the_htmx_head", func(t *testing.T) {
+		out := renderWithChild(t, htmxPage("Users - NeuralNexus"), `<p id="marker">hello</p>`)
 		if !strings.HasPrefix(strings.ToLower(out), "<!doctype html>") {
 			t.Errorf("output starts %q, want a doctype", out[:min(len(out), 40)])
 		}
@@ -57,8 +56,8 @@ func TestHTMXPage(t *testing.T) {
 		assertInOrder(t, out, "<head>", `name="htmx-config"`, `src="/public/js/htmx-glue.js"`, "</head>", "<body", `<main id="main"`, `<p id="marker">hello</p>`, "</main>")
 	})
 
-	t.Run("CU-03_a_title_with_markup_is_escaped_and_the_contents_component_is_not", func(t *testing.T) {
-		out := renderString(t, htmxPage("<b>A</b> & \"B\"", templ.Raw(`<i>x</i>`)))
+	t.Run("CU-03_a_title_with_markup_is_escaped_and_the_children_are_not", func(t *testing.T) {
+		out := renderWithChild(t, htmxPage("<b>A</b> & \"B\""), `<i>x</i>`)
 		for _, want := range []string{`<title>&lt;b&gt;A&lt;/b&gt; &amp; &#34;B&#34;</title>`, `<i>x</i>`} {
 			if !strings.Contains(out, want) {
 				t.Errorf("output lacks %q:\n%s", want, out)
