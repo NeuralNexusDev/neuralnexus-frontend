@@ -339,28 +339,6 @@ func TestAdminRoleDataDraft(t *testing.T) {
 	})
 }
 
-func TestAdminUserRowsPath(t *testing.T) {
-	t.Run("CA-024_without_a_search_the_path_carries_only_the_offset", func(t *testing.T) {
-		for offset, want := range map[int]string{0: "/admin/users/rows?offset=0", 200: "/admin/users/rows?offset=200"} {
-			if got := adminUserRowsPath(offset, ""); got != want {
-				t.Errorf("adminUserRowsPath(%d, ) = %q, want %q", offset, got, want)
-			}
-		}
-	})
-
-	t.Run("CA-025_a_search_is_added_after_the_offset", func(t *testing.T) {
-		if got := adminUserRowsPath(400, "bob"); got != "/admin/users/rows?offset=400&search=bob" {
-			t.Errorf("adminUserRowsPath = %q", got)
-		}
-	})
-
-	t.Run("CA-026_a_search_with_reserved_characters_is_query_escaped", func(t *testing.T) {
-		if got := adminUserRowsPath(200, "a b&c=d#é"); got != "/admin/users/rows?offset=200&search=a+b%26c%3Dd%23%C3%A9" {
-			t.Errorf("adminUserRowsPath = %q", got)
-		}
-	})
-}
-
 var pathEscapes = []struct{ id, escaped string }{
 	{"a/b", "a%2Fb"},
 	{"a b", "a%20b"},
@@ -427,32 +405,6 @@ func TestAdminRolePermissionPath(t *testing.T) {
 	})
 }
 
-func TestAdminRoleNameLookup(t *testing.T) {
-	t.Run("CA-033_a_role_in_the_name_map_is_shown_by_its_name", func(t *testing.T) {
-		if got := adminRoleName(map[string]string{"r1": "Moderator"}, "r1"); got != "Moderator" {
-			t.Errorf("adminRoleName = %q", got)
-		}
-	})
-
-	t.Run("CA-034_a_role_missing_from_the_map_or_a_nil_map_is_shown_by_its_ID", func(t *testing.T) {
-		cases := []struct {
-			name  string
-			names map[string]string
-			id    string
-		}{
-			{"missing_role", map[string]string{"r1": "Moderator"}, "r2"},
-			{"nil_map", nil, "r1"},
-		}
-		for _, tc := range cases {
-			t.Run("CA-034_"+tc.name, func(t *testing.T) {
-				if got := adminRoleName(tc.names, tc.id); got != tc.id {
-					t.Errorf("adminRoleName = %q, want %q", got, tc.id)
-				}
-			})
-		}
-	})
-}
-
 func TestAdminUsername(t *testing.T) {
 	t.Run("CA-035_a_username_is_shown_as_it_is", func(t *testing.T) {
 		if got := adminUsername("Bob"); got != "Bob" {
@@ -463,32 +415,6 @@ func TestAdminUsername(t *testing.T) {
 	t.Run("CA-036_an_account_without_a_username_is_shown_as_No_username", func(t *testing.T) {
 		if got := adminUsername(""); got != "No username" {
 			t.Errorf("adminUsername = %q", got)
-		}
-	})
-}
-
-func TestAdminLinkName(t *testing.T) {
-	t.Run("CA-037_a_linked_account_is_named_by_its_platform_username", func(t *testing.T) {
-		if got := adminLinkName(LinkedAccount{PlatformUsername: "bob#1", PlatformID: "123"}); got != "bob#1" {
-			t.Errorf("adminLinkName = %q", got)
-		}
-	})
-
-	t.Run("CA-038_without_a_platform_username_the_platform_ID_names_the_account", func(t *testing.T) {
-		cases := []struct {
-			name string
-			link LinkedAccount
-			want string
-		}{
-			{"platform_id", LinkedAccount{PlatformID: "123"}, "123"},
-			{"empty", LinkedAccount{}, ""},
-		}
-		for _, tc := range cases {
-			t.Run("CA-038_"+tc.name, func(t *testing.T) {
-				if got := adminLinkName(tc.link); got != tc.want {
-					t.Errorf("adminLinkName = %q, want %q", got, tc.want)
-				}
-			})
 		}
 	})
 }
@@ -796,6 +722,54 @@ func TestAdminUserRows(t *testing.T) {
 		assertText(t, out, "admin-users-more-button", "Load more")
 	})
 
+	t.Run("CA-200_the_Load_more_path_carries_the_offset_and_adds_a_search_after_it", func(t *testing.T) {
+		cases := []struct {
+			name   string
+			offset int
+			search string
+			want   string
+		}{
+			{"offset_0", 0, "", "/admin/users/rows?offset=0"},
+			{"offset_200", 200, "", "/admin/users/rows?offset=200"},
+			{"search", 400, "bob", "/admin/users/rows?offset=400&search=bob"},
+		}
+		for _, tc := range cases {
+			t.Run("CA-200_"+tc.name, func(t *testing.T) {
+				out := renderString(t, AdminUserRows(AdminUsersData{More: true, NextOffset: tc.offset, Search: tc.search}))
+				assertAttr(t, out, "admin-users-more-button", "hx-get", tc.want)
+			})
+		}
+	})
+
+	t.Run("CA-201_a_search_with_reserved_characters_is_query_escaped_in_the_Load_more_path", func(t *testing.T) {
+		out := renderString(t, AdminUserRows(AdminUsersData{More: true, NextOffset: 200, Search: "a b&c=d#é"}))
+		assertAttr(t, out, "admin-users-more-button", "hx-get", "/admin/users/rows?offset=200&search=a+b%26c%3Dd%23%C3%A9")
+	})
+
+	t.Run("CA-202_a_role_in_the_name_map_is_shown_by_its_name", func(t *testing.T) {
+		out := renderString(t, AdminUserRows(AdminUsersData{Users: []UserAccount{{UserID: "u1", Username: "A", Roles: []string{"r1"}}}, RoleNames: map[string]string{"r1": "Moderator"}}))
+		assertContains(t, out, ">Moderator</span>")
+		assertLacks(t, out, ">r1</span>")
+	})
+
+	t.Run("CA-203_a_role_missing_from_the_map_or_a_nil_map_is_shown_by_its_ID", func(t *testing.T) {
+		cases := []struct {
+			name  string
+			names map[string]string
+			id    string
+		}{
+			{"missing_role", map[string]string{"r1": "Moderator"}, "r2"},
+			{"nil_map", nil, "r1"},
+		}
+		for _, tc := range cases {
+			t.Run("CA-203_"+tc.name, func(t *testing.T) {
+				out := renderString(t, AdminUserRows(AdminUsersData{Users: []UserAccount{{UserID: "u1", Username: "A", Roles: []string{tc.id}}}, RoleNames: tc.names}))
+				assertContains(t, out, ">"+tc.id+"</span>")
+				assertLacks(t, out, "Moderator")
+			})
+		}
+	})
+
 	t.Run("CA-074_without_more_users_there_is_no_Load_more_row", func(t *testing.T) {
 		assertLacks(t, renderString(t, AdminUserRows(AdminUsersData{Users: three[:2]})), `id="admin-users-more"`)
 	})
@@ -1060,6 +1034,25 @@ func TestAdminUserLinks(t *testing.T) {
 		}
 		assertInOrder(t, list, ">discord</span>", ">bob#1</span>", ">twitch</span>", ">42</span>")
 		assertLacks(t, out, `id="admin-user-links-error"`, `id="admin-user-links-empty"`)
+	})
+
+	t.Run("CA-204_a_linked_account_without_a_platform_username_is_named_by_its_platform_ID", func(t *testing.T) {
+		cases := []struct {
+			name string
+			link LinkedAccount
+			want string
+		}{
+			{"username", LinkedAccount{Platform: "discord", PlatformUsername: "bob#1", PlatformID: "123"}, ">bob#1</span>"},
+			{"platform_id", LinkedAccount{Platform: "discord", PlatformID: "123"}, ">123</span>"},
+		}
+		for _, tc := range cases {
+			t.Run("CA-204_"+tc.name, func(t *testing.T) {
+				out := renderString(t, adminUserLinks(AdminUserData{Links: []LinkedAccount{tc.link}}))
+				assertContains(t, out, tc.want)
+			})
+		}
+		out := renderString(t, adminUserLinks(AdminUserData{Links: []LinkedAccount{{Platform: "discord"}}}))
+		assertContains(t, out, `truncate"></span>`)
 	})
 
 	t.Run("CA-105_a_user_with_no_links_shows_the_empty_note", func(t *testing.T) {

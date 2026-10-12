@@ -197,14 +197,6 @@ const (
 	permissionNodeHelp = "Lower-case words of letters, digits and underscores joined by dots"
 )
 
-func adminUserRowsPath(offset int, search string) string {
-	query := url.Values{"offset": {strconv.Itoa(offset)}}
-	if search != "" {
-		query.Set("search", search)
-	}
-	return "/admin/users/rows?" + query.Encode()
-}
-
 func adminUserPath(id string) string {
 	return "/admin/users/" + url.PathEscape(id)
 }
@@ -217,25 +209,11 @@ func adminRolePermissionPath(roleID string, permissionID string) string {
 	return adminRolePath(roleID) + "/permissions/" + url.PathEscape(permissionID)
 }
 
-func adminRoleName(names map[string]string, id string) string {
-	if name, ok := names[id]; ok {
-		return name
-	}
-	return id
-}
-
 func adminUsername(username string) string {
 	if username == "" {
 		return "No username"
 	}
 	return username
-}
-
-func adminLinkName(link LinkedAccount) string {
-	if link.PlatformUsername != "" {
-		return link.PlatformUsername
-	}
-	return link.PlatformID
 }
 
 // AdminDashboardLink is the link from the account page to the admin dashboard.
@@ -377,7 +355,11 @@ templ AdminUserRows(d AdminUsersData) {
 				if len(user.Roles) > 0 {
 					<span class="mt-2 flex flex-wrap gap-2">
 						for _, roleID := range user.Roles {
-							<span class={ chipClass }>{ adminRoleName(d.RoleNames, roleID) }</span>
+							if name, ok := d.RoleNames[roleID]; ok {
+								<span class={ chipClass }>{ name }</span>
+							} else {
+								<span class={ chipClass }>{ roleID }</span>
+							}
 						}
 					</span>
 				}
@@ -402,7 +384,11 @@ templ AdminUserRows(d AdminUsersData) {
 				id="admin-users-more-button"
 				type="button"
 				autofocus?={ d.FocusFirst && len(d.Users) == 0 }
-				hx-get={ adminUserRowsPath(d.NextOffset, d.Search) }
+				if d.Search == "" {
+					hx-get={ "/admin/users/rows?offset=" + strconv.Itoa(d.NextOffset) }
+				} else {
+					hx-get={ "/admin/users/rows?" + url.Values{"offset": {strconv.Itoa(d.NextOffset)}, "search": {d.Search}}.Encode() }
+				}
 				hx-target="#admin-users-more"
 				hx-swap="outerHTML"
 				hx-sync="this:drop"
@@ -523,7 +509,13 @@ templ adminUserLinks(d AdminUserData) {
 				for _, link := range d.Links {
 					<li class="flex justify-between gap-3 rounded-md border border-input px-3 py-2">
 						<span class="font-medium capitalize">{ link.Platform }</span>
-						<span class={ mutedClass + " min-w-0 truncate" }>{ adminLinkName(link) }</span>
+						<span class={ mutedClass + " min-w-0 truncate" }>
+							if link.PlatformUsername != "" {
+								{ link.PlatformUsername }
+							} else {
+								{ link.PlatformID }
+							}
+						</span>
 					</li>
 				}
 			</ul>
@@ -605,20 +597,15 @@ templ AdminRolesPage() {
 	@htmxPage("Roles - NeuralNexus", adminRoles())
 }
 
-func valueInputType(valueType string) string {
-	if valueType == "int" {
-		return "number"
-	}
-	return "text"
-}
-
 templ adminValueField(permission Permission, value string, name string) {
 	switch permission.ValueType {
 		case "int", "string":
 			<input
-				type={ valueInputType(permission.ValueType) }
 				if permission.ValueType == "int" {
+					type="number"
 					step="1"
+				} else {
+					type="text"
 				}
 				name={ name }
 				value={ value }
