@@ -124,6 +124,54 @@ test.describe('contrast', () => {
   }
 });
 
+test.describe('header control contrast', () => {
+  const RED_600 = 'oklch(0.577 0.245 27.325)';
+  const RED_700 = 'oklch(0.505 0.213 27.518)';
+  const controls = [
+    { name: 'light/dark toggle', minimum: 3, signedIn: false, locator: (page) => page.locator('button[onclick="toggleTheme()"]') },
+    { name: 'Login', minimum: 4.5, signedIn: false, locator: (page) => page.locator('#header-login-btn a') },
+    { name: 'Logout', minimum: 4.5, signedIn: true, locator: (page) => page.locator('#header-logout-btn button') },
+    { name: 'gear', minimum: 3, signedIn: true, locator: (page) => page.locator('#header-account a[href="/account"]') },
+  ];
+
+  const ratio = async (page, locator) => {
+    const fill = (await rgba(page, await computed(locator, 'backgroundColor'))).slice(0, 3);
+    const text = await rgba(page, await computed(locator, 'color'));
+    return contrastRatio(blend(text, fill), fill);
+  };
+
+  for (const colorScheme of schemes) {
+    for (const control of controls) {
+      test(`AX-19 the ${control.name} text or icon is at least ${control.minimum}:1 against red-600 at rest in the ${colorScheme} theme`, async ({ page }) => {
+        await page.emulateMedia({ colorScheme });
+        await page.addInitScript((theme) => localStorage.setItem('theme', theme), colorScheme);
+        await page.route(`${process.env.NN_API_URL}/api/v1/users/me`, (route) =>
+          control.signedIn ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ username: 'alice' }) }) : route.fulfill({ status: 401 }),
+        );
+        await page.goto('/');
+        const target = control.locator(page);
+        await expect(target).toBeVisible();
+        await expect.poll(() => computed(target, 'backgroundColor')).toBe(RED_600);
+        expect(await ratio(page, target)).toBeGreaterThanOrEqual(control.minimum);
+      });
+
+      test(`AX-20 the ${control.name} text or icon is at least ${control.minimum}:1 against red-700 on hover in the ${colorScheme} theme`, async ({ page }) => {
+        await page.emulateMedia({ colorScheme });
+        await page.addInitScript((theme) => localStorage.setItem('theme', theme), colorScheme);
+        await page.route(`${process.env.NN_API_URL}/api/v1/users/me`, (route) =>
+          control.signedIn ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ username: 'alice' }) }) : route.fulfill({ status: 401 }),
+        );
+        await page.goto('/');
+        const target = control.locator(page);
+        await expect(target).toBeVisible();
+        await target.hover();
+        await expect.poll(() => computed(target, 'backgroundColor')).toBe(RED_700);
+        expect(await ratio(page, target)).toBeGreaterThanOrEqual(control.minimum);
+      });
+    }
+  }
+});
+
 test.describe('focus ring', () => {
   for (const colorScheme of schemes) {
     test(`AX-06 a text field and a button show a focus ring from the keyboard and not from the mouse, at least 3:1 against the page in the ${colorScheme} theme`, async ({ page }) => {
