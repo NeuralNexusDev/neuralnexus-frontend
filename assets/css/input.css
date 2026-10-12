@@ -92,6 +92,10 @@
         @apply border-border;
     }
 
+    button:not(:disabled):not([aria-busy='true']) {
+        cursor: pointer;
+    }
+
     [aria-busy='true'] {
         cursor: progress;
     }
