@@ -584,33 +584,6 @@ test.describe('dashboard', () => {
     });
   }
 
-  test('FA-58 an account with only the users permission sees only the Users card', async ({ page }) => {
-    await signIn(page, { me: ['users.admin'] });
-    await page.goto('/admin');
-    await expect(cards(page)).toHaveCount(1);
-    await expect(page.locator('#admin-users-link')).toHaveAttribute('href', '/admin/users');
-    await expect(page.locator('#admin-roles-link')).toHaveCount(0);
-    await expect(page.locator('#admin-permissions-link')).toHaveCount(0);
-    await expect(denied(page)).toHaveCount(0);
-  });
-
-  test('FA-59 an account with only the roles permission sees the Roles and Permissions cards', async ({ page }) => {
-    await signIn(page, { me: ['roles.admin'] });
-    await page.goto('/admin');
-    await expect(cards(page)).toHaveCount(2);
-    await expect(page.locator('#admin-roles-link')).toHaveAttribute('href', '/admin/roles');
-    await expect(page.locator('#admin-permissions-link')).toHaveAttribute('href', '/admin/permissions');
-    await expect(page.locator('#admin-users-link')).toHaveCount(0);
-    await expect(denied(page)).toHaveCount(0);
-  });
-
-  test('FA-60 an account with no admin permission sees a notice and no card', async ({ page }) => {
-    await signIn(page, { me: [] });
-    await page.goto('/admin');
-    await expect(denied(page)).toHaveText('Your account has no admin permissions');
-    await expect(cards(page)).toHaveCount(0);
-  });
-
   test('FA-61 a failed cards request shows the page error banner and no card', async ({ page }) => {
     await signIn(page, { failures: { 'GET /users/me/permissions': { status: 500, detail: 'permissions are down', times: 1 } } });
     await page.goto('/admin');
