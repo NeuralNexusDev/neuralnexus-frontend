@@ -77,11 +77,10 @@ The announcements of a page load for a normal answer, an error status and a serv
 
 ## Code the rows do not reach
 
-The suite was run against htmx-glue.js with V8 coverage. Every place a mutation run left unnoticed is reached by a row above: line 18 by HG-01, line 74 by HG-02, line 90 by HG-10, line 103 by HG-24, line 126 by HG-25, line 170 by HG-40 and HG-41, line 213 by HG-51 and HG-52, line 215 by HG-51, line 227 by HG-31, HG-32 and HG-35, line 233 by HG-33 and HG-34, line 248 by HG-31, line 252 by HG-36 and line 270 by HG-60, HG-61 and HG-05. Lines the rows cannot reach:
+The suite was run against htmx-glue.js with V8 coverage. Every place a mutation run left unnoticed is reached by a row above: line 18 by HG-01, line 74 by HG-02, line 90 by HG-10, line 103 by HG-24, line 126 by HG-25, line 170 by HG-40 and HG-41, line 211 by HG-51 and HG-52, line 213 by HG-51, line 225 by HG-31, HG-32 and HG-35, line 231 by HG-33 and HG-34, line 246 by HG-31, line 250 by HG-36 and line 268 by HG-60, HG-61 and HG-05. Lines the rows cannot reach:
 
 - Line 56, the `?? 1` default of `clearBusy`, since `clearBusy` always follows a `markBusy` of the same element.
 - Lines 108 to 110, the `catch` around `selectionStart`, since Chromium returns null for a field that has no caret and does not throw.
 - Lines 130 to 132, a typed field the new markup no longer has, and lines 150 to 156, a region without a status line or with a missing one. No page redraws a region without its fields or its status.
 - Lines 163 to 165, an `htmx:finally:request` without a request of the glue. That happens when a confirm is dismissed, which the flows tests of FA do.
-- Line 202, `if (statusID)`. Without a status id the next line looks up an element with the id `undefined` and finds none, so removing the test changes nothing.
 - The `request &&` and the `hx-sync` tests of line 90 are always true when a swap is late, since a late swap only comes from the search box and the grant select, which both have `hx-sync` `this:replace`; every other element drops a second request before the glue sees it.
