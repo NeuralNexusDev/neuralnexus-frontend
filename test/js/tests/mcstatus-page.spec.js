@@ -803,7 +803,7 @@ test.describe('superseded lookups', () => {
     await expect(page.locator('#mc-status-submit')).toHaveText('Check');
   });
 
-  test('MP-42 aborting a lookup frees the button and its late answer shows nothing, and aborting with none is harmless', async ({ page }) => {
+  test('MP-42 aborting a lookup cancels its request, frees the button and its late answer shows nothing, and aborting with none is harmless', async ({ page }) => {
     let release;
     const released = new Promise((resolve) => {
       release = resolve;
@@ -814,14 +814,23 @@ test.describe('superseded lookups', () => {
     });
     const thrown = [];
     page.on('pageerror', (failure) => thrown.push(failure.message));
+    const failed = [];
+    page.on('requestfailed', (request) => {
+      if (request.url().includes('/mcstatus/')) {
+        failed.push({ url: request.url(), reason: request.failure().errorText });
+      }
+    });
     await page.goto(PAGE);
     await page.evaluate(() => abortMcStatus());
     await expect(page.locator('#mc-status-submit')).toHaveText('Check');
+    expect(failed).toEqual([]);
 
     await lookup(page, 'held.example.net');
     await expect(page.locator('#mc-status-submit')).toHaveText('Checking...');
     await page.evaluate(() => abortMcStatus());
     await expect(page.locator('#mc-status-submit')).toHaveText('Check');
+    await expect.poll(() => failed.map((entry) => entry.reason)).toEqual(['net::ERR_ABORTED']);
+    expect(failed[0].url).toContain('/mcstatus/held.example.net');
     release();
     await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 100)));
     await expect(page.locator('#mc-status-result')).toBeHidden();
