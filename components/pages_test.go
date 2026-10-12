@@ -1072,7 +1072,7 @@ func TestOAuthButtons(t *testing.T) {
 		{"xboxlive", "xbox-oauth", "Xbox Live", "/public/XboxSymbolWhite.svg", "Xbox Logo"},
 	}
 
-	t.Run("CP-94_each_provider_has_an_anchor_that_starts_the_login_for_its_own_provider", func(t *testing.T) {
+	t.Run("CP-94_each_provider_has_a_button_that_starts_the_login_for_its_own_provider", func(t *testing.T) {
 		out := renderString(t, OAuthButtons("Login with"))
 		var ids []string
 		for _, p := range providers {
@@ -1094,7 +1094,7 @@ func TestOAuthButtons(t *testing.T) {
 				t.Run("CP-95_"+strings.ReplaceAll(prefix, " ", "_")+"_"+p.id, func(t *testing.T) {
 					tag := testutil.TagByID(out, p.element)
 					block := out[strings.Index(out, tag):]
-					block = block[:strings.Index(block, "</a>")]
+					block = block[:strings.Index(block, "</button>")]
 					assertContains(t, block, `<span class="mr-2 text-white">`+prefix+" "+p.label+"</span>")
 					img := regexp.MustCompile(`<img[^>]*>`).FindString(block)
 					if got, _ := tagAttr(img, "src"); got != p.icon {
@@ -1108,7 +1108,7 @@ func TestOAuthButtons(t *testing.T) {
 		}
 	})
 
-	t.Run("CP-96_every_provider_anchor_has_the_hidden_element_it_reads", func(t *testing.T) {
+	t.Run("CP-96_every_provider_button_has_the_hidden_element_it_reads", func(t *testing.T) {
 		out := renderString(t, OAuthButtons("Login with"))
 		for _, p := range providers {
 			t.Run("CP-96_"+p.id, func(t *testing.T) {
@@ -1118,7 +1118,7 @@ func TestOAuthButtons(t *testing.T) {
 		}
 	})
 
-	t.Run("CP-97_Steam_has_its_own_sign_in_link_with_no_base_element", func(t *testing.T) {
+	t.Run("CP-97_Steam_has_its_own_sign_in_button_with_no_base_element", func(t *testing.T) {
 		out := renderString(t, OAuthButtons("Login with"))
 		assertAttr(t, out, "steam-oauth", "onclick", "startOAuthLogin('steam', null); return false;")
 		inner, _ := innerHTML(out, "steam-oauth")
@@ -1130,6 +1130,36 @@ func TestOAuthButtons(t *testing.T) {
 			t.Errorf("img alt = %q", got)
 		}
 		assertLacks(t, out, "steam-oauth-base")
+	})
+
+	t.Run("CP-123_each_sign_in_is_one_button_with_an_accessible_name_and_no_link", func(t *testing.T) {
+		out := renderString(t, OAuthButtons("Login with"))
+		assertLacks(t, out, "<a ", "href=")
+		if got := strings.Count(out, "<button"); got != len(providers)+1 {
+			t.Errorf("opening buttons = %d, want %d", got, len(providers)+1)
+		}
+		if got := strings.Count(out, "</button>"); got != len(providers)+1 {
+			t.Errorf("closing buttons = %d, want %d", got, len(providers)+1)
+		}
+		for _, p := range providers {
+			t.Run("CP-123_"+p.id, func(t *testing.T) {
+				tag := testutil.TagByID(out, p.element)
+				if !strings.HasPrefix(tag, "<button") {
+					t.Errorf("tag = %s, want a button", tag)
+				}
+				assertAttr(t, out, p.element, "type", "button")
+				block := out[strings.Index(out, tag):]
+				block = block[:strings.Index(block, "</button>")]
+				assertContains(t, block, `<span class="mr-2 text-white">Login with `+p.label+"</span>")
+			})
+		}
+		t.Run("CP-123_steam", func(t *testing.T) {
+			tag := testutil.TagByID(out, "steam-oauth")
+			if !strings.HasPrefix(tag, "<button") {
+				t.Errorf("tag = %s, want a button", tag)
+			}
+			assertAttr(t, out, "steam-oauth", "type", "button")
+		})
 	})
 }
 

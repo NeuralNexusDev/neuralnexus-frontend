@@ -72,17 +72,16 @@ templ oauthBases(prefix string) {
 templ OAuthButtons(labelPrefix string) {
 	@oauthBases("")
 	for i, provider := range oauthProviders {
-		<a
-			href=""
+		<button
+			type="button"
 			id={ provider.ElementID }
 			data-provider={ provider.ID }
 			onclick="startOAuthLogin(this.dataset.provider, document.getElementById(this.dataset.provider + '-oauth-base').innerText); return false;"
+			class={ buttonBaseClass + " " + provider.Background + " " + provider.Hover + " ring-offset-background focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full" }
 		>
-			<button class={ buttonBaseClass + " " + provider.Background + " " + provider.Hover + " ring-offset-background focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full" }>
-				<span class="mr-2 text-white">{ labelPrefix + " " + provider.Label }</span>
-				<img src={ provider.Icon } alt={ provider.Alt } class="w-6 h-6 mr-2"/>
-			</button>
-		</a>
+			<span class="mr-2 text-white">{ labelPrefix + " " + provider.Label }</span>
+			<img src={ provider.Icon } alt={ provider.Alt } class="w-6 h-6 mr-2"/>
+		</button>
 		if i < len(oauthProviders)-1 {
 			<div class="mt-2"></div>
 		}
@@ -103,9 +102,9 @@ templ OAuthButtons(labelPrefix string) {
 		</a>
 	}
 	<div class="mt-2 flex justify-center">
-		<a href="" id="steam-oauth" onclick="startOAuthLogin('steam', null); return false;">
+		<button type="button" id="steam-oauth" class="cursor-pointer" onclick="startOAuthLogin('steam', null); return false;">
 			<img src="/public/SteamSignIn.png" alt="Sign in through Steam"/>
-		</a>
+		</button>
 	</div>
 }
 
