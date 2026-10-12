@@ -269,6 +269,7 @@ test.describe('bee page', () => {
     await expect(page.locator('#get-bee-name')).toHaveText('Queen Buzzabelle');
 
     await page.locator('#get-bee-button').click();
+    await expect(nameStatus(page)).toBeVisible();
     await expect(nameStatus(page)).toHaveText("Couldn't get a name, please try again.");
     await expect(page.locator('#get-bee-name')).toHaveText('Queen Buzzabelle');
     await expect(page.locator('#get-bee-button')).toBeEnabled();
@@ -280,6 +281,7 @@ test.describe('bee page', () => {
     await page.goto('/project/bee-name-generator');
 
     await submit(page, 'royal jelly/queen?');
+    await expect(suggestStatus(page)).toBeVisible();
     await expect(suggestStatus(page)).toHaveText('Thanks for the suggestion!');
     await expect(page.locator('#suggest-bee-name')).toHaveValue('');
     await expect(page.locator('#suggest-bee-button')).toBeEnabled();
@@ -295,6 +297,7 @@ test.describe('bee page', () => {
     await page.goto('/project/bee-name-generator');
 
     await submit(page, 'wax');
+    await expect(suggestStatus(page)).toBeVisible();
     await expect(suggestStatus(page)).toHaveText("Couldn't submit that, please try again.");
     await expect(page.locator('#suggest-bee-name')).toHaveValue('wax');
     await expect(page.locator('#suggest-bee-button')).toBeEnabled();
@@ -306,6 +309,7 @@ test.describe('bee page', () => {
     await page.goto('/project/bee-name-generator');
 
     await submit(page, 'wax');
+    await expect(suggestStatus(page)).toBeVisible();
     await expect(suggestStatus(page)).toHaveText("Couldn't submit that, please try again.");
     await expect(page.locator('#suggest-bee-name')).toHaveValue('wax');
     await expect(page.locator('#suggest-bee-button')).toBeEnabled();
@@ -324,6 +328,7 @@ test.describe('bee page', () => {
       await page.locator('form[onsubmit]').evaluate((form) => (form.noValidate = true));
 
       await submit(page, text);
+      await expect(suggestStatus(page)).toBeVisible();
       await expect(suggestStatus(page)).toHaveText('Please enter a valid name.');
       await expect(page.locator('#suggest-bee-button')).toBeEnabled();
       expect(sent).toEqual([]);
