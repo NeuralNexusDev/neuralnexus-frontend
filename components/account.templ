@@ -240,5 +240,7 @@ templ accountPlatformIcon(platform string) {
 
 // AccountPage serves the account settings shell, which loads the profile, the sign-in setting and the connected accounts.
 templ AccountPage() {
-	@htmxPage("Account - NeuralNexus", Account())
+	@htmxPage("Account - NeuralNexus") {
+		@Account()
+	}
 }

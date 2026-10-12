@@ -287,7 +287,9 @@ templ AdminCards(d AdminDashboardData) {
 
 // AdminDashboardPage serves the admin dashboard shell, which loads its cards.
 templ AdminDashboardPage() {
-	@htmxPage("Admin - NeuralNexus", adminDashboard())
+	@htmxPage("Admin - NeuralNexus") {
+		@adminDashboard()
+	}
 }
 
 templ adminUsers() {
@@ -419,7 +421,9 @@ templ AdminUserRows(d AdminUsersData) {
 
 // AdminUsersPage serves the user list shell, which loads the list.
 templ AdminUsersPage() {
-	@htmxPage("Users - NeuralNexus", adminUsers())
+	@htmxPage("Users - NeuralNexus") {
+		@adminUsers()
+	}
 }
 
 templ adminUser(id string) {
@@ -557,7 +561,9 @@ templ AdminUserPermissions(d AdminUserData, oob bool) {
 
 // AdminUserPage serves the shell for the editor of one user account, which loads the editor.
 templ AdminUserPage(id string) {
-	@htmxPage("Edit user - NeuralNexus", adminUser(id))
+	@htmxPage("Edit user - NeuralNexus") {
+		@adminUser(id)
+	}
 }
 
 templ adminRoles() {
@@ -602,7 +608,9 @@ templ AdminRolesContent(d AdminRolesData) {
 
 // AdminRolesPage serves the role list shell, which loads the list.
 templ AdminRolesPage() {
-	@htmxPage("Roles - NeuralNexus", adminRoles())
+	@htmxPage("Roles - NeuralNexus") {
+		@adminRoles()
+	}
 }
 
 func valueInputType(valueType string) string {
@@ -823,7 +831,9 @@ templ AdminRoleGrantUnavailable() {
 
 // AdminRolePage serves the shell for the editor of one role, which loads the editor.
 templ AdminRolePage(id string) {
-	@htmxPage("Edit role - NeuralNexus", adminRole(id))
+	@htmxPage("Edit role - NeuralNexus") {
+		@adminRole(id)
+	}
 }
 
 templ adminPermissions() {
@@ -927,5 +937,7 @@ templ AdminPermissionForm(oob bool) {
 
 // AdminPermissionsPage serves the permission list shell, which loads the list and the create form.
 templ AdminPermissionsPage() {
-	@htmxPage("Permissions - NeuralNexus", adminPermissions())
+	@htmxPage("Permissions - NeuralNexus") {
+		@adminPermissions()
+	}
 }

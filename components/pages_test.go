@@ -133,10 +133,10 @@ func TestWrapContents(t *testing.T) {
 }
 
 func TestWrapContentsWithHead(t *testing.T) {
-	probe := templ.Raw(`<p id="probe">x</p>`)
+	const probeHTML = `<p id="probe">x</p>`
 
 	t.Run("CP-04_the_document_declares_its_type_language_encoding_viewport_and_shared_assets", func(t *testing.T) {
-		out := renderString(t, WrapContentsWithHead("T", nil, probe))
+		out := renderWithChild(t, WrapContentsWithHead("T", nil), probeHTML)
 		if !strings.HasPrefix(out, "<!doctype html>") {
 			t.Errorf("output starts %q, want <!doctype html>", out[:min(len(out), 30)])
 		}
@@ -150,7 +150,7 @@ func TestWrapContentsWithHead(t *testing.T) {
 	})
 
 	t.Run("CP-05_the_title_text_is_escaped", func(t *testing.T) {
-		out := renderString(t, WrapContentsWithHead("A<b>&\"x\"", nil, probe))
+		out := renderWithChild(t, WrapContentsWithHead("A<b>&\"x\"", nil), probeHTML)
 		assertContains(t, out, `<title>A&lt;b&gt;&amp;&#34;x&#34;</title>`)
 		if title := out[strings.Index(out, "<title>"):strings.Index(out, "</title>")]; strings.Contains(title, "<b>") {
 			t.Errorf("the title holds <b>: %q", title)
@@ -158,7 +158,7 @@ func TestWrapContentsWithHead(t *testing.T) {
 	})
 
 	t.Run("CP-06_the_skip_link_comes_first_and_targets_the_single_main_landmark", func(t *testing.T) {
-		out := renderString(t, WrapContentsWithHead("T", nil, probe))
+		out := renderWithChild(t, WrapContentsWithHead("T", nil), probeHTML)
 		body := out[strings.Index(out, "<body"):]
 		link := regexp.MustCompile(`<a[^>]*>`).FindString(body)
 		if href, _ := tagAttr(link, "href"); href != "#main" {
@@ -177,7 +177,7 @@ func TestWrapContentsWithHead(t *testing.T) {
 	})
 
 	t.Run("CP-122_the_skip_link_shows_only_on_focus_and_the_main_landmark_takes_focus_without_an_outline", func(t *testing.T) {
-		out := renderString(t, WrapContentsWithHead("T", nil, probe))
+		out := renderWithChild(t, WrapContentsWithHead("T", nil), probeHTML)
 		link := regexp.MustCompile(`<a[^>]*href="#main"[^>]*>`).FindString(out)
 		for _, want := range []string{"sr-only", "focus:not-sr-only", "focus:absolute", "focus:ring-2"} {
 			if !strings.Contains(link, want) {
@@ -193,12 +193,12 @@ func TestWrapContentsWithHead(t *testing.T) {
 	})
 
 	t.Run("CP-07_the_header_sits_before_main_and_the_contents_sit_inside_main", func(t *testing.T) {
-		out := renderString(t, WrapContentsWithHead("T", nil, probe))
+		out := renderWithChild(t, WrapContentsWithHead("T", nil), probeHTML)
 		assertInOrder(t, out, "<header", "<main", `id="probe"`, "</main>", "</body>")
 	})
 
 	t.Run("CP-08_the_API_base_URL_is_published_in_a_hidden_element_for_the_scripts", func(t *testing.T) {
-		out := renderString(t, WrapContentsWithHead("T", nil, probe))
+		out := renderWithChild(t, WrapContentsWithHead("T", nil), probeHTML)
 		assertFlag(t, out, "api-base-url", "hidden", true)
 		assertText(t, out, "api-base-url", "http://api.test")
 	})
@@ -207,13 +207,13 @@ func TestWrapContentsWithHead(t *testing.T) {
 		previous := STEAM_OPENID_LOGIN_URL
 		t.Cleanup(func() { STEAM_OPENID_LOGIN_URL = previous })
 		STEAM_OPENID_LOGIN_URL = "https://steam.test/openid?a=1&b=2"
-		out := renderString(t, WrapContentsWithHead("T", nil, probe))
+		out := renderWithChild(t, WrapContentsWithHead("T", nil), probeHTML)
 		assertFlag(t, out, "steam-openid-login-url", "hidden", true)
 		assertText(t, out, "steam-openid-login-url", "https://steam.test/openid?a=1&amp;b=2")
 	})
 
 	t.Run("CP-10_a_non_nil_head_component_renders_inside_the_head_and_nowhere_else", func(t *testing.T) {
-		out := renderString(t, WrapContentsWithHead("T", templ.Raw(`<meta name="probe" content="1">`), probe))
+		out := renderWithChild(t, WrapContentsWithHead("T", templ.Raw(`<meta name="probe" content="1">`)), probeHTML)
 		if n := strings.Count(out, `name="probe"`); n != 1 {
 			t.Errorf("the probe meta appears %d times, want 1", n)
 		}
@@ -221,7 +221,7 @@ func TestWrapContentsWithHead(t *testing.T) {
 	})
 
 	t.Run("CP-11_a_nil_head_renders_no_extra_head_content", func(t *testing.T) {
-		out := renderString(t, WrapContentsWithHead("T", nil, probe))
+		out := renderWithChild(t, WrapContentsWithHead("T", nil), probeHTML)
 		assertContains(t, out, `<script src="/public/js/theming.js"></script></head>`)
 	})
 }
