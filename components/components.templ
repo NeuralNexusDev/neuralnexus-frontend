@@ -1,18 +1,6 @@
 package components
 
-import (
-	"os"
-
-	"github.com/p0t4t0sandwich/neuralnexus-frontend/config"
-)
-
-func steamOpenIDLoginURL() string {
-	v := os.Getenv("STEAM_OPENID_LOGIN_URL")
-	if v == "" {
-		v = "https://steamcommunity.com/openid/login"
-	}
-	return v
-}
+import "github.com/p0t4t0sandwich/neuralnexus-frontend/config"
 
 var STEAM_OPENID_LOGIN_URL = steamOpenIDLoginURL()
 
@@ -253,12 +241,6 @@ templ BeeNameGeneratorPage() {
 			@pageLoad("/project/bee-name-generator/admin-link")
 		</div>
 	}
-}
-
-// BeeSuggestionsData is the list of bee name suggestions waiting for review.
-type BeeSuggestionsData struct {
-	Names     []string
-	FocusList bool
 }
 
 // BeeSuggestions renders the pending suggestions, which htmx swaps in after one is accepted or rejected.
