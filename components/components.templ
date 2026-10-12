@@ -55,20 +55,18 @@ templ WrapContentsWithHead(title string, head templ.Component) {
 }
 
 templ HomePage() {
-	@WrapContents(Home())
+	@WrapContentsWithHead("NeuralNexus", nil) {
+		@ErrorBanner()
+		<h1 class="text-4xl font-bold tracking-tight sm:text-6xl text-red-600">
+			NeuralNexus
+		</h1>
+		<script>
+			showAuthErrorFromQuery();
+		</script>
+	}
 }
 
-templ Home() {
-	@ErrorBanner()
-	<h1 class="text-4xl font-bold tracking-tight sm:text-6xl text-red-600">
-		NeuralNexus
-	</h1>
-	<script>
-		showAuthErrorFromQuery();
-	</script>
-}
-
-// ErrorBanner is revealed by showAuthErrorFromQuery(). OAuth errors land on Home
+// ErrorBanner is revealed by showAuthErrorFromQuery(). OAuth errors land on HomePage
 // rather than where the flow started, since the API can't trust that redirect_uri yet.
 templ ErrorBanner() {
 	<div id="auth-error" hidden class={ bannerClass + " mx-auto max-w-sm mb-4" }></div>
@@ -123,133 +121,22 @@ templ projectCard(href string, icon string, title string, description string) {
 	</a>
 }
 
-templ projectSection(title string, description string) {
-	<section class="space-y-4">
-		<div class="space-y-1">
-			<h2 class="text-2xl font-semibold">{ title }</h2>
-			<p class={ mutedSmallClass }>{ description }</p>
-		</div>
-		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-			{ children... }
-		</div>
-	</section>
-}
-
-templ Projects() {
-	<div class="mx-auto max-w-4xl space-y-10">
-		@pageHeading("Projects", "Things I've built and am still tinkering on")
-		@projectSection("The APIary", "REST APIs, each with a live demo to poke at") {
-			@projectCard("/project/bee-name-generator", "🐝", "Bee Name Generator", "Generate a random bee name, or suggest one of your own")
-			@projectCard("/project/mc-status", "⛏️", "MC Status", "Check whether a Minecraft server is online and who's playing")
-		}
-	</div>
-}
-
 templ ProjectsPage() {
-	@WrapContents(Projects())
-}
-
-// BeeNameGenerator renders the bee name generator: the button that draws a name and the form that suggests one.
-templ BeeNameGenerator() {
-	<script>
-		function getBeeName() {
-			const button = document.getElementById("get-bee-button");
-			const status = document.getElementById("get-bee-status");
-			button.disabled = true;
-			status.hidden = true;
-			fetch(`${apiBaseUrl()}/api/v1/bee-name-generator/name`)
-				.then((response) => {
-					if (!response.ok) {
-						throw new Error("Request failed");
-					}
-					return response.json();
-				})
-				.then((data) => {
-					document.getElementById("get-bee-name").innerText = data.name;
-				})
-				.catch(() => {
-					status.textContent = "Couldn't get a name, please try again.";
-					status.hidden = false;
-				})
-				.finally(() => {
-					button.disabled = false;
-				});
-		}
-
-		function suggestBeeName(event) {
-			event.preventDefault();
-			const input = document.getElementById("suggest-bee-name");
-			const button = document.getElementById("suggest-bee-button");
-			const status = document.getElementById("suggest-bee-status");
-			const name = input.value.trim();
-			if (!name || isDotSegment(name)) {
-				status.textContent = "Please enter a valid name.";
-				status.hidden = false;
-				return;
-			}
-			button.disabled = true;
-			fetch(
-				`${apiBaseUrl()}/api/v1/bee-name-generator/suggestion/${encodeURIComponent(name)}`,
-				{
-					method: "POST",
-				},
-			)
-				.then((response) => {
-					status.textContent = response.ok
-						? "Thanks for the suggestion!"
-						: "Couldn't submit that, please try again.";
-					status.hidden = false;
-					if (response.ok) {
-						input.value = "";
-					}
-				})
-				.catch(() => {
-					status.textContent = "Couldn't submit that, please try again.";
-					status.hidden = false;
-				})
-				.finally(() => {
-					button.disabled = false;
-				});
-		}
-	</script>
-	<div class="mx-auto max-w-sm space-y-6">
-		@pageHeading("Bee Name Generator", "Generate a random bee name, or suggest one of your own")
-		<div class="space-y-4 rounded-lg border border-input p-4 text-center">
-			<p class={ mutedSmallClass }>Your bee name</p>
-			<h2 id="get-bee-name" aria-live="polite" class="min-h-8 text-2xl font-semibold">&mdash;</h2>
-			<button
-				id="get-bee-button"
-				class={ submitClass }
-				onClick="getBeeName()"
-			>
-				Generate
-			</button>
-			<p id="get-bee-status" role="status" hidden class={ mutedSmallClass }></p>
+	@WrapContentsWithHead("NeuralNexus", nil) {
+		<div class="mx-auto max-w-4xl space-y-10">
+			@pageHeading("Projects", "Things I've built and am still tinkering on")
+			<section class="space-y-4">
+				<div class="space-y-1">
+					<h2 class="text-2xl font-semibold">The APIary</h2>
+					<p class={ mutedSmallClass }>REST APIs, each with a live demo to poke at</p>
+				</div>
+				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+					@projectCard("/project/bee-name-generator", "🐝", "Bee Name Generator", "Generate a random bee name, or suggest one of your own")
+					@projectCard("/project/mc-status", "⛏️", "MC Status", "Check whether a Minecraft server is online and who's playing")
+				</div>
+			</section>
 		</div>
-		@separator()
-		<form class="space-y-4" onsubmit="suggestBeeName(event)">
-			@formField("suggest-bee-name", "Suggest a name", "") {
-				<input
-					class={ inputClass }
-					id="suggest-bee-name"
-					name="name"
-					maxlength="64"
-					placeholder="Suggested Name"
-					required
-					type="text"
-				/>
-			}
-			<button
-				id="suggest-bee-button"
-				class={ submitClass }
-				type="submit"
-			>
-				Suggest
-			</button>
-			<p id="suggest-bee-status" role="status" hidden class={ emptyClass }></p>
-		</form>
-		@pageLoad("/project/bee-name-generator/admin-link")
-	</div>
+	}
 }
 
 // BeeNameGeneratorAdminLink is the link to the suggestion review page, which accounts that may review suggestions get.
@@ -266,14 +153,105 @@ templ BeeNameGeneratorAdminLink() {
 // BeeNameGeneratorPage serves the bee name generator in the site layout, with htmx for the review link.
 templ BeeNameGeneratorPage() {
 	@htmxPage("Bee name generator - NeuralNexus") {
-		@BeeNameGenerator()
-	}
-}
+		<script>
+			function getBeeName() {
+				const button = document.getElementById("get-bee-button");
+				const status = document.getElementById("get-bee-status");
+				button.disabled = true;
+				status.hidden = true;
+				fetch(`${apiBaseUrl()}/api/v1/bee-name-generator/name`)
+					.then((response) => {
+						if (!response.ok) {
+							throw new Error("Request failed");
+						}
+						return response.json();
+					})
+					.then((data) => {
+						document.getElementById("get-bee-name").innerText = data.name;
+					})
+					.catch(() => {
+						status.textContent = "Couldn't get a name, please try again.";
+						status.hidden = false;
+					})
+					.finally(() => {
+						button.disabled = false;
+					});
+			}
 
-// BeeNameGeneratorAdmin renders the shell of the suggestion review page, which loads the pending suggestions.
-templ BeeNameGeneratorAdmin() {
-	@pageShell("max-w-md", "", "/project/bee-name-generator/admin/suggestions") {
-		@pageHeading("Bee Name Suggestions", "Accept a suggestion to add it to the generator, or reject it to discard it")
+			function suggestBeeName(event) {
+				event.preventDefault();
+				const input = document.getElementById("suggest-bee-name");
+				const button = document.getElementById("suggest-bee-button");
+				const status = document.getElementById("suggest-bee-status");
+				const name = input.value.trim();
+				if (!name || isDotSegment(name)) {
+					status.textContent = "Please enter a valid name.";
+					status.hidden = false;
+					return;
+				}
+				button.disabled = true;
+				fetch(
+					`${apiBaseUrl()}/api/v1/bee-name-generator/suggestion/${encodeURIComponent(name)}`,
+					{
+						method: "POST",
+					},
+				)
+					.then((response) => {
+						status.textContent = response.ok
+							? "Thanks for the suggestion!"
+							: "Couldn't submit that, please try again.";
+						status.hidden = false;
+						if (response.ok) {
+							input.value = "";
+						}
+					})
+					.catch(() => {
+						status.textContent = "Couldn't submit that, please try again.";
+						status.hidden = false;
+					})
+					.finally(() => {
+						button.disabled = false;
+					});
+			}
+		</script>
+		<div class="mx-auto max-w-sm space-y-6">
+			@pageHeading("Bee Name Generator", "Generate a random bee name, or suggest one of your own")
+			<div class="space-y-4 rounded-lg border border-input p-4 text-center">
+				<p class={ mutedSmallClass }>Your bee name</p>
+				<h2 id="get-bee-name" aria-live="polite" class="min-h-8 text-2xl font-semibold">&mdash;</h2>
+				<button
+					id="get-bee-button"
+					class={ submitClass }
+					onClick="getBeeName()"
+				>
+					Generate
+				</button>
+				<p id="get-bee-status" role="status" hidden class={ mutedSmallClass }></p>
+			</div>
+			@separator()
+			<form class="space-y-4" onsubmit="suggestBeeName(event)">
+				@formField("suggest-bee-name", "Suggest a name", "") {
+					<input
+						class={ inputClass }
+						id="suggest-bee-name"
+						name="name"
+						maxlength="64"
+						placeholder="Suggested Name"
+						required
+						type="text"
+					/>
+				}
+				<button
+					id="suggest-bee-button"
+					class={ submitClass }
+					type="submit"
+				>
+					Suggest
+				</button>
+				<p id="suggest-bee-status" role="status" hidden class={ emptyClass }></p>
+			</form>
+			@pageLoad("/project/bee-name-generator/admin-link")
+		</div>
 	}
 }
 
@@ -323,7 +301,9 @@ templ BeeSuggestions(d BeeSuggestionsData) {
 // BeeNameGeneratorAdminPage serves the suggestion review shell, which loads the suggestions.
 templ BeeNameGeneratorAdminPage() {
 	@htmxPage("Bee name review - NeuralNexus") {
-		@BeeNameGeneratorAdmin()
+		@pageShell("max-w-md", "", "/project/bee-name-generator/admin/suggestions") {
+			@pageHeading("Bee Name Suggestions", "Accept a suggestion to add it to the generator, or reject it to discard it")
+		}
 	}
 }
 

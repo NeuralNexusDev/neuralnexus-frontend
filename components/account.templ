@@ -1,11 +1,5 @@
 package components
 
-// AccountPlatform is a sign-in platform an account can link.
-type AccountPlatform struct {
-	ID   string
-	Name string
-}
-
 // AccountPlatforms are the platforms the account page lists, in order.
 var AccountPlatforms = []AccountPlatform{
 	{"discord", "Discord"},
@@ -13,34 +7,6 @@ var AccountPlatforms = []AccountPlatform{
 	{"microsoft", "Microsoft"},
 	{"xboxlive", "Xbox Live"},
 	{"steam", "Steam"},
-}
-
-// AccountData is what the account page shows.
-type AccountData struct {
-	Username      string
-	PasswordAuth  bool
-	SettingsError string
-	LinksError    string
-	Links         map[string]LinkedAccount
-	AdminLink     bool
-}
-
-// AccountSettingsData is the password login setting.
-type AccountSettingsData struct {
-	PasswordAuth bool
-	Error        string
-}
-
-// Account renders the account settings page, which loads its content.
-templ Account() {
-	@ErrorBanner()
-	@pageShell("max-w-sm", "", "/account/content") {
-		@pageHeading("Account Settings", "Manage your profile and connected sign-in methods")
-	}
-	@LinkAccountSetup()
-	<script>
-		showAuthErrorFromQuery();
-	</script>
 }
 
 // AccountContent renders the profile, the sign-in setting and the connected accounts, which the account page loads.
@@ -84,12 +50,6 @@ templ AccountContent(d AccountData) {
 	</div>
 }
 
-// HasLink reports whether the account is linked to the platform.
-func (d AccountData) HasLink(platform string) bool {
-	_, ok := d.Links[platform]
-	return ok
-}
-
 // AccountPasswordLogin renders the password login setting, which htmx swaps in after a change, or the out-of-band copy a failed change sends.
 templ AccountPasswordLogin(d AccountSettingsData, oob bool) {
 	<div
@@ -123,13 +83,6 @@ templ AccountPasswordLogin(d AccountSettingsData, oob bool) {
 			<p id="account-password-error" role="alert" class={ errorTextClass }>{ d.Error }</p>
 		}
 	</div>
-}
-
-func accountActionLabel(linked bool) string {
-	if linked {
-		return "Unlink"
-	}
-	return "Link"
 }
 
 // AccountLinkRow renders one platform, linked or not, which htmx swaps in after a change to it, or the out-of-band copy a failed change sends.
@@ -176,7 +129,11 @@ templ AccountLinkRow(platform AccountPlatform, link LinkedAccount, linked bool, 
 			<button
 				id={ base + "-action" }
 				type="button"
-				aria-label={ accountActionLabel(linked) + " " + platform.Name }
+				if linked {
+					aria-label={ "Unlink " + platform.Name }
+				} else {
+					aria-label={ "Link " + platform.Name }
+				}
 				if linked {
 					hx-delete={ "/account/links/" + platform.ID }
 					hx-confirm={ "Unlink " + platform.Name + " from your account?" }
@@ -186,7 +143,11 @@ templ AccountLinkRow(platform AccountPlatform, link LinkedAccount, linked bool, 
 				}
 				class="-m-1 shrink-0 p-1 text-xs underline"
 			>
-				{ accountActionLabel(linked) }
+				if linked {
+					Unlink
+				} else {
+					Link
+				}
 			</button>
 		</div>
 		<div class="flex items-center justify-between pl-9">
@@ -241,6 +202,13 @@ templ accountPlatformIcon(platform string) {
 // AccountPage serves the account settings shell, which loads the profile, the sign-in setting and the connected accounts.
 templ AccountPage() {
 	@htmxPage("Account - NeuralNexus") {
-		@Account()
+		@ErrorBanner()
+		@pageShell("max-w-sm", "", "/account/content") {
+			@pageHeading("Account Settings", "Manage your profile and connected sign-in methods")
+		}
+		@LinkAccountSetup()
+		<script>
+			showAuthErrorFromQuery();
+		</script>
 	}
 }

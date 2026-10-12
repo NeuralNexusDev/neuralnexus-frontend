@@ -55,31 +55,11 @@ templ LoginButton() {
 	</script>
 }
 
-type oauthProvider struct {
-	ID         string
-	ElementID  string
-	Label      string
-	Background string
-	Hover      string
-	Icon       string
-	Alt        string
-	URL        templ.SafeURL
-}
-
 var oauthProviders = []oauthProvider{
 	{"discord", "discord-oauth", "Discord", "bg-discord_blurple", "hover:bg-blue-600", "/public/DiscordClydeWhite.svg", "Discord Logo", OAUTH2_DISCORD},
 	{"twitch", "twitch-oauth", "Twitch", "bg-twitch_purple", "hover:bg-purple-800", "/public/TwitchGlitchWhite.svg", "Twitch Logo", OAUTH2_TWITCH},
 	{"microsoft", "microsoft-oauth", "Microsoft", "bg-microsoft_gray", "hover:bg-black", "/public/MicrosoftLogo.svg", "Microsoft Logo", OAUTH2_MICROSOFT},
 	{"xboxlive", "xbox-oauth", "Xbox Live", "bg-xbox_bilbao", "hover:bg-green-800", "/public/XboxSymbolWhite.svg", "Xbox Logo", OAUTH2_XBOX_LIVE},
-}
-
-func oauthProviderFor(id string) (oauthProvider, bool) {
-	for _, provider := range oauthProviders {
-		if provider.ID == id {
-			return provider, true
-		}
-	}
-	return oauthProvider{}, false
 }
 
 templ oauthBases(prefix string) {
@@ -192,74 +172,71 @@ templ LoginPage() {
 	@WrapContents(Login())
 }
 
-// Register renders the sign-up form and the OAuth buttons.
-templ Register() {
-	@ErrorBanner()
-	<div class="mx-auto max-w-sm space-y-6">
-		@pageHeading("Sign Up", "Enter your information to create an account")
-		<div>
-			<form class="space-y-4" onSubmit="event.preventDefault()">
-				@formField("username", "Username", "") {
-					<input
-						class={ inputClass }
-						id="username"
-						name="username"
-						placeholder="Username"
-						required
-						type="text"
-					/>
-				}
-				@formField("email", "Email", "") {
-					<input
-						class={ inputClass }
-						id="email"
-						name="email"
-						placeholder="user@example.com"
-						required
-						type="email"
-					/>
-				}
-				@formField("password", "Password", "") {
-					<input
-						class={ inputClass }
-						id="password"
-						name="password"
-						required
-						type="password"
-					/>
-				}
-				@formField("confirm_password", "Confirm Password", "") {
-					<input
-						class={ inputClass }
-						id="confirm_password"
-						name="confirm_password"
-						required
-						type="password"
-					/>
-				}
-				<button
-					class={ submitClass }
-					type="submit"
-				>
-					Sign Up
-				</button>
-			</form>
-			@separator()
-			<div class="space-y-4">
-				@OAuthButtons("Sign up with")
-				<div class="mt-4 text-center text-sm">
-					<span class="mr-1">Already have an account?</span>
-					<a class="underline" href="/login">Login</a>
+// RegisterPage serves the sign-up form and the OAuth buttons in the site layout.
+templ RegisterPage() {
+	@WrapContentsWithHead("NeuralNexus", nil) {
+		@ErrorBanner()
+		<div class="mx-auto max-w-sm space-y-6">
+			@pageHeading("Sign Up", "Enter your information to create an account")
+			<div>
+				<form class="space-y-4" onSubmit="event.preventDefault()">
+					@formField("username", "Username", "") {
+						<input
+							class={ inputClass }
+							id="username"
+							name="username"
+							placeholder="Username"
+							required
+							type="text"
+						/>
+					}
+					@formField("email", "Email", "") {
+						<input
+							class={ inputClass }
+							id="email"
+							name="email"
+							placeholder="user@example.com"
+							required
+							type="email"
+						/>
+					}
+					@formField("password", "Password", "") {
+						<input
+							class={ inputClass }
+							id="password"
+							name="password"
+							required
+							type="password"
+						/>
+					}
+					@formField("confirm_password", "Confirm Password", "") {
+						<input
+							class={ inputClass }
+							id="confirm_password"
+							name="confirm_password"
+							required
+							type="password"
+						/>
+					}
+					<button
+						class={ submitClass }
+						type="submit"
+					>
+						Sign Up
+					</button>
+				</form>
+				@separator()
+				<div class="space-y-4">
+					@OAuthButtons("Sign up with")
+					<div class="mt-4 text-center text-sm">
+						<span class="mr-1">Already have an account?</span>
+						<a class="underline" href="/login">Login</a>
+					</div>
 				</div>
 			</div>
 		</div>
-	</div>
-	<script>
-		showAuthErrorFromQuery();
-	</script>
-}
-
-// RegisterPage serves the sign-up form in the site layout.
-templ RegisterPage() {
-	@WrapContents(Register())
+		<script>
+			showAuthErrorFromQuery();
+		</script>
+	}
 }
