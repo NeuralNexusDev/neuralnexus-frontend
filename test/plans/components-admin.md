@@ -1,6 +1,6 @@
 # Test plan: components-admin
 
-## components/admin.templ
+## components/admin_data.go
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
@@ -35,6 +35,19 @@
 | CA-032 | `adminRolePermissionPath` | Edge Case | Both IDs are path-escaped | `adminRolePermissionPath("a/b", "c d")`, then `("5", "x?y#z")` | Returns `/admin/roles/a%2Fb/permissions/c%20d`, then `/admin/roles/5/permissions/x%3Fy%23z` | P0 | Table-driven |
 | CA-035 | `adminUsername` | Happy Path | A username is shown as it is | `adminUsername("Bob")` | Returns `Bob` | P1 | |
 | CA-036 | `adminUsername` | Edge Case | An account without a username is shown as `No username` | `adminUsername("")` | Returns `No username` | P1 | |
+| CA-057 | `usersSummary` | Edge Case | An empty page after the first one says there are no more users unless a search stopped early | `usersSummary` of `{Start: 200}`, then `{Start: 200, Search: "bob"}`, then `{Start: 200, Search: "bob", More: true, NextOffset: 1000}` | Returns `No more users` for the first two and `No matches in the first 1000 users` for the third | P0 | Table-driven. A search that stopped early is checked before the `Start` case, because Load more is still offered then (CA-058 is the same case at `Start` 0) |
+| CA-058 | `usersSummary` | Edge Case | A search with no match that stopped before the end says how far it looked | `usersSummary(AdminUsersData{Search: "zzz", More: true, NextOffset: 1000})` | Returns `No matches in the first 1000 users` | P0 | |
+| CA-059 | `usersSummary` | Edge Case | A search with no match that reached the end says no matches | `usersSummary(AdminUsersData{Search: "zzz"})` | Returns `No matches` | P0 | Overlaps US-40 |
+| CA-060 | `usersSummary` | Edge Case | An empty first page with no search says no users were found | `usersSummary(AdminUsersData{})` | Returns `No users found` | P0 | |
+| CA-061 | `usersSummary` | Happy Path | The first page reports the count, with the singular for one user | `usersSummary` with 1 user, then 3 users, both with Start 0 and no search | Returns `1 user`, then `3 users` | P0 | Table-driven. Overlaps US-26 |
+| CA-062 | `usersSummary` | Happy Path | A later page reports how many more users it added | `usersSummary` with Start 200 and 1 user, then Start 200 and 3 users | Returns `1 more user`, then `3 more users` | P0 | Table-driven |
+| CA-063 | `usersSummary` | Edge Case | A search that stopped before the end adds how far it looked | `usersSummary` with 3 users, Search `bob`, More true, NextOffset 1000 and Start 0, then the same with Start 200 and NextOffset 1400 | Returns `3 users. Searched the first 1000 users`, then `3 more users. Searched the first 1400 users` | P0 | Table-driven |
+| CA-064 | `usersSummary` | Edge Case | A search that reached the end adds nothing after the count | `usersSummary` with 3 users, Search `bob`, More false, NextOffset 600 | Returns `3 users` | P1 | |
+
+## components/admin.templ
+
+| ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
+|----|----------|---------------|----------|---------------|------------------|----------|-------|
 | CA-039 | `AdminDashboardLink` | Happy Path | The link to the dashboard has the id and the target the account page and the browser tests use | `renderString(t, AdminDashboardLink())` | One `a` element with id `admin-dashboard-link`, `href` `/admin` and the text `Admin dashboard` | P1 | Overlaps AC-13, which checks that the account handler shows it. This row checks the link itself |
 | CA-040 | `adminTextBlock` | Happy Path | The name and the description are rendered in that order | `renderString(t, adminTextBlock("admins", "Site admins"))` | Output holds `admins` and then `Site admins`, each as the text of its own `span` | P1 | Unexported. Reached by direct call. Every list row and granted row uses it |
 | CA-041 | `adminTextBlock` | Edge Case | Typed text is escaped in both spans | `renderString(t, adminTextBlock("<i>a</i> & \"b\"", "<b>x</b> 'y'"))` | Output holds `&lt;i&gt;a&lt;/i&gt;` and `&lt;b&gt;x&lt;/b&gt;`, holds no raw `<i>` or `<b>`, and the text read back with `html.UnescapeString` equals the inputs | P0 | Role names, descriptions and permission nodes are typed by admins and shown here. The unescape check is the one the other escape rows use |
@@ -49,14 +62,6 @@
 | CA-054 | `AdminUsersCount` | Happy Path | The count line shows the summary of the data and passes the out-of-band flag on | `AdminUsersCount(AdminUsersData{Users: three users, NextOffset: 3}, true)`, then `false` | Both outputs hold `admin-users-count` with the text `3 users`; only the first has `hx-swap-oob` `innerHTML` | P2 | Thin wrapper over `usersCountLine` and `usersSummary`, which have their own rows. Overlaps US-33. Candidate to inline |
 | CA-055 | `usersCountLine` | Happy Path | Without the out-of-band flag the line is an empty live region with no swap attribute | `renderString(t, usersCountLine("", false))` | The tag of `admin-users-count` has `role` `status` and no `hx-swap-oob`, and the element holds no text | P1 | Unexported |
 | CA-056 | `usersCountLine` | Happy Path | With the flag the line carries the swap attribute and the text | `renderString(t, usersCountLine("2 users", true))` | The tag has `hx-swap-oob` `innerHTML` and `role` `status`, and the element text is `2 users` | P0 | `innerHTML` keeps the shell's element, so the live region announces the new text |
-| CA-057 | `usersSummary` | Edge Case | An empty page after the first one says there are no more users unless a search stopped early | `usersSummary` of `{Start: 200}`, then `{Start: 200, Search: "bob"}`, then `{Start: 200, Search: "bob", More: true, NextOffset: 1000}` | Returns `No more users` for the first two and `No matches in the first 1000 users` for the third | P0 | Table-driven. A search that stopped early is checked before the `Start` case, because Load more is still offered then (CA-058 is the same case at `Start` 0) |
-| CA-058 | `usersSummary` | Edge Case | A search with no match that stopped before the end says how far it looked | `usersSummary(AdminUsersData{Search: "zzz", More: true, NextOffset: 1000})` | Returns `No matches in the first 1000 users` | P0 | |
-| CA-059 | `usersSummary` | Edge Case | A search with no match that reached the end says no matches | `usersSummary(AdminUsersData{Search: "zzz"})` | Returns `No matches` | P0 | Overlaps US-40 |
-| CA-060 | `usersSummary` | Edge Case | An empty first page with no search says no users were found | `usersSummary(AdminUsersData{})` | Returns `No users found` | P0 | |
-| CA-061 | `usersSummary` | Happy Path | The first page reports the count, with the singular for one user | `usersSummary` with 1 user, then 3 users, both with Start 0 and no search | Returns `1 user`, then `3 users` | P0 | Table-driven. Overlaps US-26 |
-| CA-062 | `usersSummary` | Happy Path | A later page reports how many more users it added | `usersSummary` with Start 200 and 1 user, then Start 200 and 3 users | Returns `1 more user`, then `3 more users` | P0 | Table-driven |
-| CA-063 | `usersSummary` | Edge Case | A search that stopped before the end adds how far it looked | `usersSummary` with 3 users, Search `bob`, More true, NextOffset 1000 and Start 0, then the same with Start 200 and NextOffset 1400 | Returns `3 users. Searched the first 1000 users`, then `3 more users. Searched the first 1400 users` | P0 | Table-driven |
-| CA-064 | `usersSummary` | Edge Case | A search that reached the end adds nothing after the count | `usersSummary` with 3 users, Search `bob`, More false, NextOffset 600 | Returns `3 users` | P1 | |
 | CA-066 | `AdminUserRows` | Edge Case | A user without a username is shown as `No username` with the ID | Users `{UserID: "u3"}` | The row holds `No username` and `u3` | P1 | |
 | CA-067 | `AdminUserRows` | Edge Case | The user ID is path-escaped in the link | Users `{UserID: "a/b", Username: "x"}` | The link `href` is `/admin/users/a%2Fb` | P0 | |
 | CA-069 | `AdminUserRows` | Edge Case | Only the first row's link takes focus, and only when FocusFirst is set | Three users with FocusFirst true, then the same with FocusFirst false | First render has `autofocus` on the first link only; second has no `autofocus` | P1 | Table-driven. Focus lands on the first new row after Load more. Overlaps US-26 and US-33 for the unset case |
