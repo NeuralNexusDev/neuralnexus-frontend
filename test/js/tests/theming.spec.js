@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { signIn, test as shell } from './helpers.js';
 
 const API = `${process.env.NN_API_URL}/api/v1`;
 
@@ -209,5 +210,31 @@ test.describe('header control hover', () => {
         expect(await cursor(target)).toBe('pointer');
       });
     }
+  }
+});
+
+test.describe('button cursor', () => {
+  const pages = [
+    { name: 'admin roles', url: '/admin/roles', button: '#admin-role-create-submit' },
+    { name: 'account', url: '/account', button: '#link-discord-action' },
+    { name: 'mcstatus', url: '/project/mc-status', button: '#mc-status-submit' },
+  ];
+
+  for (const { name, url, button } of pages) {
+    shell(`TH-16 an enabled button shows the pointer, a disabled one the arrow and a busy one progress on the ${name} page`, async ({ page }) => {
+      await page.unroute(`${API}/users/me`);
+      await signIn(page, { myLinks: [{ platform: 'discord', platform_username: 'alice', verified: true, login_enabled: true }] });
+      await page.goto(url);
+      const target = page.locator(button);
+      await expect(target).toBeVisible();
+      await expect(target).toHaveCSS('cursor', 'pointer');
+      await target.evaluate((el) => el.setAttribute('aria-busy', 'true'));
+      await expect(target).toHaveCSS('cursor', 'progress');
+      await target.evaluate((el) => {
+        el.removeAttribute('aria-busy');
+        el.disabled = true;
+      });
+      await expect(target).toHaveCSS('cursor', 'default');
+    });
   }
 });
