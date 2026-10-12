@@ -99,6 +99,20 @@ test.describe('contrast', () => {
   }
 
   for (const colorScheme of schemes) {
+    test(`AX-22 the on track of a switch is at least 3:1 against the page in the ${colorScheme} theme`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme });
+      await signIn(page, { account: { username: 'testuser', password_auth: true } });
+      await page.goto('/account');
+      const track = page.locator('label:has(#password-auth-enabled)');
+      await expect(track).toBeVisible();
+      await expect(page.locator('#password-auth-enabled')).toBeChecked();
+      const background = await pageBackground(page);
+      const fill = blend(await rgba(page, await computed(track, 'backgroundColor')), background);
+      expect(contrastRatio(fill, background)).toBeGreaterThanOrEqual(3);
+    });
+  }
+
+  for (const colorScheme of schemes) {
     test(`AX-04 the muted description of a page is at least 4.5:1 against the page in the ${colorScheme} theme`, async ({ page }) => {
       await page.emulateMedia({ colorScheme });
       await signIn(page);
