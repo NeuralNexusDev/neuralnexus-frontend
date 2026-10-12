@@ -689,29 +689,6 @@ func TestAccountContent(t *testing.T) {
 	})
 }
 
-func TestAccountDataHasLink(t *testing.T) {
-	t.Run("CP-58_a_platform_is_linked_when_its_key_is_present_whatever_the_entry_holds", func(t *testing.T) {
-		cases := []struct {
-			name  string
-			links map[string]LinkedAccount
-			check map[string]bool
-		}{
-			{"zero_entry", map[string]LinkedAccount{"discord": {}}, map[string]bool{"discord": true}},
-			{"other_keys", map[string]LinkedAccount{"discord": {}}, map[string]bool{"steam": false, "Discord": false, "": false}},
-			{"nil_map", nil, map[string]bool{"discord": false}},
-		}
-		for _, tc := range cases {
-			t.Run("CP-58_"+tc.name, func(t *testing.T) {
-				for platform, want := range tc.check {
-					if got := (AccountData{Links: tc.links}).HasLink(platform); got != want {
-						t.Errorf("HasLink(%q) = %t, want %t", platform, got, want)
-					}
-				}
-			})
-		}
-	})
-}
-
 func TestAccountPasswordLogin(t *testing.T) {
 	t.Run("CP-60_the_setting_is_a_switch_checkbox_that_posts_its_field_on_change", func(t *testing.T) {
 		out := renderString(t, AccountPasswordLogin(AccountSettingsData{}, false))
@@ -1090,32 +1067,6 @@ func TestLoginButton(t *testing.T) {
 			t.Errorf("checkHeaderAuthState(); appears %d times, want 1", n)
 		}
 		assertInOrder(t, out, `id="header-login-btn"`, "<script>", "checkHeaderAuthState();")
-	})
-}
-
-func TestOAuthProviderFor(t *testing.T) {
-	t.Run("CP-90_each_provider_id_returns_its_provider_and_any_other_id_returns_the_zero_value", func(t *testing.T) {
-		known := []struct{ id, element, label, icon, alt string }{
-			{"discord", "discord-oauth", "Discord", "/public/DiscordClydeWhite.svg", "Discord Logo"},
-			{"twitch", "twitch-oauth", "Twitch", "/public/TwitchGlitchWhite.svg", "Twitch Logo"},
-			{"microsoft", "microsoft-oauth", "Microsoft", "/public/MicrosoftLogo.svg", "Microsoft Logo"},
-			{"xboxlive", "xbox-oauth", "Xbox Live", "/public/XboxSymbolWhite.svg", "Xbox Logo"},
-		}
-		for _, tc := range known {
-			t.Run("CP-90_"+tc.id, func(t *testing.T) {
-				got, ok := oauthProviderFor(tc.id)
-				if !ok || got.ID != tc.id || got.ElementID != tc.element || got.Label != tc.label || got.Icon != tc.icon || got.Alt != tc.alt {
-					t.Errorf("oauthProviderFor(%q) = %+v, %t", tc.id, got, ok)
-				}
-			})
-		}
-		for name, id := range map[string]string{"empty": "", "steam": "steam", "minecraft": "minecraft", "capitalised": "Discord", "trailing_space": "discord "} {
-			t.Run("CP-90_unknown_"+name, func(t *testing.T) {
-				if got, ok := oauthProviderFor(id); ok || got != (oauthProvider{}) {
-					t.Errorf("oauthProviderFor(%q) = %+v, %t, want the zero value and false", id, got, ok)
-				}
-			})
-		}
 	})
 }
 

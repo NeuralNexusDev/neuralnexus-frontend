@@ -29,6 +29,8 @@ tmp
 /components/**/*.go
 !/components/**/*_test.go
 !/components/admin_data.go
+!/components/account_data.go
+!/components/auth_data.go
 /public/css/styles.css
 
 # Playwright output

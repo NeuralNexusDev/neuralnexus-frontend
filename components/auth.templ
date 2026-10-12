@@ -55,31 +55,11 @@ templ LoginButton() {
 	</script>
 }
 
-type oauthProvider struct {
-	ID         string
-	ElementID  string
-	Label      string
-	Background string
-	Hover      string
-	Icon       string
-	Alt        string
-	URL        templ.SafeURL
-}
-
 var oauthProviders = []oauthProvider{
 	{"discord", "discord-oauth", "Discord", "bg-discord_blurple", "hover:bg-blue-600", "/public/DiscordClydeWhite.svg", "Discord Logo", OAUTH2_DISCORD},
 	{"twitch", "twitch-oauth", "Twitch", "bg-twitch_purple", "hover:bg-purple-800", "/public/TwitchGlitchWhite.svg", "Twitch Logo", OAUTH2_TWITCH},
 	{"microsoft", "microsoft-oauth", "Microsoft", "bg-microsoft_gray", "hover:bg-black", "/public/MicrosoftLogo.svg", "Microsoft Logo", OAUTH2_MICROSOFT},
 	{"xboxlive", "xbox-oauth", "Xbox Live", "bg-xbox_bilbao", "hover:bg-green-800", "/public/XboxSymbolWhite.svg", "Xbox Logo", OAUTH2_XBOX_LIVE},
-}
-
-func oauthProviderFor(id string) (oauthProvider, bool) {
-	for _, provider := range oauthProviders {
-		if provider.ID == id {
-			return provider, true
-		}
-	}
-	return oauthProvider{}, false
 }
 
 templ oauthBases(prefix string) {
